@@ -41,6 +41,8 @@ create policy "Anyone can update rooms" on rooms for update using (true);
 
 create policy "Anyone can read messages" on messages for select using (true);
 create policy "Anyone can insert messages" on messages for insert with check (true);
+create policy "Anyone can update messages" on messages for update using (true) with check (true);
+create policy "Anyone can delete messages" on messages for delete using (true);
 
 -- Enable Realtime on both tables
 alter publication supabase_realtime add table rooms;

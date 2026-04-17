@@ -20,10 +20,48 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA"
+      ],
+      "package": "com.vault.messenger"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Приложению нужен доступ к фото, чтобы отправлять изображения в чат.",
+          "cameraPermission": "Приложению нужна камера, чтобы сделать и отправить фото в чат."
+        }
+      ],
+      "expo-audio",
+      "expo-av",
+      "expo-asset",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Vault использует камеру для видеосообщений",
+          "microphonePermission": "Vault использует микрофон для видеосообщений"
+        }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0b10cf07-5810-4e32-ad65-6c02d326eccb"
+      }
+    },
+    "owner": "esaiam"
   }
 }

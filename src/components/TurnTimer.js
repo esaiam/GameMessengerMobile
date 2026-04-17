@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Animated, Easing } from 'react-native';
 import tw from 'twrnc';
+import { V } from '../theme';
 
 const TURN_DURATION = 60;
 
@@ -57,26 +58,21 @@ export default function TurnTimer({ isMyTurn, isPlaying, onTimeUp }) {
 
   if (!isPlaying) return null;
 
-  const barColor = seconds > 20 ? '#22c55e' : seconds > 10 ? '#eab308' : '#ef4444';
+  const barColor = seconds > 20 ? V.accentSage : seconds > 10 ? V.accentGold : V.dangerMuted;
 
   return (
     <View style={tw`px-4 mb-2`}>
       <View style={tw`flex-row items-center justify-between mb-1`}>
-        <Text style={tw`text-gray-500 text-xs`}>
+        <Text style={[tw`text-[10px]`, { color: V.textMuted }]}>
           {isMyTurn ? 'Твоё время' : 'Время соперника'}
         </Text>
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-          <Text
-            style={[
-              tw`text-sm font-bold`,
-              { color: barColor },
-            ]}
-          >
+          <Text style={[tw`text-[13px] font-medium`, { color: barColor }]}>
             {seconds}с
           </Text>
         </Animated.View>
       </View>
-      <View style={tw`h-1.5 bg-gray-800 rounded-full overflow-hidden`}>
+      <View style={[tw`h-1.5 rounded-full overflow-hidden`, { backgroundColor: V.bgSurface }]}>
         <Animated.View
           style={{
             height: '100%',

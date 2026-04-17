@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, Easing } from 'react-native';
 import tw from 'twrnc';
+import { Dices } from '../icons/lucideIcons';
+import { V } from '../theme';
 
 const DOT_SIZE = 6;
 
@@ -13,7 +15,7 @@ const DOT_POSITIONS = {
   6: [[0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2]],
 };
 
-function DieFace({ value, isUsed, size = 48, animValue }) {
+export function DieFace({ value, isUsed, size = 48, animValue }) {
   const dots = DOT_POSITIONS[value] || [];
   const cellSize = size / 3;
 
@@ -34,17 +36,12 @@ function DieFace({ value, isUsed, size = 48, animValue }) {
   const Inner = (
     <View
       style={[
-        tw`rounded-lg items-center justify-center`,
+        tw`rounded-[8px] items-center justify-center`,
         {
           width: size,
           height: size,
-          backgroundColor: isUsed ? '#4a4a4a' : '#FFFDE7',
+          backgroundColor: isUsed ? V.bgElevated : '#FFFDE7',
           opacity: isUsed ? 0.4 : 1,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.3,
-          shadowRadius: 3,
-          elevation: 4,
         },
       ]}
     >
@@ -56,7 +53,7 @@ function DieFace({ value, isUsed, size = 48, animValue }) {
             width: DOT_SIZE,
             height: DOT_SIZE,
             borderRadius: DOT_SIZE / 2,
-            backgroundColor: isUsed ? '#888' : '#212121',
+            backgroundColor: isUsed ? V.textMuted : '#212121',
             top: row * cellSize + (cellSize - DOT_SIZE) / 2,
             left: col * cellSize + (cellSize - DOT_SIZE) / 2,
           }}
@@ -147,16 +144,24 @@ export default function Dice({
   const used = usedDice();
 
   return (
-    <View style={tw`items-center my-3`}>
+    <View style={tw`items-center`}>
       {canRoll ? (
         <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
           <TouchableOpacity
             onPress={onRoll}
             disabled={rolling}
-            style={tw`bg-amber-600 rounded-xl px-8 py-3 ${rolling ? 'opacity-50' : ''}`}
+            style={[
+              tw`rounded-[10px] px-8 py-3 flex-row items-center ${rolling ? 'opacity-50' : ''}`,
+              {
+                backgroundColor: V.btnPrimaryBg,
+                borderWidth: 0.5,
+                borderColor: V.accentSage,
+              },
+            ]}
           >
-            <Text style={tw`text-white text-lg font-bold`}>
-              {rolling ? '🎲 ...' : '🎲 Бросить кубики'}
+            <Dices size={18} color={V.accentSage} strokeWidth={1.5} style={tw`mr-2`} />
+            <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>
+              {rolling ? 'Бросаем...' : 'Бросить кубики'}
             </Text>
           </TouchableOpacity>
         </Animated.View>

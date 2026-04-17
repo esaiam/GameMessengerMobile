@@ -1,0 +1,97 @@
+/**
+ * Официальный subpath `lucide-react-native/icons` (см. package.json exports).
+ * В пакете нет CompassRose — ниже алиас на Compass.
+ */
+import {
+  Send,
+  Mic,
+  X,
+  Plus,
+  MessageCircle,
+  Smile,
+  Keyboard,
+  Camera,
+  Dice5,
+  Crown,
+  Layers,
+  Image,
+  MapPin,
+  Trash2,
+  Check,
+  CheckCheck,
+  Flame,
+  Play,
+  Pause,
+  Timer,
+  ArrowLeft,
+  Menu,
+  Phone,
+  LogOut,
+  ChartColumn,
+  User,
+  UserPlus,
+  Users,
+  Dices,
+  ChevronDown,
+  Compass,
+  Paperclip,
+  Lock,
+  LockOpen,
+  SendHorizontal,
+  Square,
+  Copy,
+  Forward,
+} from 'lucide-react-native/icons';
+
+/** В lucide-react-native нет `Unlock` — это `LockOpen` */
+const Unlock = LockOpen;
+
+const KeyboardIcon = Keyboard;
+const ImageIcon = Image;
+const CompassRose = Compass;
+/** В lucide-react-native/icons нет BarChart3 — это тот же компонент, что ChartColumn */
+const BarChart3 = ChartColumn;
+
+export {
+  Send,
+  Mic,
+  X,
+  Plus,
+  MessageCircle,
+  Smile,
+  Keyboard,
+  KeyboardIcon,
+  Camera,
+  Dice5,
+  Crown,
+  Layers,
+  Image,
+  ImageIcon,
+  MapPin,
+  Trash2,
+  Check,
+  CheckCheck,
+  Flame,
+  Play,
+  Pause,
+  Timer,
+  ArrowLeft,
+  Menu,
+  Phone,
+  LogOut,
+  BarChart3,
+  User,
+  UserPlus,
+  Users,
+  Dices,
+  ChevronDown,
+  Compass,
+  CompassRose,
+  Paperclip,
+  Lock,
+  Unlock,
+  SendHorizontal,
+  Square,
+  Copy,
+  Forward,
+};

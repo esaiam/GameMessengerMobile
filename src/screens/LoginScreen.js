@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import tw from 'twrnc';
+import { Dices } from '../icons/lucideIcons';
+import { V } from '../theme';
 
 const NICKNAME_KEY = '@backgammon_nickname';
 
@@ -19,7 +21,7 @@ export default function LoginScreen({ navigation }) {
   useEffect(() => {
     AsyncStorage.getItem(NICKNAME_KEY).then((stored) => {
       if (stored) {
-        navigation.replace('Home', { nickname: stored });
+        navigation.replace('Main', { nickname: stored });
       } else {
         setLoading(false);
       }
@@ -30,13 +32,13 @@ export default function LoginScreen({ navigation }) {
     const trimmed = nickname.trim();
     if (!trimmed) return;
     await AsyncStorage.setItem(NICKNAME_KEY, trimmed);
-    navigation.replace('Home', { nickname: trimmed });
+    navigation.replace('Main', { nickname: trimmed });
   };
 
   if (loading) {
     return (
-      <View style={tw`flex-1 bg-gray-900 items-center justify-center`}>
-        <Text style={tw`text-white text-lg`}>Загрузка...</Text>
+      <View style={[tw`flex-1 items-center justify-center`, { backgroundColor: V.bgApp }]}>
+        <Text style={[tw`text-[13px]`, { color: V.textPrimary }]}>Загрузка...</Text>
       </View>
     );
   }
@@ -44,20 +46,33 @@ export default function LoginScreen({ navigation }) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={tw`flex-1 bg-gray-900`}
+      style={[tw`flex-1`, { backgroundColor: V.bgApp }]}
     >
       <View style={tw`flex-1 items-center justify-center px-8`}>
-        <Text style={tw`text-white text-4xl font-bold mb-2`}>🎲 Нарды</Text>
-        <Text style={tw`text-gray-400 text-base mb-10`}>
+        <View style={tw`flex-row items-center mb-2`}>
+          <Dices size={20} color={V.accentGold} strokeWidth={1.5} style={tw`mr-2`} />
+          <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]}>Нарды</Text>
+        </View>
+        <Text style={[tw`text-[13px] mb-10`, { color: V.textSecondary, lineHeight: 20 }]}>
           Играй с друзьями онлайн
         </Text>
 
         <View style={tw`w-full mb-6`}>
-          <Text style={tw`text-gray-300 text-sm mb-2 ml-1`}>Твой никнейм</Text>
+          <Text style={[tw`text-[13px] font-medium mb-2 ml-1`, { color: V.textSecondary }]}>
+            Твой никнейм
+          </Text>
           <TextInput
-            style={tw`w-full bg-gray-800 text-white rounded-xl px-4 py-3.5 text-base border border-gray-700`}
+            style={[
+              tw`w-full px-4 py-3.5 text-[13px] rounded-[10px]`,
+              {
+                backgroundColor: V.bgSurface,
+                color: V.textPrimary,
+                borderWidth: 0.5,
+                borderColor: V.border,
+              },
+            ]}
             placeholder="Введи ник..."
-            placeholderTextColor="#6b7280"
+            placeholderTextColor={V.textGhost}
             value={nickname}
             onChangeText={setNickname}
             maxLength={20}
@@ -67,13 +82,18 @@ export default function LoginScreen({ navigation }) {
         </View>
 
         <TouchableOpacity
-          style={tw`w-full bg-amber-600 rounded-xl py-3.5 items-center ${
-            !nickname.trim() ? 'opacity-50' : ''
-          }`}
+          style={[
+            tw`w-full rounded-[10px] py-3.5 items-center ${!nickname.trim() ? 'opacity-50' : ''}`,
+            {
+              backgroundColor: V.btnPrimaryBg,
+              borderWidth: 0.5,
+              borderColor: V.accentSage,
+            },
+          ]}
           onPress={handleLogin}
           disabled={!nickname.trim()}
         >
-          <Text style={tw`text-white text-lg font-semibold`}>Войти</Text>
+          <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>Войти</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
