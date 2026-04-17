@@ -31,13 +31,14 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 function parseArgs(argv) {
-  const out = { url: null, latest: null, dryRun: false, bucket: 'chat-media' };
+  const out = { url: null, latest: null, dryRun: false, bucket: 'chat-media', force: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--url') out.url = argv[++i] ?? null;
     else if (a === '--latest') out.latest = Number(argv[++i] ?? '0') || null;
     else if (a === '--dry-run') out.dryRun = true;
     else if (a === '--bucket') out.bucket = argv[++i] ?? out.bucket;
+    else if (a === '--force') out.force = true;
   }
   return out;
 }
@@ -137,7 +138,7 @@ async function downloadToFile(url, destPath) {
   return buf.length;
 }
 
-async function processOnePublicUrl({ supabase, bucket, url, dryRun }) {
+async function processOnePublicUrl({ supabase, bucket, url, dryRun, force }) {
   const objectPath = parseStoragePathFromPublicUrl(url, bucket);
   if (!objectPath) throw new Error(`Could not parse storage object path from url (bucket=${bucket})`);
 
@@ -175,13 +176,13 @@ async function processOnePublicUrl({ supabase, bucket, url, dryRun }) {
       console.log('[video-fix] skip: missing duration metadata');
       return { ok: false, skipped: true, reason: 'no_duration' };
     }
-    if (aDur + 0.15 >= vDur) {
+    if (!force && aDur + 0.15 >= vDur) {
       console.log('[video-fix] ok: audio already matches video (within 150ms)');
       return { ok: true, skipped: true, reason: 'already_ok' };
     }
 
     const target = Number(vDur.toFixed(3));
-    console.log('[video-fix] padding audio to video duration', target);
+    console.log('[video-fix] padding audio to video duration', target, force ? '(force)' : '');
 
     if (!dryRun) {
       await padAudioToVideoDuration({ input: inputPath, output: outputPath, videoDurSec: target });
@@ -212,6 +213,7 @@ async function main() {
   if (!args.url && !args.latest) {
     console.log('Usage: node scripts/process-chat-videos.mjs --url <publicUrl>');
     console.log('   or: node scripts/process-chat-videos.mjs --latest 20');
+    console.log('   add: --force  # remux even when durations look OK');
     process.exit(2);
   }
 
@@ -222,7 +224,7 @@ async function main() {
   });
 
   if (args.url) {
-    await processOnePublicUrl({ supabase, bucket: args.bucket, url: args.url, dryRun: args.dryRun });
+    await processOnePublicUrl({ supabase, bucket: args.bucket, url: args.url, dryRun: args.dryRun, force: args.force });
     return;
   }
 
@@ -246,7 +248,7 @@ async function main() {
     const u = urls[i];
     console.log('\n[video-fix] (' + (i + 1) + '/' + urls.length + ')', u);
     try {
-      await processOnePublicUrl({ supabase, bucket: args.bucket, url: u, dryRun: args.dryRun });
+      await processOnePublicUrl({ supabase, bucket: args.bucket, url: u, dryRun: args.dryRun, force: args.force });
     } catch (e) {
       console.warn('[video-fix] failed', e?.message ?? String(e));
     }

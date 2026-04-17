@@ -31,6 +31,16 @@ SUPABASE_URL="..." SUPABASE_SERVICE_ROLE_KEY="..." \
 node scripts/process-chat-videos.mjs --latest 50
 ```
 
+#### Принудительно перемуксить (даже если длительности “OK”)
+
+Иногда `ffprobe` показывает одинаковые длительности, но на устройстве аудио всё равно обрывается.
+В таком случае можно прогнать принудительный ремукс (аудио пере-кодируется + `apad`):
+
+```bash
+SUPABASE_URL="..." SUPABASE_SERVICE_ROLE_KEY="..." \
+node scripts/process-chat-videos.mjs --latest 50 --force
+```
+
 #### Dry-run (без загрузки результата)
 
 ```bash
