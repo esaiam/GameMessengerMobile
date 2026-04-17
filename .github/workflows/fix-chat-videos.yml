@@ -39,12 +39,10 @@ jobs:
           ffprobe -version
 
       - name: Install deps (minimal)
-        working-directory: GameMessengerMobile
         run: |
           npm ci
 
       - name: Process latest videos
-        working-directory: GameMessengerMobile
         run: |
           node scripts/process-chat-videos.mjs --latest "${{ github.event.inputs.latest || '20' }}"
 
