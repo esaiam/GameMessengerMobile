@@ -20,6 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      # Opt into Node.js 24 for JS-based actions early (GitHub runner deprecation notice).
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
@@ -30,6 +33,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Validate secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SUPABASE_URL:-}" ]]; then
+            echo "::error::Missing GitHub Actions secret SUPABASE_URL"
+            exit 1
+          fi
+          if [[ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+            echo "::error::Missing GitHub Actions secret SUPABASE_SERVICE_ROLE_KEY"
+            exit 1
+          fi
+          echo "Secrets look present."
 
       - name: Install ffmpeg + ffprobe
         run: |
