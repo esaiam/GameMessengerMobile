@@ -2,6 +2,7 @@
   "expo": {
     "name": "GameMessengerMobile",
     "slug": "GameMessengerMobile",
+    "scheme": "vaultmessenger",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,6 +16,20 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.vault.messenger",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "vaultmessenger",
+              "host": "reset-password"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -25,8 +40,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.CAMERA"
-      ],
-      "package": "com.vault.messenger"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
