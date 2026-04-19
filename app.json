@@ -1,4 +1,4 @@
-{
+﻿{
   "expo": {
     "name": "GameMessengerMobile",
     "slug": "GameMessengerMobile",
@@ -16,6 +16,7 @@
       "supportsTablet": true
     },
     "android": {
+      "versionCode": 2,
       "package": "com.vault.messenger",
       "intentFilters": [
         {
