@@ -16,8 +16,8 @@
       "supportsTablet": true
     },
     "android": {
-      "versionCode": 2,
       "package": "com.vault.messenger",
+      "versionCode": 2,
       "intentFilters": [
         {
           "action": "VIEW",
