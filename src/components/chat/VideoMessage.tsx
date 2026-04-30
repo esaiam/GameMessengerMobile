@@ -1,15 +1,18 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import type { GestureResponderEvent } from 'react-native';
 import {
   View,
   StyleSheet,
   Pressable,
   Platform,
   Animated,
+  Image,
 } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import Svg, { Circle } from 'react-native-svg';
 import { V } from '../../theme';
+const IDLE_WARMUP_TEXTURE = require('../../../assets/chat-room-wallpaper.jpg');
 
 interface VideoMessageProps {
   url: string;
@@ -17,21 +20,33 @@ interface VideoMessageProps {
   activeVideoId: string | null;
   wasActivated: boolean;
   onActivate: (id: string | null) => void;
-  onLongPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
 }
 
 const CIRCLE_IDLE = 200;
 const CIRCLE_ACTIVE = 280;
 const R_IDLE = CIRCLE_IDLE / 2;
 const R_ACTIVE = CIRCLE_ACTIVE / 2;
+/** Свежий локальный mp4 часто шлёт ложный playToEnd до стабильной длительности — не закрываем UI сразу после старта. */
+const PLAY_TO_END_GRACE_MS = 550;
+const MEANINGFUL_PROGRESS = { minDur: 0.06, minTime: 0.012 };
 
 export default function VideoMessage({ url, messageId, activeVideoId, wasActivated, onActivate, onLongPress }: VideoMessageProps) {
   const isActive = activeVideoId === messageId;
   const [thumbUri, setThumbUri] = useState<string | null>(null);
+  /** Превью из getThumbnailAsync готово — в покое снимаем блюр с миниатюры */
+  const [idlePreviewReady, setIdlePreviewReady] = useState(false);
+  /** Поток готов к показу — при воспроизведении убираем блюр с VideoView */
+  const [streamRenderReady, setStreamRenderReady] = useState(false);
   const [activated, setActivated] = useState(wasActivated);
   const [shouldInitPlayer, setShouldInitPlayer] = useState(wasActivated);
   const [progress01, setProgress01] = useState(0);
   const sizeAnim = useRef(new Animated.Value(CIRCLE_IDLE)).current;
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
+  /** Был ли реальный прогректайм (отсекаем playToEnd при duration≈0 сразу после play). */
+  const sawMeaningfulProgressRef = useRef(false);
+  const playbackStartedAtRef = useRef(0);
 
   // Флаг готовности к загрузке превью — откладываем на 600ms после монтирования,
   // чтобы не запускать N параллельных нативных декодеров при открытии чата.
@@ -42,10 +57,26 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
   }, []);
 
   useEffect(() => {
+    setIdlePreviewReady(false);
+    setThumbUri(null);
+  }, [url]);
+
+  useEffect(() => {
     if (!shouldLoadThumb) return;
+    let cancelled = false;
     VideoThumbnails.getThumbnailAsync(url, { time: 0 })
-      .then(({ uri }) => setThumbUri(uri))
-      .catch(() => {});
+      .then(({ uri }) => {
+        if (!cancelled) {
+          setThumbUri(uri);
+          setIdlePreviewReady(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setIdlePreviewReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [shouldLoadThumb, url]);
 
   // Плеер создаётся после первой активации (или сразу, если wasActivated)
@@ -60,6 +91,9 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
   useEffect(() => {
     if (isActive && !shouldInitPlayer) setShouldInitPlayer(true);
     if (isActive) {
+      sawMeaningfulProgressRef.current = false;
+      playbackStartedAtRef.current = 0;
+      setStreamRenderReady(false);
       setActivated(true);
       setProgress01(0);
       Animated.spring(sizeAnim, {
@@ -69,6 +103,9 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
         stiffness: 200,
       }).start();
     } else {
+      sawMeaningfulProgressRef.current = false;
+      playbackStartedAtRef.current = 0;
+      setStreamRenderReady(false);
       if (player) player.pause();
       setProgress01(0);
       Animated.spring(sizeAnim, {
@@ -83,14 +120,39 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
   useEffect(() => {
     if (!player) return;
     if (!isActive) return;
+    try {
+      player.timeUpdateEventInterval = 0.1;
+    } catch {
+      /* ignore */
+    }
     const sub = player.addListener('timeUpdate', (e: any) => {
       const currentTime = typeof e?.currentTime === 'number' ? e.currentTime : 0;
       const duration = typeof e?.duration === 'number' ? e.duration : 0;
+      if (
+        duration >= MEANINGFUL_PROGRESS.minDur &&
+        currentTime >= MEANINGFUL_PROGRESS.minTime
+      ) {
+        sawMeaningfulProgressRef.current = true;
+      }
       if (duration <= 0) return;
+      if (duration > 0.05) setStreamRenderReady(true);
       const p = Math.min(1, Math.max(0, currentTime / duration));
       setProgress01(p);
     });
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      try {
+        player.timeUpdateEventInterval = 0.25;
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [isActive, player]);
+
+  useEffect(() => {
+    if (!isActive || !player) return;
+    const t = setTimeout(() => setStreamRenderReady(true), 2800);
+    return () => clearTimeout(t);
   }, [isActive, player]);
 
   useEffect(() => {
@@ -103,6 +165,8 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
       if (started) return;
       if (status?.isLoaded || status?.playableDuration > 0) {
         started = true;
+        setStreamRenderReady(true);
+        playbackStartedAtRef.current = Date.now();
         player.replay();
         player.play();
       }
@@ -111,6 +175,8 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
     const fallback = setTimeout(() => {
       if (!started) {
         started = true;
+        setStreamRenderReady(true);
+        playbackStartedAtRef.current = Date.now();
         try { player.replay(); player.play(); } catch {}
       }
     }, 500);
@@ -123,10 +189,23 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
 
   useEffect(() => {
     if (!player) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
     const sub = player.addListener('playToEnd', () => {
-      onActivate(null);
+      if (!isActiveRef.current) return;
+      const started = playbackStartedAtRef.current;
+      const sinceStart = started > 0 ? Date.now() - started : Number.POSITIVE_INFINITY;
+      if (sinceStart < PLAY_TO_END_GRACE_MS && !sawMeaningfulProgressRef.current) {
+        return;
+      }
+      t = setTimeout(() => {
+        if (!isActiveRef.current) return;
+        onActivate(null);
+      }, 300);
     });
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      if (t !== null) clearTimeout(t);
+    };
   }, [player, onActivate]);
 
   const togglePlay = useCallback(() => {
@@ -141,6 +220,11 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
     inputRange: [CIRCLE_IDLE, CIRCLE_ACTIVE],
     outputRange: [R_IDLE, R_ACTIVE],
   });
+
+  const showIdleLoadingVeil = !isActive && !idlePreviewReady;
+  const showActiveStreamVeil = isActive && !streamRenderReady;
+  const veilPosterSource =
+    showActiveStreamVeil && thumbUri ? { uri: thumbUri } : IDLE_WARMUP_TEXTURE;
 
   return (
     <Pressable
@@ -196,16 +280,27 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
           <VideoView
             pointerEvents="none"
             player={player}
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, styles.videoLayer]}
             contentFit="cover"
             nativeControls={false}
             {...(Platform.OS === 'android' ? { surfaceType: 'textureView' } : {})}
           />
         )}
 
-        {/* Thumbnail поверх пока не активен */}
-        {!isActive && thumbUri && (
-          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {(showIdleLoadingVeil || showActiveStreamVeil) && (
+          <View style={[StyleSheet.absoluteFill, styles.veilLayer]} pointerEvents="none">
+            <Image
+              source={veilPosterSource}
+              style={StyleSheet.absoluteFill}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
+          </View>
+        )}
+
+        {/* Миниатюра в покое после загрузки превью */}
+        {!isActive && idlePreviewReady && thumbUri && (
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.thumbLayer]}>
             <Animated.Image
               source={{ uri: thumbUri }}
               style={[StyleSheet.absoluteFill, { borderRadius }]}
@@ -219,6 +314,15 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
 }
 
 const styles = StyleSheet.create({
+  videoLayer: {
+    zIndex: 1,
+  },
+  veilLayer: {
+    zIndex: 3,
+  },
+  thumbLayer: {
+    zIndex: 2,
+  },
   progressRing: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 5,

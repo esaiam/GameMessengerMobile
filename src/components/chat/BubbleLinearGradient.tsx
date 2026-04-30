@@ -17,15 +17,10 @@ function defaultPositions(n: number): number[] {
 }
 
 /**
- * Вертикальный градиент под контент пузыря.
- * Родитель с `overflow: 'hidden'` и `borderRadius` задаёт форму — здесь прямоугольная заливка.
- *
- * Раньше использовался `Canvas` из `@shopify/react-native-skia`; в связке Reanimated 3+
- * первый кадр идёт через worklet и `Skia.Picture.MakePicture(null)` падает с
- * «Expected arraybuffer as first parameter». Для пузыря достаточно `expo-linear-gradient`
- * (один нативный слой, без Skia reconciliation).
+ * Вертикальный градиент под контент пузыря (`expo-linear-gradient`).
+ * Родитель с `overflow: 'hidden'` и `borderRadius` задаёт форму.
  */
-function BubbleSkiaGradient({ colors, positions }: Props) {
+function BubbleLinearGradient({ colors, positions }: Props) {
   const list = useMemo(() => [...colors], [colors]);
   const loc = useMemo(() => {
     if (positions && positions.length === list.length) {
@@ -46,4 +41,4 @@ function BubbleSkiaGradient({ colors, positions }: Props) {
   );
 }
 
-export default React.memo(BubbleSkiaGradient);
+export default React.memo(BubbleLinearGradient);

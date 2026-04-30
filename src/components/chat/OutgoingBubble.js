@@ -1,18 +1,13 @@
 import React from 'react';
-import { View, Pressable, Platform, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { V } from '../../theme';
-import BubbleSkiaGradient from './BubbleSkiaGradient';
+import BubbleLinearGradient from './BubbleLinearGradient';
 
 const BUBBLE_EDGE_SOFT = 'rgba(110, 195, 185, 0.07)';
 
 const outgoingBubbleStyles = StyleSheet.create({
   outer: {
     alignSelf: 'flex-end',
-    shadowColor: 'rgba(72, 200, 190, 0.28)',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: Platform.OS === 'ios' ? 0.11 : 0,
-    shadowRadius: 8,
-    elevation: Platform.OS === 'android' ? 2 : 0,
   },
   inner: {
     overflow: 'hidden',
@@ -59,7 +54,7 @@ function OutgoingBubble({
       testID={message?.id ? `outgoing-bubble-${message.id}` : undefined}
     >
       <View style={[bubbleRadii, outgoingBubbleStyles.inner]} collapsable={false}>
-        <BubbleSkiaGradient colors={V.outBubbleGradient} />
+        <BubbleLinearGradient colors={V.outBubbleGradient} />
         <View pointerEvents="none" style={outgoingBubbleStyles.gloss} />
         <View pointerEvents="none" style={outgoingBubbleStyles.shade} />
         {hasHandlers ? (

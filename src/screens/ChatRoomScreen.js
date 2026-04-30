@@ -7,16 +7,28 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 
 export default function ChatRoomScreen({ route, navigation }) {
-  const { nickname, roomId, roomCode, title } = route.params || {};
+  const { nickname, roomId, roomCode, title, peerName } = route.params || {};
   const insets = useSafeAreaInsets();
 
   const headerTitle = useMemo(() => title || 'Чат', [title]);
   const [contactOnline, setContactOnline] = useState(false);
   const [frostedHeaderH, setFrostedHeaderH] = useState(0);
+  const [listPaddingTop, setListPaddingTop] = useState(insets.top + 75);
 
-  /** Без лишнего зазора: иначе под шапкой видна полоска фона ленты (bgApp + dim), темнее шапки */
-  const listPaddingTop =
-    frostedHeaderH > 0 ? frostedHeaderH : insets.top + 75;
+  const chatRoomHeader = useMemo(
+    () => ({
+      title: headerTitle,
+      contactOnline,
+      navigation,
+    }),
+    [headerTitle, contactOnline, navigation]
+  );
+
+  useEffect(() => {
+    if (frostedHeaderH > 0) {
+      setListPaddingTop(frostedHeaderH);
+    }
+  }, [frostedHeaderH]);
 
   useFocusEffect(
     useCallback(() => {
@@ -75,13 +87,9 @@ export default function ChatRoomScreen({ route, navigation }) {
         roomId={roomId}
         roomCode={roomCode}
         nickname={nickname}
-        compact={false}
+        peerName={peerName || title}
         listPaddingTop={listPaddingTop}
-        chatRoomHeader={{
-          title: headerTitle,
-          contactOnline,
-          navigation,
-        }}
+        chatRoomHeader={chatRoomHeader}
         onTopOverlayHeight={setFrostedHeaderH}
       />
     </View>

@@ -166,11 +166,6 @@ const styles = StyleSheet.create({
     marginRight: 4,
     borderRadius: 18,
     backgroundColor: 'rgba(90,158,154,0.15)',
-    shadowColor: ACCENT,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 7,
-    elevation: 5,
   },
   waveWrap: {
     flex: 1,

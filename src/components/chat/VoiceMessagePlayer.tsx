@@ -134,11 +134,6 @@ const styles = StyleSheet.create({
     backgroundColor: V.accentSage,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: V.accentSage,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 7,
   },
   rightCol: {
     flex: 1,

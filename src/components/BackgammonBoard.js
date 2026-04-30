@@ -1,7 +1,18 @@
-import React, { useMemo, useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import React, {
+  useMemo,
+  useRef,
+  useEffect,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+  memo,
+  useCallback,
+} from 'react';
 import {
   View,
   Text,
+  Animated,
+  Easing,
   TouchableOpacity,
   PanResponder,
   LayoutAnimation,
@@ -39,7 +50,7 @@ const COLORS = {
   barBg: boardPalette.bar,
 };
 
-function Checker({ player, size, isSelected }) {
+const Checker = memo(function Checker({ player, size, isSelected }) {
   const bg = player === 1 ? COLORS.player1 : COLORS.player2;
   const border = player === 1 ? COLORS.player1Border : COLORS.player2Border;
   return (
@@ -67,9 +78,9 @@ function Checker({ player, size, isSelected }) {
       )}
     </View>
   );
-}
+});
 
-function Triangle({
+const Triangle = memo(function Triangle({
   index,
   isTop,
   color,
@@ -77,12 +88,16 @@ function Triangle({
   player,
   isHighlighted,
   isSelected,
-  onPress,
+  onPointPress,
   pointHeight,
   maxDisplay,
   pointWidth,
   checkerSize,
 }) {
+  const handlePointPress = useCallback(() => {
+    onPointPress(index);
+  }, [onPointPress, index]);
+
   const count = Math.abs(checkers);
   const cap = Math.max(1, maxDisplay);
   const show = Math.min(count, cap);
@@ -95,7 +110,7 @@ function Triangle({
 
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={handlePointPress}
       activeOpacity={0.7}
       style={[
         {
@@ -151,7 +166,7 @@ function Triangle({
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 /** Роза ветров из PNG (подложка подогнана под bg доски, см. scripts/tint-compass-to-board.mjs) */
 function PrisonCompassStarImage({ size }) {
@@ -169,7 +184,124 @@ function PrisonCompassStarImage({ size }) {
   );
 }
 
-const BackgammonBoard = forwardRef(function BackgammonBoard({
+const BoardOverlayHint = React.memo(function BoardOverlayHint({
+  isMyTurn,
+  turnPhase,
+  selfPlay,
+  opponentOnline,
+}) {
+  const hint =
+    isMyTurn === true && turnPhase === 'roll'
+      ? !selfPlay && opponentOnline
+        ? 'Бросай!'
+        : null
+      : isMyTurn === true && turnPhase === 'move' && opponentOnline
+        ? 'Ходи!'
+        : null;
+
+  const [hintLabel, setHintLabel] = useState(null);
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const previousHintRef = useRef(null);
+  const showHintRef = useRef(false);
+  const pulseLoopRef = useRef(null);
+
+  useEffect(() => {
+    const prevHint = previousHintRef.current;
+
+    const startPulseLoop = () => {
+      pulseLoopRef.current?.stop();
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(opacityAnim, {
+            toValue: 0.26,
+            duration: 900,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacityAnim, {
+            toValue: 0.14,
+            duration: 900,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseLoopRef.current = loop;
+      loop.start();
+    };
+
+    if (hint) {
+      showHintRef.current = true;
+      setHintLabel(hint);
+      if (prevHint === null) {
+        pulseLoopRef.current?.stop();
+        pulseLoopRef.current = null;
+        opacityAnim.stopAnimation();
+        opacityAnim.setValue(0);
+        Animated.timing(opacityAnim, {
+          toValue: 0.2,
+          duration: 400,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (!finished || !showHintRef.current) return;
+          startPulseLoop();
+        });
+      }
+    } else if (prevHint !== null) {
+      showHintRef.current = false;
+      pulseLoopRef.current?.stop();
+      pulseLoopRef.current = null;
+      opacityAnim.stopAnimation();
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setHintLabel(null);
+      });
+    }
+
+    previousHintRef.current = hint;
+  }, [hint, opacityAnim]);
+
+  useEffect(() => () => {
+    pulseLoopRef.current?.stop();
+    pulseLoopRef.current = null;
+    opacityAnim.stopAnimation();
+  }, [opacityAnim]);
+
+  if (hintLabel == null) return null;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 6,
+        elevation: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <Animated.Text
+        style={{
+          fontSize: 56,
+          fontWeight: 'bold',
+          color: '#ffffff',
+          opacity: opacityAnim,
+          textAlign: 'center',
+        }}
+      >
+        {hintLabel}
+      </Animated.Text>
+    </View>
+  );
+});
+
+const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
   gameState,
   playerNumber,
   selectedPoint,
@@ -188,6 +320,10 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
   enableLayoutAnimations = true,
   maxBoardWidth,
   renderPausedRef,
+  isMyTurn,
+  turnPhase,
+  selfPlay = true,
+  opponentOnline = false,
   children,
 }, ref) {
   useImperativeHandle(ref, () => ({
@@ -238,8 +374,13 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
     prevMaxVisibleRef.current = maxVisible;
     prevPointHeightRef.current = pointHeight;
   }, [maxVisible, pointHeight, enableLayoutAnimations]);
-  const highlightedTargets = (highlightedMoves || []).map((m) => m.to);
-  const offHighlight = highlightedTargets.includes('off');
+
+  const highlightedTargets = useMemo(
+    () => new Set((highlightedMoves || []).map((m) => m.to)),
+    [highlightedMoves]
+  );
+  const offHighlight = highlightedTargets.has('off');
+
   const halfW = pointW * 6;
   const right12Start = halfW + barW;
   const leftClusterCx = halfW / 2;
@@ -273,8 +414,11 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
     })
   ).current;
 
-  const topIndices = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
-  const bottomIndices = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+  const topIndices = useMemo(() => [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], []);
+  const bottomIndices = useMemo(() => [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0], []);
+
+  const onBarPressPlayer2 = useCallback(() => onBarPress(2), [onBarPress]);
+  const onBarPressPlayer1 = useCallback(() => onBarPress(1), [onBarPress]);
 
   const renderHalf = (indices, isTop) => {
     const leftHalf = indices.slice(0, 6);
@@ -295,9 +439,9 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
                 color={color}
                 checkers={val}
                 player={player}
-                isHighlighted={highlightedTargets.includes(idx)}
+                isHighlighted={highlightedTargets.has(idx)}
                 isSelected={selectedPoint === idx}
-                onPress={() => onPointPress(idx)}
+                onPointPress={onPointPress}
                 pointHeight={pointHeight}
                 maxDisplay={maxVisible}
                 pointWidth={pointW}
@@ -307,7 +451,7 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
           })}
 
           <TouchableOpacity
-            onPress={() => onBarPress(isTop ? 2 : 1)}
+            onPress={isTop ? onBarPressPlayer2 : onBarPressPlayer1}
             style={{
               width: barW,
               height: pointHeight,
@@ -341,9 +485,9 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
                 color={color}
                 checkers={val}
                 player={player}
-                isHighlighted={highlightedTargets.includes(idx)}
+                isHighlighted={highlightedTargets.has(idx)}
                 isSelected={selectedPoint === idx}
-                onPress={() => onPointPress(idx)}
+                onPointPress={onPointPress}
                 pointHeight={pointHeight}
                 maxDisplay={maxVisible}
                 pointWidth={pointW}
@@ -363,7 +507,7 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
         if (typeof w === 'number' && w > 0) setContainerW(w);
       }}
       style={{
-        backgroundColor: boardPalette.bg,
+        backgroundColor: 'transparent',
         width: '100%',
         alignSelf: 'stretch',
         alignItems: 'center',
@@ -375,7 +519,7 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
           maxWidth: '100%',
           borderRadius: 12,
           overflow: 'hidden',
-          backgroundColor: boardPalette.bg,
+          backgroundColor: 'transparent',
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: V.border,
         }}
@@ -384,7 +528,7 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
           intensity={Platform.OS === 'ios' ? 52 : 40}
           tint="dark"
           blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
-          style={{ width: '100%' }}
+          style={{ width: '100%', borderRadius: 12, overflow: 'hidden' }}
         >
           <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: GLASS_TINT }]} />
           {/* Верхний блик «стекла» — тонкая линия, без градиента */}
@@ -393,15 +537,20 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
             style={{
               position: 'absolute',
               top: 0,
-              left: 12,
-              right: 12,
+              left: 0,
+              right: 0,
               height: StyleSheet.hairlineWidth,
               backgroundColor: V.sectionBorder,
               zIndex: 3,
             }}
           />
       <View style={{ width: '100%' }}>
-      <View style={tw`flex-row items-center justify-between px-2 py-1`}>
+      <View
+        style={[
+          tw`flex-row items-center justify-between px-2 py-1`,
+          { borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden' },
+        ]}
+      >
         <View style={tw`flex-row items-center`}>
           <TouchableOpacity
             onPress={() => onBearOffPress(2)}
@@ -520,6 +669,12 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
             {diceOverlay}
           </View>
         )}
+        <BoardOverlayHint
+          isMyTurn={isMyTurn}
+          turnPhase={turnPhase}
+          selfPlay={selfPlay}
+          opponentOnline={opponentOnline}
+        />
         {swipeHintOverlay}
       </View>
 
@@ -529,6 +684,6 @@ const BackgammonBoard = forwardRef(function BackgammonBoard({
       </View>
     </View>
   );
-});
+}));
 
 export default BackgammonBoard;

@@ -1,16 +1,15 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Clipboard from 'expo-clipboard';
-import { CommonActions } from '@react-navigation/native';
 import tw from 'twrnc';
 import { V } from '../theme';
+import { supabase } from '../lib/supabase';
+import { NICKNAME_STORAGE_KEY } from '../context/AuthGateContext';
 import { UserAvatar } from '../components/UserAvatar';
 import ProfileAvatarModal from '../components/ProfileAvatarModal';
 import { useLocalAvatar } from '../context/LocalAvatarContext';
 import TabBackground from '../components/TabBackground';
-
-const NICKNAME_KEY = '@backgammon_nickname';
+import { useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
 
 function RowButton({ title, subtitle, onPress, variant = 'default' }) {
   const color =
@@ -23,9 +22,15 @@ function RowButton({ title, subtitle, onPress, variant = 'default' }) {
       ]}
       onPress={onPress}
     >
-      <Text style={[tw`text-[13px] font-medium`, { color }]}>{title}</Text>
+      <Text pointerEvents="none" style={[tw`text-[13px] font-medium`, { color }]}>
+        {title}
+      </Text>
       {!!subtitle && (
-        <Text style={[tw`text-[11px] mt-1`, { color: V.textSecondary }]} numberOfLines={2}>
+        <Text
+          pointerEvents="none"
+          style={[tw`text-[11px] mt-1`, { color: V.textSecondary }]}
+          numberOfLines={2}
+        >
           {subtitle}
         </Text>
       )}
@@ -33,36 +38,61 @@ function RowButton({ title, subtitle, onPress, variant = 'default' }) {
   );
 }
 
+function Section({ title, children }) {
+  return (
+    <View style={tw`mb-4`}>
+      <Text
+        pointerEvents="none"
+        style={[
+          tw`text-[11px] mb-[6px]`,
+          { color: V.textSecondary, fontWeight: '400' },
+        ]}
+      >
+        {title}
+      </Text>
+      <View
+        style={[
+          tw`rounded-[12px] px-4 overflow-hidden`,
+          { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border },
+        ]}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
 export default function ProfileScreen({ route, navigation }) {
   const nickname = route.params?.nickname || '';
-  const inviteCode = useMemo(() => nickname || '—', [nickname]);
   const { avatarUri } = useLocalAvatar();
   const [avatarModal, setAvatarModal] = useState(false);
+  const headerLayout = useMessengerHeaderLayout();
 
-  const copyInvite = async () => {
-    try {
-      await Clipboard.setStringAsync(inviteCode);
-      Alert.alert('Скопировано', 'Инвайт-код скопирован в буфер обмена.');
-    } catch {
-      Alert.alert('Ошибка', 'Не удалось скопировать код.');
+  const openInvites = () => {
+    const tabNav = navigation.getParent?.();
+    if (tabNav?.navigate) {
+      tabNav.navigate('Profile', { screen: 'InviteFriends' });
+    } else {
+      navigation.navigate('InviteFriends');
     }
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem(NICKNAME_KEY);
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'Login' }],
-      })
-    );
+    await supabase.auth.signOut();
+    await AsyncStorage.removeItem(NICKNAME_STORAGE_KEY);
   };
 
   return (
     <TabBackground>
-      <View style={[tw`flex-1 pt-12 px-4`, { backgroundColor: 'transparent' }]}>
-        <Text style={[tw`text-[17px] font-medium mb-4`, { color: V.textPrimary }]}>Профиль</Text>
-
+      <ScrollView
+        style={tw`flex-1`}
+        contentContainerStyle={[
+          tw`px-4 pb-10`,
+          { backgroundColor: 'transparent', paddingTop: headerLayout.paddingTop },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={tw`flex-row items-center mb-5`}>
           <UserAvatar
             name={nickname}
@@ -70,47 +100,61 @@ export default function ProfileScreen({ route, navigation }) {
             size={56}
             onPress={() => setAvatarModal(true)}
           />
-          <View style={tw`ml-3 flex-1`}>
-            <Text style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
-              {nickname || 'Гость'}
-            </Text>
-            <Text style={[tw`text-[11px] mt-1`, { color: V.textSecondary }]}>Твой инвайт-код</Text>
-            <Text style={[tw`text-[12px] mt-0.5`, { color: V.textMuted }]}>{inviteCode}</Text>
+          <View style={tw`ml-3 flex-1 min-w-0`}>
+            <View style={tw`flex-row items-center`}>
+              <Text
+                style={[tw`text-[15px] font-medium flex-1 min-w-0`, { color: V.textPrimary }]}
+                numberOfLines={1}
+              >
+                @{nickname || 'гость'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => Alert.alert('Скоро')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[tw`text-[13px] font-medium ml-2`, { color: V.accentSage }]}>
+                  Редактировать
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
-        <View
-          style={[
-            tw`rounded-[12px] px-4`,
-            { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border },
-          ]}
-        >
+        <Section title="ОСНОВНОЕ">
           <RowButton
-            title="Пригласить нового пользователя"
-            subtitle="Скопировать инвайт-код и отправить другу"
-            onPress={copyInvite}
+            title="Пригласить пользователя"
+            onPress={openInvites}
             variant="primary"
           />
+        </Section>
+
+        <Section title="ПРИВАТНОСТЬ">
           <RowButton
-            title="Настройки"
-            subtitle="Скоро: уведомления, приватность, тема"
-            onPress={() => Alert.alert('Настройки', 'Скоро.')}
+            title="Кто может написать мне"
+            onPress={() => Alert.alert('Скоро')}
           />
+        </Section>
+
+        <Section title="ПРИЛОЖЕНИЕ">
+          <RowButton title="Уведомления" onPress={() => Alert.alert('Скоро')} />
+          <RowButton title="Внешний вид" onPress={() => Alert.alert('Скоро')} />
+        </Section>
+
+        <Section title="АККАУНТ">
+          <RowButton title="Выйти" onPress={logout} variant="danger" />
           <RowButton
-            title="Выйти"
-            subtitle="Удалит локальный никнейм на этом устройстве"
-            onPress={logout}
+            title="Удалить аккаунт"
+            onPress={() => Alert.alert('Скоро')}
             variant="danger"
           />
-        </View>
+        </Section>
 
         <ProfileAvatarModal
           visible={avatarModal}
           onClose={() => setAvatarModal(false)}
           nickname={nickname}
         />
-      </View>
+      </ScrollView>
     </TabBackground>
   );
 }
-

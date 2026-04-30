@@ -13,12 +13,24 @@ import {
   StyleSheet,
 } from 'react-native';
 import tw from 'twrnc';
-import * as Clipboard from 'expo-clipboard';
 import SafeBlurView from './SafeBlurView';
 import { supabase } from '../lib/supabase';
 import { TAB_BAR_INNER_ROW_H, TAB_BAR_LAYOUT, V } from '../theme';
 import { UserPlus } from '../icons/lucideIcons';
 import { normalizeUserPair } from '../utils/roomIds';
+import { useMessengerHeaderLayout } from './MessengerHeaderLayout';
+
+const HANDLE_PREFIX_DEBOUNCE_MS = 350;
+const HANDLE_SLUG_MAX = 32;
+/** Совпадает с проверкой в RPC search_profiles_by_handle_prefix */
+const HANDLE_RPC_PREFIX_RE = /^[a-z0-9_]{2,}$/;
+
+function sanitizeHandleSlug(raw) {
+  return String(raw || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, HANDLE_SLUG_MAX);
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
@@ -54,17 +66,29 @@ export default function ContactsDrawer({
   variant = 'drawer',
 }) {
   const isScreen = variant === 'screen';
+  const headerLayout = useMessengerHeaderLayout();
   const [contacts, setContacts] = useState([]);
   const [searchQ, setSearchQ] = useState('');
+  const [handleResults, setHandleResults] = useState([]);
+  const [handleSearchLoading, setHandleSearchLoading] = useState(false);
+  const handleSearchSeqRef = useRef(0);
   const inviteScaleX = useRef(new Animated.Value(1)).current;
   const inviteScaleY = useRef(new Animated.Value(1)).current;
   const inviteRunAnimRef = useRef(null);
 
   const filteredContacts = useMemo(() => {
+    if (searchQ.trimStart().startsWith('@')) return [];
     const s = searchQ.trim().toLowerCase();
     if (!s) return contacts;
     return contacts.filter((name) => (name || '').toLowerCase().includes(s));
   }, [contacts, searchQ]);
+
+  const handlePrefixForUi = useMemo(() => {
+    const raw = searchQ.trimStart();
+    if (!raw.startsWith('@')) return '';
+    return sanitizeHandleSlug(raw.slice(1));
+  }, [searchQ]);
+
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
 
@@ -108,6 +132,56 @@ export default function ContactsDrawer({
     if (visible) fetchContacts();
   }, [nickname, visible, isScreen]);
 
+  useEffect(() => {
+    if (!isScreen || !nickname) {
+      handleSearchSeqRef.current += 1;
+      setHandleResults([]);
+      setHandleSearchLoading(false);
+      return;
+    }
+    const raw = searchQ.trimStart();
+    if (!raw.startsWith('@')) {
+      handleSearchSeqRef.current += 1;
+      setHandleResults([]);
+      setHandleSearchLoading(false);
+      return;
+    }
+    const slug = sanitizeHandleSlug(raw.slice(1));
+    if (slug.length < 2 || !HANDLE_RPC_PREFIX_RE.test(slug)) {
+      handleSearchSeqRef.current += 1;
+      setHandleResults([]);
+      setHandleSearchLoading(false);
+      return;
+    }
+
+    const seq = ++handleSearchSeqRef.current;
+    setHandleSearchLoading(true);
+    setHandleResults([]);
+    const timer = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase.rpc('search_profiles_by_handle_prefix', {
+          prefix: slug,
+          lim: 20,
+        });
+        if (seq !== handleSearchSeqRef.current) return;
+        if (error) {
+          setHandleResults([]);
+          Alert.alert('Поиск', error.message || 'Не удалось выполнить поиск');
+          return;
+        }
+        const rows = (data || []).filter((r) => r?.handle && r.handle !== nickname);
+        setHandleResults(rows);
+      } finally {
+        if (seq === handleSearchSeqRef.current) setHandleSearchLoading(false);
+      }
+    }, HANDLE_PREFIX_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(timer);
+      setHandleSearchLoading(false);
+    };
+  }, [searchQ, nickname, isScreen]);
+
   const fetchContacts = async () => {
     const { data: rooms } = await supabase
       .from('rooms')
@@ -124,19 +198,15 @@ export default function ContactsDrawer({
     setContacts([...names].sort());
   };
 
-  const inviteFriends = useCallback(async () => {
-    const code = (nickname || '').trim();
-    if (!code) {
-      Alert.alert('Профиль', 'Сначала укажи никнейм в профиле.');
+  const openInviteFriends = useCallback(() => {
+    onClose?.();
+    const tabNav = navigation?.getParent?.();
+    if (tabNav?.navigate) {
+      tabNav.navigate('Profile', { screen: 'InviteFriends' });
       return;
     }
-    try {
-      await Clipboard.setStringAsync(code);
-      Alert.alert('Скопировано', 'Инвайт-код скопирован в буфер обмена.');
-    } catch {
-      Alert.alert('Ошибка', 'Не удалось скопировать код.');
-    }
-  }, [nickname]);
+    Alert.alert('Приглашения', 'Откройте вкладку «Профиль» → приглашения.');
+  }, [navigation, onClose]);
 
   const openOrCreateRoom = async (contactName) => {
     try {
@@ -172,9 +242,10 @@ export default function ContactsDrawer({
       }
 
       onClose?.();
-      navigation?.navigate('Game', {
+      navigation?.navigate('Room', {
         roomId: room.id,
         nickname,
+        peerName: contactName,
         playerNumber: room.user1_id === nickname ? 1 : 2,
       });
     } catch (e) {
@@ -205,185 +276,223 @@ export default function ContactsDrawer({
     </View>
   );
 
-  const screenListEmpty = (
-    <View style={tw`py-10`}>
-      {contacts.length === 0 ? (
-        <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>
-          Пока нет контактов. Сыграй с кем-нибудь!
-        </Text>
-      ) : (
-        <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>Контакты не найдены</Text>
-      )}
-    </View>
-  );
+  const screenListEmpty =
+    searchQ.trimStart().startsWith('@') ? null : (
+      <View style={tw`py-10`}>
+        {contacts.length === 0 ? (
+          <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>
+            Пока нет контактов. Сыграй с кем-нибудь!
+          </Text>
+        ) : (
+          <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>Контакты не найдены</Text>
+        )}
+      </View>
+    );
 
   const screenHeader = (
     <View style={{ backgroundColor: 'transparent' }}>
-      <View style={tw`mb-3 pt-12`}>
-        <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]}>Контакты</Text>
+      <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
+        <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
+          Контакты
+        </Text>
       </View>
-      <View style={tw`mb-3`}>
-        <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFillObject,
-            {
-              borderRadius: TAB_BAR_LAYOUT.borderRadius,
-              borderWidth: 2,
-              borderColor: V.sageBorder,
-            },
-          ]}
-        />
-        <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFillObject,
-            {
-              borderRadius: TAB_BAR_LAYOUT.borderRadius,
-              borderWidth: 1,
-              borderColor: V.sageFocus,
-            },
-          ]}
-        />
-        <SafeBlurView
-          intensity={20}
-          tint="dark"
-          blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
-          style={[
-            tw`flex-row items-center`,
-            {
-              height: TAB_BAR_INNER_ROW_H,
-              borderRadius: TAB_BAR_LAYOUT.borderRadius,
-              overflow: 'hidden',
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: V.border,
-              paddingLeft: TAB_BAR_LAYOUT.rowPaddingH,
-              paddingRight: 0,
-            },
-          ]}
-        >
+      <View style={{ paddingHorizontal: headerLayout.paddingHorizontal }}>
+        <View style={tw`mb-3`}>
           <View
             pointerEvents="none"
             style={[
               StyleSheet.absoluteFillObject,
               {
-                backgroundColor: V.sageSubtle,
-                opacity: 1,
+                borderRadius: TAB_BAR_LAYOUT.borderRadius,
+                borderWidth: 2,
+                borderColor: V.sageBorder,
               },
             ]}
           />
-        <TextInput
-          style={[
-            tw`flex-1 text-[13px]`,
-            {
-              color: V.textPrimary,
-              paddingVertical: 0,
-              height: TAB_BAR_INNER_ROW_H,
-            },
-          ]}
-          placeholder="Поиск..."
-          placeholderTextColor={V.textGhost}
-          value={searchQ}
-          onChangeText={setSearchQ}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {!!searchQ && (
-          <TouchableOpacity
-            onPress={() => setSearchQ('')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={tw`ml-2`}
-            accessibilityRole="button"
-            accessibilityLabel="Очистить поиск"
-          >
-            <Text style={[tw`text-[18px]`, { color: V.textPrimary, lineHeight: 18 }]}>×</Text>
-          </TouchableOpacity>
-        )}
-
-        <Pressable
-          onPress={inviteFriends}
-          onPressIn={() => {
-            inviteRunAnimRef.current?.stop?.();
-            inviteScaleX.stopAnimation?.();
-            inviteScaleY.stopAnimation?.();
-            inviteScaleX.setValue(1);
-            inviteScaleY.setValue(1);
-
-            const anim = Animated.sequence([
-              Animated.parallel([
-                Animated.timing(inviteScaleX, {
-                  toValue: 1.08,
-                  duration: 95,
-                  useNativeDriver: true,
-                }),
-                Animated.timing(inviteScaleY, {
-                  toValue: 0.84,
-                  duration: 95,
-                  useNativeDriver: true,
-                }),
-              ]),
-              Animated.parallel([
-                Animated.spring(inviteScaleX, {
-                  toValue: 1,
-                  friction: 3,
-                  tension: 200,
-                  useNativeDriver: true,
-                }),
-                Animated.spring(inviteScaleY, {
-                  toValue: 1,
-                  friction: 3,
-                  tension: 200,
-                  useNativeDriver: true,
-                }),
-              ]),
-            ]);
-
-            inviteRunAnimRef.current = anim;
-            anim.start();
-          }}
-          onPressOut={() => {
-            // Ничего не делаем: возврат уже в последовательности onPressIn
-          }}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={{ marginLeft: 8, marginRight: 0 }}
-          accessibilityRole="button"
-          accessibilityLabel="Пригласить друзей"
-        >
-          <Animated.View
-            style={{
-              width: TAB_BAR_INNER_ROW_H,
-              height: TAB_BAR_INNER_ROW_H,
-              borderRadius: TAB_BAR_INNER_ROW_H / 2,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: V.sageSubtle,
-              borderWidth: 1,
-              borderColor: V.accentSage,
-              transform: [{ scaleX: inviteScaleX }, { scaleY: inviteScaleY }],
-            }}
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                borderRadius: TAB_BAR_LAYOUT.borderRadius,
+                borderWidth: 1,
+                borderColor: V.sageFocus,
+              },
+            ]}
+          />
+          <SafeBlurView
+            intensity={20}
+            tint="dark"
+            blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
+            style={[
+              tw`flex-row items-center`,
+              {
+                height: TAB_BAR_INNER_ROW_H,
+                borderRadius: TAB_BAR_LAYOUT.borderRadius,
+                overflow: 'hidden',
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: V.border,
+                paddingLeft: TAB_BAR_LAYOUT.rowPaddingH,
+                paddingRight: 0,
+              },
+            ]}
           >
             <View
               pointerEvents="none"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                borderRadius: TAB_BAR_INNER_ROW_H / 2,
-                borderWidth: 2,
-                borderColor: V.sageFocus,
-                opacity: 1,
-              }}
+              style={[
+                StyleSheet.absoluteFillObject,
+                {
+                  backgroundColor: V.sageSubtle,
+                  opacity: 1,
+                },
+              ]}
             />
-            <UserPlus size={16} color={V.accentSage} strokeWidth={1.5} />
-          </Animated.View>
-        </Pressable>
-        </SafeBlurView>
+            <TextInput
+              style={[
+                tw`flex-1 text-[13px]`,
+                {
+                  color: V.textPrimary,
+                  paddingVertical: 0,
+                  height: TAB_BAR_INNER_ROW_H,
+                },
+              ]}
+              placeholder="Поиск по имени или @handle"
+              placeholderTextColor={V.textGhost}
+              value={searchQ}
+              onChangeText={setSearchQ}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {!!searchQ && (
+              <TouchableOpacity
+                onPress={() => setSearchQ('')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={tw`ml-2`}
+                accessibilityRole="button"
+                accessibilityLabel="Очистить поиск"
+              >
+                <Text style={[tw`text-[18px]`, { color: V.textPrimary, lineHeight: 18 }]}>×</Text>
+              </TouchableOpacity>
+            )}
+
+            <Pressable
+              onPress={openInviteFriends}
+              onPressIn={() => {
+                inviteRunAnimRef.current?.stop?.();
+                inviteScaleX.stopAnimation?.();
+                inviteScaleY.stopAnimation?.();
+                inviteScaleX.setValue(1);
+                inviteScaleY.setValue(1);
+
+                const anim = Animated.sequence([
+                  Animated.parallel([
+                    Animated.timing(inviteScaleX, {
+                      toValue: 1.08,
+                      duration: 95,
+                      useNativeDriver: true,
+                    }),
+                    Animated.timing(inviteScaleY, {
+                      toValue: 0.84,
+                      duration: 95,
+                      useNativeDriver: true,
+                    }),
+                  ]),
+                  Animated.parallel([
+                    Animated.spring(inviteScaleX, {
+                      toValue: 1,
+                      friction: 3,
+                      tension: 200,
+                      useNativeDriver: true,
+                    }),
+                    Animated.spring(inviteScaleY, {
+                      toValue: 1,
+                      friction: 3,
+                      tension: 200,
+                      useNativeDriver: true,
+                    }),
+                  ]),
+                ]);
+
+                inviteRunAnimRef.current = anim;
+                anim.start();
+              }}
+              onPressOut={() => {
+                // Ничего не делаем: возврат уже в последовательности onPressIn
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ marginLeft: 8, marginRight: 0 }}
+              accessibilityRole="button"
+              accessibilityLabel="Коды приглашений"
+            >
+              <Animated.View
+                style={{
+                  width: TAB_BAR_INNER_ROW_H,
+                  height: TAB_BAR_INNER_ROW_H,
+                  borderRadius: TAB_BAR_INNER_ROW_H / 2,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: V.sageSubtle,
+                  borderWidth: 1,
+                  borderColor: V.accentSage,
+                  transform: [{ scaleX: inviteScaleX }, { scaleY: inviteScaleY }],
+                }}
+              >
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: TAB_BAR_INNER_ROW_H / 2,
+                    borderWidth: 2,
+                    borderColor: V.sageFocus,
+                    opacity: 1,
+                  }}
+                />
+                <UserPlus size={16} color={V.accentSage} strokeWidth={1.5} />
+              </Animated.View>
+            </Pressable>
+          </SafeBlurView>
+        </View>
+
+        {isScreen ? (
+          <View style={tw`mb-4`}>
+            {handleSearchLoading ? (
+              <Text style={[tw`text-[12px] ml-1 mb-1`, { color: V.textMuted }]}>Поиск…</Text>
+            ) : null}
+            {!handleSearchLoading &&
+            searchQ.trimStart().startsWith('@') &&
+            handlePrefixForUi.length >= 2 &&
+            HANDLE_RPC_PREFIX_RE.test(handlePrefixForUi) &&
+            handleResults.length === 0 ? (
+              <Text style={[tw`text-[12px] ml-1`, { color: V.textMuted }]}>Пользователи не найдены</Text>
+            ) : null}
+            {handleResults.map((row) => (
+              <TouchableOpacity
+                key={row.id}
+                onPress={() => openOrCreateRoom(row.handle)}
+                style={[
+                  tw`flex-row items-center py-3 px-3 rounded-[10px] mb-1`,
+                  { backgroundColor: V.bgElevated, borderWidth: 0.5, borderColor: V.border },
+                ]}
+              >
+                <AvatarCircle name={row.handle} />
+                <View style={tw`flex-1`}>
+                  <Text style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]}>
+                    @{row.handle}
+                  </Text>
+                </View>
+                <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]}>Открыть</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
       </View>
     </View>
   );
 
   if (isScreen) {
     return (
-      <View style={[tw`flex-1 px-4`, { backgroundColor: 'transparent' }]}>
+      <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
         <FlatList
           style={tw`flex-1`}
           data={filteredContacts}
@@ -426,8 +535,10 @@ export default function ContactsDrawer({
           },
         ]}
       >
-        <View style={[tw`pt-14 pb-4 px-4`, { backgroundColor: V.bgElevated }]}>
-          <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]}>Контакты</Text>
+        <View style={[headerLayout.containerStyle, { backgroundColor: V.bgElevated }]}>
+          <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
+            Контакты
+          </Text>
         </View>
 
         <FlatList

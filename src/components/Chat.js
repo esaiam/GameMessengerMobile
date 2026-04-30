@@ -4,8 +4,10 @@ import React, {
   useRef,
   useCallback,
   useMemo,
-  useSyncExternalStore,
+  useContext,
+  createContext,
 } from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   View,
   Text,
@@ -23,15 +25,19 @@ import {
   ScrollView,
   StyleSheet,
   useWindowDimensions,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import SafeBlurView from './SafeBlurView';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
+import { uploadAsync, FileSystemUploadType } from 'expo-file-system/legacy';
 import { deriveKey, encrypt, decrypt, looksLikeEncryptedPayload } from '../utils/crypto';
 import { getOrCreateKeyPair } from '../utils/VaultKeyStore';
-import { publishMyPublicKey } from '../utils/VaultKeyServer';
+import { publishMyPublicKey, fetchPublicKeys, getKeyFromCache } from '../utils/VaultKeyServer';
 import { encryptMessage, decryptMessage, isVaultEncrypted } from '../utils/VaultCrypto';
+import roomMessagesCache from '../utils/roomMessagesCache';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
@@ -39,11 +45,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useVoicePlayer } from '../hooks/useVoicePlayer';
 import VoiceRecorder from './chat/VoiceRecorder';
 import ChatRoomHeader from './ChatRoomHeader';
-import ChatBackgroundNoise from './ChatBackgroundNoise';
 import VideoMessage from '../components/chat/VideoMessage';
 import VoiceMessagePlayer from './chat/VoiceMessagePlayer';
-import BubbleSkiaGradient from './chat/BubbleSkiaGradient';
+import BubbleLinearGradient from './chat/BubbleLinearGradient';
 import OutgoingBubble from './chat/OutgoingBubble';
+import MessageContextMenu from './chat/MessageContextMenu';
 import {
   Send,
   X,
@@ -55,15 +61,20 @@ import {
   MapPin,
   Trash2,
   Check,
+  Users,
   CheckCheck,
   Flame,
   Timer,
 } from '../icons/lucideIcons';
 import Reanimated, {
   useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
   useAnimatedScrollHandler,
   runOnJS,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H } from '../theme';
 
 /** Подсветка строки в режиме выбора (ширина контента ленты); нейтральный серый из токенов */
@@ -71,17 +82,9 @@ const MESSAGE_ROW_SELECTION_BG = V.border;
 import { File as ExpoFile, Paths } from 'expo-file-system';
 import CryptoJS from 'crypto-js';
 
-const LongPressView = ({ onLongPress, delayLongPress, style, children }) => (
-  <Pressable
-    onLongPress={onLongPress}
-    delayLongPress={delayLongPress}
-    style={({ pressed }) => [style, pressed && { opacity: 0.7 }]}
-  >
-    {children}
-  </Pressable>
-);
 
-const CHAT_BG_PATTERN = require('../../assets/chat-bg-gaming.jpg');
+/** Фон чата: полный экран (cover), затемнение 50% — слой ниже */
+const CHAT_ROOM_WALLPAPER = require('../../assets/chat-room-wallpaper.jpg');
 
 /** Пузыри: Design.mdc */
 const BUBBLE_RADIUS = 18;
@@ -89,13 +92,49 @@ const BUBBLE_TAIL = 4;
 const MSG_TEXT_SIZE = 15;
 const MSG_LINE_HEIGHT = Math.round(MSG_TEXT_SIZE * 1.45);
 const TS_TEXT_SIZE = 11;
-/** Резерв ширины под время+галочки (только NBSP — без дублирования цифр времени в spacer). */
-const META_RESERVE_NBSP_INCOMING = 12;
-const META_RESERVE_NBSP_OUTGOING = 22;
-const META_RESERVE_NBSP_EPHEMERAL_EXTRA = 10;
+/** Резерв ширины под время+галочки/огонёк (px) — вместо длинной строки NBSP внутри Text. */
+const META_RESERVE_PX_INCOMING = 48;
+const META_RESERVE_PX_OUTGOING = 88;
+const META_RESERVE_PX_EPHEMERAL_EXTRA = 40;
+
+const MAX_RENDERED_VIDEOS = 5;
+
+/** Тик 1 с только для сгорающих сообщений; обновляют только EphemeralCountdown (context). */
+const EphemeralClockContext = createContext(0);
 
 /** Расстояние до низа, меньше которого считаем пользователя «внизу» (как в Telegram). */
 const CHAT_AT_BOTTOM_THRESHOLD_PX = 40;
+
+/** Свайп пузырька влево → ответ */
+const SWIPE_REPLY_THRESHOLD_PX = 48;
+const SWIPE_REPLY_MAX_DRAG_PX = 88;
+/** Возврат пузырька на место после отпускания — только timing, без spring */
+const SWIPE_REPLY_RESET_MS = 200;
+/** Reply-плашка над капсулой ввода */
+const REPLY_TARGET_PREVIEW_H = 52;
+const REPLY_TARGET_ANIM_MS = 180;
+const EMOJI_PICKER_PANEL_H = 221;
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+function configureReplyTargetLayoutAnimation() {
+  LayoutAnimation.configureNext({
+    duration: REPLY_TARGET_ANIM_MS,
+    create: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+    update: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+    },
+    delete: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+  });
+}
 
 const BUBBLE_EDGE_SOFT = 'rgba(110, 195, 185, 0.07)';
 
@@ -144,7 +183,7 @@ const BubbleMaterial = React.memo(function BubbleMaterial({
           },
         ]}
       >
-        <BubbleSkiaGradient colors={V.inBubbleGradient} />
+        <BubbleLinearGradient colors={V.inBubbleGradient} />
         <View
           pointerEvents="none"
           style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.04)' }]}
@@ -213,8 +252,8 @@ const INPUT_BAR_BLUR_INTENSITY_IOS = 78;
 const INPUT_BAR_BLUR_INTENSITY_ANDROID = 56;
 const INPUT_BAR_FROST_TINT_OPACITY = 0.28;
 
-/** Ширина слота под VoiceRecorder (внешнее кольцо микрофона 52px, см. VoiceRecorder) */
-const MIC_BUTTON_SIZE = 52;
+/** Ширина слота под VoiceRecorder (внешнее кольцо микрофона, см. VoiceRecorder MIC_OUTER) */
+const MIC_BUTTON_SIZE = 47;
 
 /** Ключ объекта в Storage: только безопасные символы; `room_id` может быть с кириллицей и т.д. */
 function storageRoomSegment(roomId) {
@@ -236,8 +275,6 @@ async function readUriAsArrayBuffer(uri) {
   }
   return res.arrayBuffer();
 }
-
-const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
 const EPHEMERAL_OPTIONS = [
   { label: 'Выкл', value: null },
@@ -379,6 +416,24 @@ function parseVoiceCaptionDurationSec(text) {
   return min * 60 + sec;
 }
 
+function VideoPlaceholder({ onPress }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        backgroundColor: V.bgElevated,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ fontSize: 32 }}>🎥</Text>
+    </Pressable>
+  );
+}
+
 function ReadCheck({ isRead, isMine }) {
   if (!isMine) return null;
   return (
@@ -414,35 +469,6 @@ function ReplyPreview({ replyMsg }) {
   );
 }
 
-let ephemeralListTick = 0;
-const ephemeralListTickListeners = new Set();
-let ephemeralListTickInterval = null;
-
-function subscribeEphemeralListTick(listener) {
-  ephemeralListTickListeners.add(listener);
-  if (ephemeralListTickListeners.size === 1 && ephemeralListTickInterval == null) {
-    ephemeralListTickInterval = setInterval(() => {
-      ephemeralListTick += 1;
-      ephemeralListTickListeners.forEach((l) => l());
-    }, 1000);
-  }
-  return () => {
-    ephemeralListTickListeners.delete(listener);
-    if (ephemeralListTickListeners.size === 0 && ephemeralListTickInterval != null) {
-      clearInterval(ephemeralListTickInterval);
-      ephemeralListTickInterval = null;
-    }
-  };
-}
-
-function getEphemeralListTickSnapshot() {
-  return ephemeralListTick;
-}
-
-function getEphemeralListTickServerSnapshot() {
-  return 0;
-}
-
 function ReactionsBar({ reactions, onReact }) {
   if (!reactions || Object.keys(reactions).length === 0) return null;
   return (
@@ -467,11 +493,7 @@ function ReactionsBar({ reactions, onReact }) {
 }
 
 function EphemeralCountdown({ expiresAt }) {
-  const tick = useSyncExternalStore(
-    subscribeEphemeralListTick,
-    getEphemeralListTickSnapshot,
-    getEphemeralListTickServerSnapshot
-  );
+  const tick = useContext(EphemeralClockContext);
   const secsLeft = useMemo(
     () => Math.max(0, Math.ceil((new Date(expiresAt) - Date.now()) / 1000)),
     [expiresAt, tick]
@@ -742,7 +764,7 @@ function VoicePlayer({
   isRecordingVoice,
   waveformRaw,
   onPlay,
-  activeVoiceUri,
+  activeVoiceMessageId,
   activePlayerStatus,
   idleDurationSec,
 }) {
@@ -782,7 +804,8 @@ function VoicePlayer({
 
   if (!resolvedUri) return null;
 
-  const isActiveRow = activeVoiceUri != null && activeVoiceUri === resolvedUri;
+  const isActiveRow =
+    !isRecordingVoice && activeVoiceMessageId != null && activeVoiceMessageId === messageId;
   const isPlaying = isActiveRow && activePlayerStatus.playing;
   const duration = isActiveRow ? activePlayerStatus.duration : 0;
   const progress =
@@ -805,16 +828,100 @@ function VoicePlayer({
   );
 }
 
+/** Свайп влево: пузырёк следует за пальцем (с лёгким растяжением); отпуск после порога → ответить; без spring */
+function MessageBubbleSwipeWrap({ children, enabled, isMine, onReply }) {
+  const translateX = useSharedValue(0);
+
+  const triggerReply = useCallback(() => {
+    onReply();
+  }, [onReply]);
+
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(!!enabled)
+        .maxPointers(1)
+        .activeOffsetX([-16, 16])
+        .failOffsetY([-14, 14])
+        .onUpdate((e) => {
+          const tx = e.translationX;
+          if (tx <= 0) {
+            translateX.value = Math.max(tx, -SWIPE_REPLY_MAX_DRAG_PX);
+          } else {
+            translateX.value = 0;
+          }
+        })
+        .onEnd(() => {
+          const shouldReply = translateX.value <= -SWIPE_REPLY_THRESHOLD_PX;
+          if (shouldReply) {
+            runOnJS(triggerReply)();
+          }
+        })
+        .onFinalize(() => {
+          translateX.value = withTiming(0, {
+            duration: SWIPE_REPLY_RESET_MS,
+            easing: Easing.out(Easing.cubic),
+          });
+        }),
+    [enabled, translateX, triggerReply]
+  );
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const tx = translateX.value;
+    const stretch = Math.min(Math.abs(tx) / 420, 0.045);
+    return {
+      transform: [{ translateX: tx }, { scaleX: 1 + stretch }],
+    };
+  });
+
+  return (
+    <GestureDetector gesture={panGesture}>
+      <Reanimated.View
+        style={[{ alignSelf: isMine ? 'flex-end' : 'flex-start' }, animatedStyle]}
+      >
+        {children}
+      </Reanimated.View>
+    </GestureDetector>
+  );
+}
+
 const MessageRow = React.memo(
-  function MessageRow({ item, index, listExtra, activePlayback, fmtLenRef, rowEnvRef, onMessagePress, onMessageLongPress }) {
+  function MessageRow({
+    item,
+    index,
+    listExtra,
+    activeVoiceMessageId,
+    activeVoiceUri,
+    activeVideoId,
+    isRecordingVoice,
+    voicePlaybackSig,
+    fmtLenRef,
+    rowEnvRef,
+    onMessagePress,
+    onMessageLongPress,
+  }) {
     const env = rowEnvRef.current;
     const listLength = fmtLenRef.current;
+    const emitMessageLongPress = (e) => {
+      const x = e?.nativeEvent?.pageX ?? 0;
+      const y = e?.nativeEvent?.pageY ?? 0;
+      onMessageLongPress({ nativeEvent: { pageX: x, pageY: y } }, item);
+    };
+    const fireReply = useCallback(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      rowEnvRef.current.replyToMessage?.(item);
+    }, [item]);
     const isMine = item.player_name === env.nickname;
     const replyMsg = env.getReplyMessage(item.reply_to);
     const isVideoMessage = item.message_type === 'video';
+    const isVideoRenderable = isVideoMessage
+      ? listExtra.renderableVideoIds?.has(item.id)
+      : false;
     const messageRowAnims = env.ensureMessageAnims(item.id);
     const isEphemeral = !!item.expires_at;
     const isSelected = listExtra.selectionMode && env.selectedIds.has(item.id);
+
+    const isVoiceOrAudioItem = item.message_type === 'voice' || item.message_type === 'audio';
 
     const bounceAnim = useRef(new Animated.Value(1)).current;
     const bounceAnimVideo = useRef(new Animated.Value(1)).current;
@@ -839,9 +946,7 @@ const MessageRow = React.memo(
 
     let rowMarginBottom = 0;
     if (item._abovePlayerName != null) {
-      if (!item._sameDay) rowMarginBottom = 10;
-      else if (item._abovePlayerName === item.player_name) rowMarginBottom = 3;
-      else rowMarginBottom = 10;
+      rowMarginBottom = 4;
     }
 
     const bubbleMaxW = env.windowWidth * 0.75;
@@ -876,9 +981,9 @@ const MessageRow = React.memo(
       </>
     );
 
-    const metaReserveNbsp =
-      (isMine ? META_RESERVE_NBSP_OUTGOING : META_RESERVE_NBSP_INCOMING) +
-      (isEphemeral ? META_RESERVE_NBSP_EPHEMERAL_EXTRA : 0);
+    const metaReservePx =
+      (isMine ? META_RESERVE_PX_OUTGOING : META_RESERVE_PX_INCOMING) +
+      (isEphemeral ? META_RESERVE_PX_EPHEMERAL_EXTRA : 0);
 
     const videoEdgeStripStyle = { flex: 1, alignSelf: 'stretch' };
     /* Клип круга — только внутри VideoMessage (Animated.View + overflow: hidden). Здесь без overflow: hidden — иначе предок expo-video ломает композицию вместе с нативным драйвером на строке. */
@@ -890,7 +995,7 @@ const MessageRow = React.memo(
     const bubbleInner = isTextMessage ? (
       <>
         <ReplyPreview replyMsg={replyMsg} />
-        <View style={{ overflow: 'visible' }}>
+        <View style={{ overflow: 'visible', paddingRight: metaReservePx }}>
           <Text
             style={{
               fontSize: MSG_TEXT_SIZE,
@@ -900,16 +1005,6 @@ const MessageRow = React.memo(
             }}
           >
             {item.text}
-            <Text
-              style={{
-                fontSize: TS_TEXT_SIZE,
-                color: bodyColor,
-                opacity: 0,
-                lineHeight: MSG_LINE_HEIGHT,
-              }}
-            >
-              {'\u00A0'.repeat(metaReserveNbsp)}
-            </Text>
           </Text>
           <View
             style={{
@@ -940,13 +1035,19 @@ const MessageRow = React.memo(
             <>
               <Pressable
                 style={videoEdgeStripStyle}
-                onPress={() => onMessagePress(item)}
-                onLongPress={() => onMessageLongPress(item)}
+                onPress={(e) => onMessagePress(e, item)}
+                onLongPress={emitMessageLongPress}
                 delayLongPress={400}
               />
               <Animated.View style={{ transform: [{ scale: bounceAnimVideo }] }}>
                 <View style={{ ...videoCircleChrome, alignSelf: 'flex-start' }}>
-                  {env.renderMessageContent(item, isMine)}
+                  {isVideoRenderable
+                    ? env.renderMessageContent(item, isMine)
+                    : (
+                      <VideoPlaceholder
+                        onPress={() => listExtra.onUnlockVideo?.(item.id)}
+                      />
+                    )}
                 </View>
               </Animated.View>
             </>
@@ -954,13 +1055,19 @@ const MessageRow = React.memo(
             <>
               <Animated.View style={{ transform: [{ scale: bounceAnimVideo }] }}>
                 <View style={{ ...videoCircleChrome, alignSelf: 'flex-start' }}>
-                  {env.renderMessageContent(item, isMine)}
+                  {isVideoRenderable
+                    ? env.renderMessageContent(item, isMine)
+                    : (
+                      <VideoPlaceholder
+                        onPress={() => listExtra.onUnlockVideo?.(item.id)}
+                      />
+                    )}
                 </View>
               </Animated.View>
               <Pressable
                 style={videoEdgeStripStyle}
-                onPress={() => onMessagePress(item)}
-                onLongPress={() => onMessageLongPress(item)}
+                onPress={(e) => onMessagePress(e, item)}
+                onLongPress={emitMessageLongPress}
                 delayLongPress={400}
               />
             </>
@@ -1009,7 +1116,13 @@ const MessageRow = React.memo(
               )}
               {isMine ? (
                 <View style={{ width: '100%', alignSelf: 'stretch' }}>
-                  <View style={{ alignSelf: 'flex-end', width: '100%' }}>{bubbleInner}</View>
+                  <MessageBubbleSwipeWrap
+                    enabled={!listExtra.selectionMode}
+                    isMine
+                    onReply={fireReply}
+                  >
+                    <View style={{ alignSelf: 'flex-end', width: '100%' }}>{bubbleInner}</View>
+                  </MessageBubbleSwipeWrap>
                   <View
                     style={{
                       flexDirection: 'row',
@@ -1023,7 +1136,13 @@ const MessageRow = React.memo(
                 </View>
               ) : (
                 <View style={{ width: '100%', alignSelf: 'stretch' }}>
-                  <View style={{ alignSelf: 'flex-start', width: '100%' }}>{bubbleInner}</View>
+                  <MessageBubbleSwipeWrap
+                    enabled={!listExtra.selectionMode}
+                    isMine={false}
+                    onReply={fireReply}
+                  >
+                    <View style={{ alignSelf: 'flex-start', width: '100%' }}>{bubbleInner}</View>
+                  </MessageBubbleSwipeWrap>
                   <View
                     style={{
                       flexDirection: 'row',
@@ -1040,7 +1159,7 @@ const MessageRow = React.memo(
                 reactions={item.reactions}
                 onReact={(emoji) =>
                   listExtra.selectionMode
-                    ? onMessagePress(item)
+                    ? onMessagePress(undefined, item)
                     : env.toggleReaction(item.id, emoji)
                 }
               />
@@ -1054,8 +1173,8 @@ const MessageRow = React.memo(
             }}
           >
             <Pressable
-              onPress={() => onMessagePress(item)}
-              onLongPress={() => onMessageLongPress(item)}
+              onPress={(e) => onMessagePress(e, item)}
+              onLongPress={emitMessageLongPress}
               delayLongPress={400}
               style={{ width: '100%' }}
             >
@@ -1080,34 +1199,40 @@ const MessageRow = React.memo(
               </Text>
             )}
             <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
-              {isMine ? (
-                <OutgoingBubble
-                  message={item}
-                  bubbleMaxW={bubbleMaxW}
-                  bubbleRadii={bubbleRadii}
-                  isEphemeral={isEphemeral}
-                  isSelected={false}
-                  selectionMode={listExtra.selectionMode}
-                >
-                  {bubbleInner}
-                </OutgoingBubble>
-              ) : (
-                <BubbleMaterial
-                  bubbleMaxW={bubbleMaxW}
-                  alignSelf="flex-start"
-                  bubbleRadii={bubbleRadii}
-                  isEphemeral={isEphemeral}
-                  selectionMode={listExtra.selectionMode}
-                >
-                  {bubbleInner}
-                </BubbleMaterial>
-              )}
+              <MessageBubbleSwipeWrap
+                enabled={!listExtra.selectionMode}
+                isMine={isMine}
+                onReply={fireReply}
+              >
+                {isMine ? (
+                  <OutgoingBubble
+                    message={item}
+                    bubbleMaxW={bubbleMaxW}
+                    bubbleRadii={bubbleRadii}
+                    isEphemeral={isEphemeral}
+                    isSelected={false}
+                    selectionMode={listExtra.selectionMode}
+                  >
+                    {bubbleInner}
+                  </OutgoingBubble>
+                ) : (
+                  <BubbleMaterial
+                    bubbleMaxW={bubbleMaxW}
+                    alignSelf="flex-start"
+                    bubbleRadii={bubbleRadii}
+                    isEphemeral={isEphemeral}
+                    selectionMode={listExtra.selectionMode}
+                  >
+                    {bubbleInner}
+                  </BubbleMaterial>
+                )}
+              </MessageBubbleSwipeWrap>
             </Animated.View>
             <ReactionsBar
               reactions={item.reactions}
               onReact={(emoji) =>
                 listExtra.selectionMode
-                  ? onMessagePress(item)
+                  ? onMessagePress(undefined, item)
                   : env.toggleReaction(item.id, emoji)
               }
             />
@@ -1119,28 +1244,37 @@ const MessageRow = React.memo(
     );
   },
   (prev, next) => {
-    // Voice: перерендериваем только тот пузырь, который сейчас играет (по messageId, не по URI)
-    const prevIsVoiceActive =
-      prev.activePlayback?.activeVoiceMessageId != null &&
-      prev.activePlayback.activeVoiceMessageId === prev.item.id;
-    const nextIsVoiceActive =
-      next.activePlayback?.activeVoiceMessageId != null &&
-      next.activePlayback.activeVoiceMessageId === next.item.id;
+    const isVoiceOrAudio = (item) =>
+      item?.message_type === 'voice' || item?.message_type === 'audio';
 
-    // Video: перерендериваем только активный видеопузырь
-    const prevIsVideoActive =
-      prev.activePlayback?.activeVideoId === prev.item.id &&
-      prev.item.message_type === 'video';
-    const nextIsVideoActive =
-      next.activePlayback?.activeVideoId === next.item.id &&
-      next.item.message_type === 'video';
-
-    if (prevIsVoiceActive || nextIsVoiceActive || prevIsVideoActive || nextIsVideoActive) {
-      // Этот item является активным медиа — всегда перерендерить
-      return false;
+    if (isVoiceOrAudio(prev.item)) {
+      const prevIsActive = prev.activeVoiceMessageId === prev.item.id;
+      const nextIsActive = next.activeVoiceMessageId === next.item.id;
+      // Если этот пузырь сейчас активен или становится активным — перерендер
+      if (prevIsActive || nextIsActive) {
+        return (
+          prev.voicePlaybackSig === next.voicePlaybackSig &&
+          prev.activeVoiceUri === next.activeVoiceUri &&
+          prev.isRecordingVoice === next.isRecordingVoice
+        );
+      }
+      // Неактивная голосовая строка: item стабилен, но смена URI/id плеера должна снимать залипший прогресс
+      return (
+        prev.item === next.item &&
+        prev.index === next.index &&
+        prev.listExtra === next.listExtra &&
+        prev.activeVoiceUri === next.activeVoiceUri &&
+        prev.activeVoiceMessageId === next.activeVoiceMessageId
+      );
     }
 
-    // Неактивный item: изменения activePlayback игнорируем
+    if (prev.item.message_type === 'video') {
+      const prevIsActive = prev.activeVideoId === prev.item.id;
+      const nextIsActive = next.activeVideoId === next.item.id;
+      // Перерендер только если этот конкретный пузырь стал активным или перестал
+      if (prevIsActive !== nextIsActive) return false;
+    }
+
     return (
       prev.item === next.item &&
       prev.index === next.index &&
@@ -1149,11 +1283,14 @@ const MessageRow = React.memo(
   }
 );
 
+// Кэш расшифрованных сообщений — персистится между ремонтированиями чата
+const decryptedCache = new Map(); // key: msg.id, value: расшифрованный text
+
 export default function Chat({
   roomId,
   roomCode,
   nickname,
-  compact = false,
+  peerName,
   onInputBarHeight,
   onInputBarTopY,
   /** Отступ сверху у ленты (под «парящую» шапку с blur), px */
@@ -1161,6 +1298,8 @@ export default function Chat({
   /** Данные для frosted-шапки (рендер внутри Chat); если null — шапки нет. */
   chatRoomHeader,
   onTopOverlayHeight,
+  /** GameScreen: true — не трогать JS-таймеры эфемерки (бросок кубиков) */
+  renderPausedRef,
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -1178,19 +1317,33 @@ export default function Chat({
     });
   }, [onInputBarHeight, onInputBarTopY]);
   const [messages, setMessages] = useState([]);
+  const [messagesLoading, setMessagesLoading] = useState(true);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
-  const [messageActionTarget, setMessageActionTarget] = useState(null);
+  const [visibleReplyTo, setVisibleReplyTo] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [unlockedVideoIds, setUnlockedVideoIds] = useState(() => new Set());
   const [ephemeralSec, setEphemeralSec] = useState(null);
   const [deletingIds, setDeletingIds] = useState(() => new Set());
+
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null);
+  const [uiReady, setUiReady] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      setUiReady(true);
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   const {
     play: handleVoicePlay,
@@ -1203,6 +1356,32 @@ export default function Chat({
   const activatedVideoIds = useRef(new Set());
   const [activeVoiceMessageId, setActiveVoiceMessageId] = useState(null);
 
+  const setReplyTarget = useCallback((nextReply) => {
+    configureReplyTargetLayoutAnimation();
+    setReplyTo(nextReply);
+  }, []);
+
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const [ephemeralClockTick, setEphemeralClockTick] = useState(0);
+
+  /** 1 c тик только пока в ленте есть неистёкшие сгорающие сообщения (без глобального интервала «всегда»). */
+  useEffect(() => {
+    const hasUnexpiredEphemeral = () =>
+      messagesRef.current.some(
+        (m) => m.expires_at && new Date(m.expires_at).getTime() > Date.now()
+      );
+    if (!hasUnexpiredEphemeral()) return undefined;
+    const id = setInterval(() => {
+      if (renderPausedRef?.current) return;
+      setEphemeralClockTick((n) => n + 1);
+      if (!hasUnexpiredEphemeral()) {
+        clearInterval(id);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [messages]);
+
   const flatListRef = useRef(null);
   /** Пользователь у низа inverted-ленты — при новых сообщениях держим offset 0. */
   const stickToBottomRef = useRef(true);
@@ -1210,10 +1389,6 @@ export default function Chat({
   const layoutReadyRef = useRef(false);
   /** Один раз после первого успешного initial scroll. */
   const initialScrollDoneRef = useRef(false);
-  /** Сбрасывает подписку initial-эффекта после layout (ref сам по себе не триггерит ререндер). */
-  const [layoutSignal, setLayoutSignal] = useState(0);
-  const layoutStableRef = useRef(false);
-  const pendingLayoutMutationsRef = useRef(0);
 
   const atBottomScrollShared = useSharedValue(1);
 
@@ -1241,15 +1416,41 @@ export default function Chat({
     [messages]
   );
 
-  const otherPlayerName = useMemo(
-    () => messages.find((m) => m.player_name !== nickname)?.player_name ?? null,
-    [messages, nickname]
-  );
+  const otherPlayerName = useMemo(() => {
+    const explicitPeer = typeof peerName === 'string' ? peerName.trim() : '';
+    if (explicitPeer) return explicitPeer;
+    return messages.find((m) => m.player_name !== nickname)?.player_name ?? null;
+  }, [messages, nickname, peerName]);
+
   const formattedMessagesCacheRef = useRef(new Map());
-  const formattedMessages = useMemo(
-    () => buildFormattedMessagesCached(messages, formattedMessagesCacheRef.current),
-    [messages]
-  );
+  const [formattedMessages, setFormattedMessages] = useState([]);
+  useEffect(() => {
+    setFormattedMessages(
+      buildFormattedMessagesCached(messages, formattedMessagesCacheRef.current)
+    );
+  }, [messages]);
+
+  const onUnlockVideo = useCallback((id) => {
+    setUnlockedVideoIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
+
+  const renderableVideoIds = useMemo(() => {
+    const ids = new Set(unlockedVideoIds);
+    let count = 0;
+    for (const msg of formattedMessages) {
+      if (msg.message_type === 'video') {
+        if (count < MAX_RENDERED_VIDEOS) {
+          ids.add(msg.id);
+          count++;
+        }
+      }
+    }
+    return ids;
+  }, [formattedMessages, unlockedVideoIds]);
 
   const selectedHash = useMemo(
     () => Array.from(selectedIds).sort().join(','),
@@ -1258,13 +1459,16 @@ export default function Chat({
 
   const rowEnvRef = useRef({});
   const fmtLenRef = useRef(0);
+  const readSentRef = useRef(new Set());
   const inputRef = useRef(null);
   const sendInProgressRef = useRef(false);
+  /** Temp ID оптимистичного видеосообщения, ожидающего подтверждения от сервера */
+  const optimisticVideoTempIdRef = useRef(null);
+  /** После INSERT: tempId → реальный id, чтобы не сбрасывать открытое видео при замене плейсхолдера */
+  const pendingVideoActiveIdMigrationRef = useRef(null);
   const fadeAnims = useRef({}).current;
   const scaleAnims = useRef({}).current;
 
-  const actionModalOpacity = useRef(new Animated.Value(0)).current;
-  const actionModalScale = useRef(new Animated.Value(0.96)).current;
   const deletingIdsRef = useRef(deletingIds);
   useEffect(() => {
     deletingIdsRef.current = deletingIds;
@@ -1273,7 +1477,32 @@ export default function Chat({
   const cryptoKey = useRef(null);
   cryptoKey.current = roomCode ? deriveKey(roomCode) : null;
 
-  const keyboardPadding = useRef(new Animated.Value(0)).current;
+  const keyboardHeightShared = useSharedValue(0);
+  const replyTargetProgress = useSharedValue(0);
+  const listOpacity = useSharedValue(0);
+  const headerMeasured = useSharedValue(0);
+
+  const rootAnimatedStyle = useAnimatedStyle(() => ({
+    paddingBottom: keyboardHeightShared.value,
+  }));
+
+  const inputBarAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -keyboardHeightShared.value }],
+  }));
+
+  const replyTargetAnimatedStyle = useAnimatedStyle(() => {
+    const p = replyTargetProgress.value;
+    return {
+      height: REPLY_TARGET_PREVIEW_H * p,
+      opacity: p,
+      transform: [{ translateY: (1 - p) * REPLY_TARGET_PREVIEW_H }],
+    };
+  });
+
+  const listAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: listOpacity.value,
+  }));
+
   const emojiWobbleRotate = useRef(new Animated.Value(0)).current;
 
   const playEmojiWobble = useCallback(() => {
@@ -1288,14 +1517,36 @@ export default function Chat({
   }, [emojiWobbleRotate]);
 
   useEffect(() => {
-    const id = setInterval(playEmojiWobble, 5000);
-    return () => clearInterval(id);
+    const t = setTimeout(playEmojiWobble, 300);
+    return () => clearTimeout(t);
   }, [playEmojiWobble]);
 
   useEffect(() => {
     if (!isRecordingVoice) return;
     pauseVoice();
   }, [isRecordingVoice, pauseVoice]);
+
+  useEffect(() => {
+    if (replyTo) {
+      setVisibleReplyTo(replyTo);
+      replyTargetProgress.value = withTiming(1, {
+        duration: REPLY_TARGET_ANIM_MS,
+        easing: Easing.out(Easing.cubic),
+      });
+      return;
+    }
+
+    replyTargetProgress.value = withTiming(
+      0,
+      {
+        duration: REPLY_TARGET_ANIM_MS,
+        easing: Easing.in(Easing.cubic),
+      },
+      (finished) => {
+        if (finished) runOnJS(setVisibleReplyTo)(null);
+      }
+    );
+  }, [replyTo, replyTargetProgress]);
 
   // Сбрасываем activeVoiceMessageId когда плеер останавливается
   useEffect(() => {
@@ -1324,73 +1575,30 @@ export default function Chat({
     stickToBottomRef.current = true;
     layoutReadyRef.current = false;
     initialScrollDoneRef.current = false;
-    pendingLayoutMutationsRef.current = 0;
-    layoutStableRef.current = false;
     formattedMessagesCacheRef.current.clear();
+    headerMeasured.value = 0;
   }, [roomId, pauseVoice]);
 
   useEffect(() => {
-    if (!roomId) return;
-    if (initialScrollDoneRef.current) return;
-    if (!layoutReadyRef.current && messages.length > 0) return;
-
-    initialScrollDoneRef.current = true;
-  }, [roomId, layoutSignal, messages]);
-
-  useEffect(() => {
-    if (pendingLayoutMutationsRef.current === 0) {
-      layoutStableRef.current = true;
-      return;
-    }
-
-    const id = requestAnimationFrame(() => {
-      pendingLayoutMutationsRef.current -= 1;
-
-      if (pendingLayoutMutationsRef.current <= 0) {
-        layoutStableRef.current = true;
-        pendingLayoutMutationsRef.current = 0;
-      } else {
-        setLayoutSignal((s) => s + 1);
-      }
-    });
-
-    return () => cancelAnimationFrame(id);
-  }, [layoutSignal]);
-
-  useEffect(() => {
     if (!initialScrollDoneRef.current) return;
-    if (!layoutStableRef.current) return;
-
-    const shouldStickToBottom = stickToBottomRef.current;
-
+    if (!stickToBottomRef.current) return;
     const id = requestAnimationFrame(() => {
-      if (shouldStickToBottom) {
-        flatListRef.current?.scrollToOffset({
-          offset: 0,
-          animated: false,
-        });
-      }
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
     });
-
     return () => cancelAnimationFrame(id);
-  }, [messages, layoutSignal]);
+  }, [messages]);
 
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const sub1 = Keyboard.addListener(showEvt, (e) => {
-      Animated.timing(keyboardPadding, {
-        toValue: e.endCoordinates.height,
-        duration: Platform.OS === 'ios' ? e.duration : 200,
-        useNativeDriver: false,
-      }).start();
+      keyboardHeightShared.value = withTiming(
+        e.endCoordinates.height,
+        { duration: Platform.OS === 'ios' ? e.duration : 200 }
+      );
     });
     const sub2 = Keyboard.addListener(hideEvt, () => {
-      Animated.timing(keyboardPadding, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
-      }).start();
+      keyboardHeightShared.value = withTiming(0, { duration: 200 });
     });
     return () => { sub1.remove(); sub2.remove(); };
   }, []);
@@ -1401,11 +1609,40 @@ export default function Chat({
     const raw = msg.text;
     if (!raw) return msg;
 
-    // Уровень 1: новый формат Vault E2E
+    // Уровень 1а: формат VM2 (двойной box — для получателя и для себя)
+    if (raw.startsWith('VM2:')) {
+      try {
+        const { r, s } = JSON.parse(raw.slice(4));
+        const isMyMessage = msg.player_name === nickname;
+        const box = isMyMessage ? s : r;
+        const senderName = isMyMessage ? nickname : msg.player_name;
+        const plain = await decryptMessage(box, senderName);
+        if (plain !== null) return { ...msg, text: plain };
+      } catch (e) {
+        console.warn('[Vault] VM2 parse error:', e?.message);
+      }
+    }
+
+    // Уровень 1б: старый формат Vault E2E (одиночный box)
     if (isVaultEncrypted(raw)) {
       try {
-        const plain = await decryptMessage(raw, msg.player_name);
-        if (plain !== null) return { ...msg, text: plain };
+        const isMyMessage = msg.player_name === nickname;
+        // Bug 2 fix: для своих сообщений в одиночном box plaintext не восстановим —
+        // расшифровка парой (peerPubKey + mySecret) даёт мусор, не null.
+        // Новые сообщения идут через VM2 (выше), где self-box открывается корректно.
+        if (!isMyMessage) {
+          const peerName = msg.player_name;
+          const cachedKey = getKeyFromCache(peerName);
+          if (peerName && cachedKey) {
+            const plain = await decryptMessage(raw, peerName);
+            if (plain !== null) {
+              // Защита от garbage-результата: crypto_box_open_easy иногда
+              // «открывает» box с неверными ключами и возвращает мусор вместо null.
+              const looksValid = /^[\x20-\x7E\u0400-\u04FF\s]+$/.test(plain);
+              if (looksValid) return { ...msg, text: plain };
+            }
+          }
+        }
       } catch {}
     }
 
@@ -1416,8 +1653,12 @@ export default function Chat({
     }
 
     // Уровень 3: plaintext
+    // Если текст выглядит зашифрованным но не расшифровался — показываем заглушку
+    if (isVaultEncrypted(raw)) {
+      return { ...msg, text: '🔒 Сообщение зашифровано' };
+    }
     return msg;
-  }, []);
+  }, [nickname]);
 
   const decryptBatch = useCallback(
     async (msgs) => {
@@ -1425,7 +1666,25 @@ export default function Chat({
       const result = [];
       for (let i = 0; i < msgs.length; i += CHUNK) {
         const chunk = msgs.slice(i, i + CHUNK);
-        const decrypted = await Promise.all(chunk.map((m) => decryptMsg(m)));
+        const decrypted = await Promise.all(
+          chunk.map(async (m) => {
+            // Если уже расшифровали раньше — берём из кэша
+            if (decryptedCache.has(m.id)) {
+              const cached = decryptedCache.get(m.id);
+              if (!isVaultEncrypted(cached) && !looksLikeEncryptedPayload(cached)) {
+                return { ...m, text: cached };
+              }
+              // cached value is still encrypted — fall through to decrypt again
+              decryptedCache.delete(m.id);
+            }
+            const row = await decryptMsg(m);
+            // Сохраняем в кэш только если текст изменился (был зашифрован)
+            if (row.text !== m.text && !isVaultEncrypted(row.text)) {
+              decryptedCache.set(m.id, row.text);
+            }
+            return row;
+          })
+        );
         result.push(...decrypted);
       }
       return result;
@@ -1478,34 +1737,93 @@ export default function Chat({
   );
 
   useEffect(() => {
-    const currentIds = new Set(messages.map((m) => m.id));
-    Object.keys(fadeAnims).forEach((id) => {
-      if (!currentIds.has(id)) {
-        delete fadeAnims[id];
-        delete scaleAnims[id];
-      }
+    const id = requestAnimationFrame(() => {
+      const currentIds = new Set(messages.map((m) => m.id));
+      Object.keys(fadeAnims).forEach((animId) => {
+        if (!currentIds.has(animId)) {
+          delete fadeAnims[animId];
+          delete scaleAnims[animId];
+        }
+      });
     });
+    return () => cancelAnimationFrame(id);
   }, [messages, fadeAnims, scaleAnims]);
 
   /* ── Load & subscribe ── */
 
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId) {
+      setMessagesLoading(false);
+      return;
+    }
     let cancelled = false;
     const loadMessages = async () => {
+      const cached = roomMessagesCache.get(roomId);
+      if (!cached || cached.length === 0) {
+        listOpacity.value = 0;
+      }
+      if (cached && cached.length > 0) {
+        setMessages(cached);
+        setMessagesLoading(false);
+        listOpacity.value = 1;
+      } else {
+        setMessagesLoading(true);
+      }
+
       const { data } = await supabase
         .from('messages')
-        .select('*')
+        .select(
+          'id, room_id, player_name, text, created_at, read_at, reply_to, reactions, hidden_for, message_type, media_url, latitude, longitude, expires_at, waveform'
+        )
         .eq('room_id', roomId)
-        .order('created_at', { ascending: true })
-        .limit(200);
-      if (cancelled || !data) return;
-      const decrypted = await decryptBatch(data);
-      setMessages(filterHiddenForMeKeepingDeleting(filterExpired(decrypted)));
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (cancelled || !data) {
+        setMessagesLoading(false);
+        return;
+      }
+
+      const chronological = data.length ? [...data].reverse() : [];
+
+      // Прогреваем кэш публичных ключей до расшифровки
+      const uniquePlayers = [...new Set(chronological.map((m) => m.player_name))];
+      try {
+        await fetchPublicKeys(uniquePlayers);
+      } catch {}
+
+      const decrypted = await decryptBatch(chronological);
+
+      if (cancelled) return;
+
+      const filtered = filterHiddenForMeKeepingDeleting(filterExpired(decrypted));
+
+      const prev = messagesRef.current;
+      const hasChanged =
+        prev.length !== filtered.length ||
+        filtered.some((msg, i) => {
+          const prior = prev[i];
+          return (
+            !prior ||
+            prior.id !== msg.id ||
+            prior.text !== msg.text ||
+            prior.message_type !== msg.message_type
+          );
+        });
+      if (hasChanged) {
+        setMessages(filtered);
+      }
+      roomMessagesCache.set(roomId, filtered);
+      setMessagesLoading(false);
+
+      if (!cached || cached.length === 0) {
+        listOpacity.value = withTiming(1, { duration: 80 });
+      }
     };
     loadMessages();
     return () => {
       cancelled = true;
+      setMessagesLoading(false);
     };
   }, [roomId, roomCode, filterHiddenForMeKeepingDeleting, decryptBatch, filterExpired]);
 
@@ -1522,23 +1840,60 @@ export default function Chat({
             const msg = await decryptMsg(payload.new);
             if (msg.expires_at && new Date(msg.expires_at).getTime() <= Date.now()) return;
             if ((msg.hidden_for || []).includes(nickname)) return;
-            fadeAnims[msg.id] = new Animated.Value(0);
-            scaleAnims[msg.id] = new Animated.Value(0.85);
-            Animated.parallel([
-              Animated.timing(fadeAnims[msg.id], { toValue: 1, duration: 200, useNativeDriver: true }),
-              Animated.spring(scaleAnims[msg.id], {
-                toValue: 1,
-                friction: 8,
-                tension: 120,
-                useNativeDriver: true,
-              }),
-            ]).start();
+            const replaceVideoTempId =
+              msg.message_type === 'video' && msg.player_name === nickname
+                ? optimisticVideoTempIdRef.current
+                : null;
+            if (
+              replaceVideoTempId &&
+              fadeAnims[replaceVideoTempId] != null &&
+              scaleAnims[replaceVideoTempId] != null
+            ) {
+              fadeAnims[msg.id] = fadeAnims[replaceVideoTempId];
+              scaleAnims[msg.id] = scaleAnims[replaceVideoTempId];
+              delete fadeAnims[replaceVideoTempId];
+              delete scaleAnims[replaceVideoTempId];
+            } else {
+              fadeAnims[msg.id] = new Animated.Value(0);
+              scaleAnims[msg.id] = new Animated.Value(0.85);
+              Animated.parallel([
+                Animated.timing(fadeAnims[msg.id], { toValue: 1, duration: 200, useNativeDriver: true }),
+                Animated.spring(scaleAnims[msg.id], {
+                  toValue: 1,
+                  friction: 8,
+                  tension: 120,
+                  useNativeDriver: true,
+                }),
+              ]).start();
+            }
+            pendingVideoActiveIdMigrationRef.current = null;
             setMessages((prev) => {
               if (prev.some((m) => m.id === msg.id)) {
                 return filterHiddenForMeKeepingDeleting(filterExpired(prev));
               }
+              // Убираем оптимистичный placeholder при подтверждении видео от себя
+              if (msg.message_type === 'video' && msg.player_name === nickname) {
+                const tempId = optimisticVideoTempIdRef.current;
+                if (tempId) {
+                  optimisticVideoTempIdRef.current = null;
+                  pendingVideoActiveIdMigrationRef.current = { from: tempId, to: msg.id };
+                  return filterHiddenForMeKeepingDeleting(filterExpired([
+                    ...prev.filter((m) => m.id !== tempId),
+                    { ...msg, clientRowKey: tempId },
+                  ]));
+                }
+              }
               return filterHiddenForMeKeepingDeleting(filterExpired([...prev, msg]));
             });
+            const videoIdMig = pendingVideoActiveIdMigrationRef.current;
+            if (videoIdMig) {
+              pendingVideoActiveIdMigrationRef.current = null;
+              setActiveVideoId((cur) => (cur === videoIdMig.from ? videoIdMig.to : cur));
+              if (activatedVideoIds.current.has(videoIdMig.from)) {
+                activatedVideoIds.current.delete(videoIdMig.from);
+                activatedVideoIds.current.add(videoIdMig.to);
+              }
+            }
           } else if (payload.eventType === 'UPDATE') {
             const updatedMsg = await decryptMsg(payload.new);
             setMessages((prev) => {
@@ -1563,6 +1918,7 @@ export default function Chat({
     const hasEphemeral = messages.some((m) => m.expires_at);
     if (!hasEphemeral) return;
     const timer = setInterval(() => {
+      if (renderPausedRef?.current) return;
       setMessages((prev) => {
         const filtered = filterExpired(prev);
         if (filtered.length !== prev.length) {
@@ -1580,12 +1936,15 @@ export default function Chat({
 
   useEffect(() => {
     if (!roomId || !nickname) return;
-    const unread = messages.filter((m) => m.player_name !== nickname && !m.read_at);
-    if (unread.length > 0) {
-      const ids = unread.map((m) => m.id);
-      supabase.from('messages').update({ read_at: new Date().toISOString() }).in('id', ids).then();
-    }
-  }, [messages, nickname, roomId]);
+    const unread = messages.filter(
+      (m) => m.player_name !== nickname && !m.read_at && !readSentRef.current.has(m.id)
+    );
+    if (unread.length === 0) return;
+    const ids = unread.map((m) => m.id);
+    ids.forEach((id) => readSentRef.current.add(id));
+    supabase.from('messages').update({ read_at: new Date().toISOString() }).in('id', ids).then();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, nickname, roomId]);
 
   /* ── Media upload ── */
 
@@ -1594,17 +1953,48 @@ export default function Chat({
       throw new Error('room_id отсутствует');
     }
     const filePath = `${folder}/${storageRoomSegment(roomId)}/${Date.now()}.${ext}`;
-  
-    const arrayBuffer = await readUriAsArrayBuffer(uri);
-  
-    const { error } = await supabase.storage
-      .from('chat-media')
-      .upload(filePath, arrayBuffer, { contentType, upsert: false });
-    if (error) throw error;
+    const bucket = 'chat-media';
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('chat-media')
-      .getPublicUrl(filePath);
+    /** Видео: нативный upload с диска (без полного буфера в JS), тот же REST, что и у supabase-js. */
+    const useNativeVideoStream = folder === 'video' && Platform.OS !== 'web';
+
+    if (useNativeVideoStream) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Сессия недоступна, войди снова');
+      }
+      const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${bucket}/${filePath}`;
+      const uploadResult = await uploadAsync(uploadUrl, uri, {
+        httpMethod: 'POST',
+        uploadType: FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': contentType,
+          'cache-control': 'max-age=3600',
+          'x-upsert': 'false',
+        },
+      });
+      if (uploadResult.status < 200 || uploadResult.status >= 300) {
+        let detail = `HTTP ${uploadResult.status}`;
+        try {
+          const parsed = JSON.parse(uploadResult.body || '{}');
+          if (parsed?.message) detail = parsed.message;
+          else if (parsed?.error) detail = typeof parsed.error === 'string' ? parsed.error : parsed.error?.message || detail;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(detail);
+      }
+    } else {
+      const arrayBuffer = await readUriAsArrayBuffer(uri);
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, arrayBuffer, { contentType, upsert: false });
+      if (error) throw error;
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
     return publicUrl;
   }, [roomId]);
 
@@ -1634,9 +2024,9 @@ export default function Chat({
       console.warn('Chat media insert error:', error.message);
       throw error;
     }
-    setReplyTo(null);
+    setReplyTarget(null);
     return data ?? null;
-  }, [roomId, nickname, replyTo, ephemeralSec]);
+  }, [roomId, nickname, replyTo, ephemeralSec, setReplyTarget]);
 
   /* ── Image picker ── */
 
@@ -1752,6 +2142,45 @@ export default function Chat({
     ]
   );
 
+  /* ── Optimistic video ── */
+
+  const handleVideoRecorded = useCallback((localUri) => {
+    const tempId = `__opt_video_${Date.now()}`;
+    optimisticVideoTempIdRef.current = tempId;
+    fadeAnims[tempId] = new Animated.Value(0);
+    scaleAnims[tempId] = new Animated.Value(0.85);
+    Animated.parallel([
+      Animated.timing(fadeAnims[tempId], { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.spring(scaleAnims[tempId], { toValue: 1, friction: 8, tension: 120, useNativeDriver: true }),
+    ]).start();
+    setMessages((prev) =>
+      filterHiddenForMeKeepingDeleting(filterExpired([
+        ...prev,
+        {
+          id: tempId,
+          clientRowKey: tempId,
+          room_id: roomId,
+          player_name: nickname,
+          message_type: 'video',
+          media_url: localUri,
+          created_at: new Date().toISOString(),
+          _isOptimistic: true,
+        },
+      ]))
+    );
+  }, [roomId, nickname, fadeAnims, scaleAnims, filterHiddenForMeKeepingDeleting, filterExpired]);
+
+  const handleVideoSendError = useCallback(() => {
+    const tempId = optimisticVideoTempIdRef.current;
+    if (!tempId) return;
+    optimisticVideoTempIdRef.current = null;
+    setMessages((prev) => prev.filter((m) => m.id !== tempId));
+  }, []);
+
+  const onVoiceRecorderOpen = useCallback(() => {
+    setActiveVideoId(null);
+  }, []);
+
   /* ── Emoji ── */
 
   const toggleEmojiPicker = () => {
@@ -1777,13 +2206,20 @@ export default function Chat({
     sendInProgressRef.current = true;
     const replySnapshot = replyTo;
     const replyId = replyTo?.id || null;
-    let cipherText = trimmed;
+    let cipherText;
     try {
-      if (otherPlayerName) {
-        cipherText = await encryptMessage(trimmed, otherPlayerName);
+      if (!otherPlayerName) {
+        throw new Error('Не удалось определить получателя');
       }
+      const forRecipient = await encryptMessage(trimmed, otherPlayerName);
+      const forSelf      = await encryptMessage(trimmed, nickname);
+      cipherText = 'VM2:' + JSON.stringify({ r: forRecipient, s: forSelf });
     } catch (e) {
-      console.warn('[Vault E2E] Ошибка шифрования, отправляем plaintext:', e?.message);
+      const detail = e?.message || 'Не удалось зашифровать сообщение';
+      console.warn('[Vault E2E] Ошибка шифрования:', detail);
+      Alert.alert('Ошибка', detail);
+      sendInProgressRef.current = false;
+      return;
     }
     const row = {
       room_id: roomId,
@@ -1795,25 +2231,25 @@ export default function Chat({
       row.expires_at = new Date(Date.now() + ephemeralSec * 1000).toISOString();
     }
     setText('');
-    setReplyTo(null);
+    setReplyTarget(null);
     try {
       const { error } = await supabase.from('messages').insert(row);
       if (error) {
         console.warn('Chat insert error:', error.message);
         setText(trimmed);
-        setReplyTo(replySnapshot);
+        setReplyTarget(replySnapshot);
         Alert.alert('Ошибка', error.message || 'Не удалось отправить сообщение');
       }
     } catch (e) {
       const detail = e?.message || String(e);
       console.warn('Chat insert error:', detail);
       setText(trimmed);
-      setReplyTo(replySnapshot);
+      setReplyTarget(replySnapshot);
       Alert.alert('Ошибка', detail);
     } finally {
       sendInProgressRef.current = false;
     }
-  }, [text, replyTo, roomId, nickname, ephemeralSec, otherPlayerName]);
+  }, [text, replyTo, roomId, nickname, ephemeralSec, otherPlayerName, setReplyTarget]);
 
   /* ── Reactions ── */
 
@@ -1834,7 +2270,6 @@ export default function Chat({
         Alert.alert('Ошибка', error.message || 'Не удалось поставить реакцию');
         return;
       }
-      setMessageActionTarget(null);
     },
     [messages, nickname]
   );
@@ -1854,7 +2289,6 @@ export default function Chat({
       const msg = messages.find((m) => m.id === messageId);
       if (!msg) return;
       setDeletingIds((prev) => new Set(prev).add(messageId));
-      setMessageActionTarget(null);
       await popMessage(messageId, { duration: 200, toScale: 0.55 });
       const hidden = [...(msg.hidden_for || []), nickname];
       const { error } = await supabase
@@ -1883,9 +2317,13 @@ export default function Chat({
     [messages, nickname, popMessage]
   );
 
+  const closeDeleteConfirm = useCallback(() => {
+    setDeleteConfirmVisible(false);
+    setSelectedMessage(null);
+  }, []);
+
   const deleteMessageForAll = useCallback(async (messageId) => {
     setDeletingIds((prev) => new Set(prev).add(messageId));
-    setMessageActionTarget(null);
     await popMessage(messageId, { duration: 200, toScale: 0.55 });
 
     // Вместо физического DELETE (который может не прилететь второму клиенту через Realtime),
@@ -1945,7 +2383,7 @@ export default function Chat({
   }, []);
 
   const handleMessagePress = useCallback(
-    (item) => {
+    (event, item) => {
       if (selectionMode) {
         setSelectedIds((prev) => {
           const next = new Set(prev);
@@ -1956,13 +2394,16 @@ export default function Chat({
         });
         return;
       }
-      setMessageActionTarget(item);
+      const x = event?.nativeEvent?.pageX ?? 0;
+      const y = event?.nativeEvent?.pageY ?? 0;
+      setMenuPosition({ x, y });
+      setSelectedMessage(item);
+      setMenuVisible(true);
     },
     [selectionMode]
   );
 
-  const handleMessageLongPress = useCallback((item) => {
-    setMessageActionTarget(null);
+  const handleMessageLongPress = useCallback((event, item) => {
     setSelectionMode(true);
     setSelectedIds(new Set([item.id]));
   }, []);
@@ -2100,7 +2541,7 @@ export default function Chat({
               setActiveVoiceMessageId(item.id);
               handleVoicePlay(uri);
             }}
-            activeVoiceUri={activeVoiceUri}
+            activeVoiceMessageId={activeVoiceMessageId}
             activePlayerStatus={activePlayerStatus}
             idleDurationSec={parseVoiceCaptionDurationSec(item.text)}
           />
@@ -2139,7 +2580,11 @@ export default function Chat({
               if (id) activatedVideoIds.current.add(id);
               setActiveVideoId(id);
             }}
-            onLongPress={() => onMessageLongPress(item)}
+            onLongPress={(e) => {
+              const x = e?.nativeEvent?.pageX ?? 0;
+              const y = e?.nativeEvent?.pageY ?? 0;
+              rowEnvRef.current.handleMessageLongPress({ nativeEvent: { pageX: x, pageY: y } }, item);
+            }}
           />
         );
       default:
@@ -2152,30 +2597,39 @@ export default function Chat({
   }, [
     isRecordingVoice,
     handleVoicePlay,
-    activeVoiceUri,
+    activeVoiceMessageId,
     activePlayerStatus,
     activeVideoId,
   ]);
 
   /** Меняется редко (выбор, мультиселект) — extraData FlatList, MessageRow.memo сравнивает по ссылке. */
   const listExtraDataStable = useMemo(
-    () => ({ selectionMode, selectedHash }),
-    [selectionMode, selectedHash]
+    () => ({ selectionMode, selectedHash, renderableVideoIds, onUnlockVideo }),
+    [selectionMode, selectedHash, renderableVideoIds, onUnlockVideo]
   );
 
-  /** Меняется каждые ~250ms при воспроизведении — передаётся отдельным пропом,
-   *  memo comparator игнорирует его для неактивных пузырей. */
+  /** Сигнатура прогресса для активной голосовой строки (expo-av status), без setInterval в MessageRow. */
+  const voiceProgressSig = useMemo(() => {
+    if (!activeVoiceMessageId) return '';
+    return `${activePlayerStatus.playing ? 1 : 0}|${Math.round(activePlayerStatus.currentTime * 20) / 20}|${Math.round(activePlayerStatus.duration * 50) / 50}`;
+  }, [
+    activeVoiceMessageId,
+    activePlayerStatus.playing,
+    activePlayerStatus.currentTime,
+    activePlayerStatus.duration,
+  ]);
+
   const activePlayback = useMemo(
     () => ({ activeVoiceUri, activePlayerStatus, activeVideoId, isRecordingVoice, activeVoiceMessageId }),
     [activeVoiceUri, activePlayerStatus, activeVideoId, isRecordingVoice, activeVoiceMessageId]
   );
 
-  const onMessagePress = useCallback((item) => {
-    rowEnvRef.current.handleMessagePress(item);
+  const onMessagePress = useCallback((event, item) => {
+    rowEnvRef.current.handleMessagePress(event, item);
   }, []);
 
-  const onMessageLongPress = useCallback((item) => {
-    rowEnvRef.current.handleMessageLongPress(item);
+  const onMessageLongPress = useCallback((event, item) => {
+    rowEnvRef.current.handleMessageLongPress(event, item);
   }, []);
 
   const renderItem = useCallback(
@@ -2184,26 +2638,37 @@ export default function Chat({
         item={item}
         index={index}
         listExtra={listExtraDataStable}
-        activePlayback={activePlayback}
+        activeVoiceMessageId={activeVoiceMessageId}
+        activeVoiceUri={activeVoiceUri}
+        activeVideoId={activeVideoId}
+        isRecordingVoice={isRecordingVoice}
+        voicePlaybackSig={
+          (item.message_type === 'voice' || item.message_type === 'audio') &&
+          item.id === activeVoiceMessageId
+            ? voiceProgressSig
+            : ''
+        }
         fmtLenRef={fmtLenRef}
         rowEnvRef={rowEnvRef}
         onMessagePress={onMessagePress}
         onMessageLongPress={onMessageLongPress}
       />
     ),
-    [listExtraDataStable, activePlayback, onMessagePress, onMessageLongPress]
+    [
+      listExtraDataStable,
+      activeVoiceMessageId,
+      activeVoiceUri,
+      activeVideoId,
+      isRecordingVoice,
+      voiceProgressSig,
+      onMessagePress,
+      onMessageLongPress,
+    ]
   );
 
-  useEffect(() => {
-    if (messageActionTarget) {
-      actionModalOpacity.setValue(0);
-      actionModalScale.setValue(0.96);
-      Animated.parallel([
-        Animated.timing(actionModalOpacity, { toValue: 1, duration: 170, useNativeDriver: true }),
-        Animated.timing(actionModalScale, { toValue: 1, duration: 200, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [messageActionTarget, actionModalOpacity, actionModalScale]);
+  const replyToMessage = useCallback((msg) => {
+    setReplyTarget(msg);
+  }, [setReplyTarget]);
 
   fmtLenRef.current = formattedMessages.length;
   rowEnvRef.current = {
@@ -2218,28 +2683,78 @@ export default function Chat({
     handleMessageLongPress,
     toggleReaction,
     setActiveVideoId,
+    activePlayback,
+    replyToMessage,
   };
 
+  const listFooterComponent = useMemo(() => {
+    const needsTopSpacer =
+      chatRoomHeader != null &&
+      typeof listPaddingTop === 'number' &&
+      listPaddingTop > 0;
+    const showLegacySelectionBar = selectionMode && chatRoomHeader == null;
+    if (!needsTopSpacer && !showLegacySelectionBar) return null;
+    return (
+      <View collapsable={false}>
+        {showLegacySelectionBar ? (
+          <View
+            style={[
+              tw`flex-row items-center justify-between px-4 py-2.5 mb-1`,
+              { backgroundColor: V.bgSurface, borderBottomWidth: 0.5, borderBottomColor: V.border },
+            ]}
+          >
+            <TouchableOpacity onPress={exitSelectionMode}>
+              <Text style={[tw`text-[14px]`, { color: V.accentSage }]}>Отмена</Text>
+            </TouchableOpacity>
+            <Text style={[tw`text-[13px] font-medium`, { color: V.textPrimary }]}>
+              {selectedIds.size} выбрано
+            </Text>
+            <TouchableOpacity
+              onPress={batchDeleteForMe}
+              disabled={selectedIds.size === 0}
+              style={{ opacity: selectedIds.size === 0 ? 0.35 : 1 }}
+            >
+              <Trash2 size={20} color={V.dangerMuted} strokeWidth={1.5} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        {needsTopSpacer ? (
+          <View style={{ height: listPaddingTop }} collapsable={false} />
+        ) : null}
+      </View>
+    );
+  }, [chatRoomHeader, listPaddingTop, selectionMode, selectedIds.size, exitSelectionMode, batchDeleteForMe]);
+
+  const listBottomInsetH =
+    inputBarH > 0
+      ? inputBarH +
+        (showEmojiPicker ? EMOJI_PICKER_PANEL_H : 0) +
+        (replyTo ? REPLY_TARGET_PREVIEW_H : 0)
+      : bottomOverlayH;
+
   return (
-    <Animated.View
+    <EphemeralClockContext.Provider value={ephemeralClockTick}>
+    <Reanimated.View
       style={[
         tw`flex-1`,
         {
           backgroundColor: V.bgApp,
-          paddingBottom: keyboardPadding,
           overflow: chatRoomHeader ? 'visible' : 'hidden',
         },
+        rootAnimatedStyle,
       ]}
     >
       <Image
         pointerEvents="none"
-        source={CHAT_BG_PATTERN}
+        source={CHAT_ROOM_WALLPAPER}
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
+          width: '100%',
+          height: '100%',
           zIndex: 0,
         }}
         resizeMode="cover"
@@ -2253,54 +2768,8 @@ export default function Chat({
           right: 0,
           bottom: 0,
           zIndex: 0,
-          backgroundColor: 'rgba(0,0,0,0.50)',
+          backgroundColor: 'rgba(0,0,0,0.65)',
         }}
-      />
-      <ChatBackgroundNoise />
-      <LinearGradient
-        colors={['rgba(90,158,154,0.09)', 'transparent']}
-        start={{ x: 0, y: 1 }}
-        end={{ x: 1, y: 0 }}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 1,
-        }}
-        pointerEvents="none"
-      />
-      <LinearGradient
-        colors={[V.sageBorder, V.sageSubtle, 'transparent']}
-        locations={[0, 0.45, 1]}
-        start={{ x: 1, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 1,
-          opacity: 0.55,
-        }}
-        pointerEvents="none"
-      />
-      <View
-        pointerEvents="none"
-        style={[
-          {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 0,
-            backgroundColor: V.bgApp,
-            opacity: 0.78,
-          },
-        ]}
       />
       {/* Upload overlay */}
       {uploading && (
@@ -2318,6 +2787,7 @@ export default function Chat({
       )}
 
       {/* Full-screen image viewer */}
+      {uiReady && (
       <Modal
         visible={!!fullScreenImage}
         transparent
@@ -2346,119 +2816,122 @@ export default function Chat({
           </TouchableOpacity>
         </Pressable>
       </Modal>
+      )}
 
-      {/* Действия с сообщением: реакции сверху, кнопки снизу */}
+      {/* Контекстное меню по тапу (реакции + действия) */}
+      {uiReady && (
+      <MessageContextMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        position={menuPosition}
+        onReply={() => {
+          if (selectedMessage) setReplyTarget(selectedMessage);
+        }}
+        onCopy={async () => {
+          if (!selectedMessage) return;
+          try {
+            await Clipboard.setStringAsync(getCopyText(selectedMessage));
+          } catch (e) {
+            Alert.alert('Ошибка', e?.message || 'Не удалось скопировать');
+          }
+        }}
+        onForward={() => Alert.alert('Переслать', 'Функция в разработке.')}
+        onPin={() => Alert.alert('Закрепить', 'Функция в разработке.')}
+        onDelete={() => setDeleteConfirmVisible(true)}
+      />
+      )}
+
+      {uiReady && (
       <Modal
-        visible={!!messageActionTarget}
+        visible={deleteConfirmVisible}
         transparent
-        animationType="none"
-        onRequestClose={() => setMessageActionTarget(null)}
+        animationType="fade"
+        onRequestClose={closeDeleteConfirm}
       >
-        <View style={tw`flex-1 justify-center items-center`}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Закрыть"
+          style={[tw`flex-1 justify-center items-center px-6`, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
+          onPress={closeDeleteConfirm}
+        >
           <Pressable
-            style={[tw`absolute inset-0`, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
-            onPress={() => setMessageActionTarget(null)}
-          />
-          {messageActionTarget && (
-            <Animated.View
-              style={[
-                tw`z-10 items-center px-5`,
-                { width: '100%', maxWidth: 420, opacity: actionModalOpacity, transform: [{ scale: actionModalScale }] },
+            onPress={() => {}}
+            style={[
+              tw`w-full max-w-sm rounded-[12px] overflow-hidden`,
+              {
+                backgroundColor: V.bgElevated,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: V.border,
+              },
+            ]}
+          >
+            <View style={tw`px-5 pt-5 pb-2`}>
+              <Text style={[tw`text-[16px]`, { color: V.textPrimary, fontWeight: '500' }]}>
+                Удалить сообщение?
+              </Text>
+              <Text style={[tw`text-[13px] mt-2`, { color: V.textSecondary, fontWeight: '400' }]}>
+                Выберите, для кого удалить сообщение.
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Удалить только у себя"
+              onPress={async () => {
+                if (!selectedMessage) return;
+                const id = selectedMessage.id;
+                closeDeleteConfirm();
+                await deleteMessageForMe(id);
+              }}
+              style={({ pressed }) => [
+                tw`flex-row items-center px-5 py-3.5`,
+                pressed && { backgroundColor: V.hoverBg },
               ]}
             >
-              <SafeBlurView
-                intensity={20}
-                tint="dark"
-                blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
-                style={[
-                  tw`rounded-[14px] px-3 py-2.5 flex-row justify-center gap-2 mb-2`,
-                  { overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: V.border },
-                ]}
-              >
-                {REACTION_EMOJIS.map((emoji) => (
-                  <TouchableOpacity
-                    key={emoji}
-                    onPress={() => toggleReaction(messageActionTarget.id, emoji)}
-                  >
-                    <Text style={tw`text-2xl`}>{emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </SafeBlurView>
-              <SafeBlurView
-                intensity={20}
-                tint="dark"
-                blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
-                style={[
-                  tw`rounded-[14px] overflow-hidden`,
-                  { width: '51%' },
-                  { borderWidth: 0.5, borderColor: V.border },
-                ]}
-              >
-                <TouchableOpacity
-                  style={tw`px-4 py-3`}
-                  onPress={async () => {
-                    const t = getCopyText(messageActionTarget);
-                    await Clipboard.setStringAsync(t);
-                    setMessageActionTarget(null);
-                  }}
-                >
-                  <Text style={[tw`text-[14px] text-center`, { color: V.textPrimary }]}>Копировать</Text>
-                </TouchableOpacity>
-                <View style={[tw`h-[0.5px]`, { backgroundColor: V.border }]} />
-                <TouchableOpacity
-                  style={tw`px-4 py-3`}
-                  onPress={() => deleteMessageForMe(messageActionTarget.id)}
-                >
-                  <Text style={[tw`text-[14px] text-center`, { color: V.textPrimary }]}>
-                    Удалить у меня
-                  </Text>
-                </TouchableOpacity>
-                {messageActionTarget.player_name === nickname && (
-                  <>
-                    <View style={[tw`h-[0.5px]`, { backgroundColor: V.border }]} />
-                    <TouchableOpacity
-                      style={tw`px-4 py-3`}
-                      onPress={() => {
-                        const id = messageActionTarget.id;
-                        Alert.alert(
-                          'Удалить у всех',
-                          'Сообщение удалится у всех в чате.',
-                          [
-                            { text: 'Отмена', style: 'cancel' },
-                            {
-                              text: 'Удалить',
-                              style: 'destructive',
-                              onPress: () => {
-                                deleteMessageForAll(id);
-                              },
-                            },
-                          ]
-                        );
-                      }}
-                    >
-                      <Text style={[tw`text-[14px] text-center`, { color: V.dangerMuted }]}>
-                        Удалить у всех
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-                <View style={[tw`h-[0.5px]`, { backgroundColor: V.border }]} />
-                <TouchableOpacity
-                  style={tw`px-4 py-3`}
-                  onPress={() => {
-                    setReplyTo(messageActionTarget);
-                    setMessageActionTarget(null);
-                  }}
-                >
-                  <Text style={[tw`text-[14px] text-center`, { color: V.textPrimary }]}>Ответить</Text>
-                </TouchableOpacity>
-              </SafeBlurView>
-            </Animated.View>
-          )}
-        </View>
+              <Check size={20} color={V.accentSage} strokeWidth={1.5} />
+              <Text style={[tw`text-[15px] ml-3 flex-1`, { color: V.textPrimary, fontWeight: '400' }]}>
+                Только у меня
+              </Text>
+            </Pressable>
+            <View style={[tw`h-[0.5px] mx-5`, { backgroundColor: V.border }]} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Удалить у всех в чате"
+              onPress={async () => {
+                if (!selectedMessage) return;
+                const id = selectedMessage.id;
+                closeDeleteConfirm();
+                await deleteMessageForAll(id);
+              }}
+              style={({ pressed }) => [
+                tw`flex-row items-center px-5 py-3.5`,
+                pressed && { backgroundColor: V.hoverBg },
+              ]}
+            >
+              <Users size={20} color="#E05A5A" strokeWidth={1.5} />
+              <Text style={[tw`text-[15px] ml-3 flex-1`, { color: '#E05A5A', fontWeight: '400' }]}>
+                Удалить у собеседника тоже
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Отмена"
+              onPress={closeDeleteConfirm}
+              style={({ pressed }) => [
+                tw`items-center py-3.5 mb-1 mx-3 rounded-[10px]`,
+                pressed && { backgroundColor: V.hoverBg },
+              ]}
+            >
+              <Text style={[tw`text-[15px]`, { color: V.textSecondary, fontWeight: '400' }]}>
+                Отмена
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
       </Modal>
+      )}
 
       {/* Attachment menu (bottom sheet) */}
+      {uiReady && (
       <Modal
         visible={showAttachMenu}
         transparent
@@ -2569,84 +3042,73 @@ export default function Chat({
           </Pressable>
         </Pressable>
       </Modal>
+      )}
 
-      <Reanimated.FlatList
-        ref={flatListRef}
-        data={formattedMessages}
-        inverted
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        extraData={listExtraDataStable}
-        initialNumToRender={16}
-        maxToRenderPerBatch={8}
-        windowSize={12}
-        onScroll={onScrollReanimated}
-        scrollEventThrottle={32}
-        decelerationRate={Platform.OS === 'ios' ? 0.992 : 'fast'}
-        style={[
-          tw`flex-1`,
-          chatRoomHeader ? { backgroundColor: 'transparent' } : null,
-          { zIndex: 1 },
-        ]}
-        removeClippedSubviews={false}
-        ListFooterComponent={
-          (() => {
-            const needsTopSpacer =
-              chatRoomHeader != null &&
-              typeof listPaddingTop === 'number' &&
-              listPaddingTop > 0;
-            const showLegacySelectionBar = selectionMode && chatRoomHeader == null;
-            if (!needsTopSpacer && !showLegacySelectionBar) return null;
-            return (
-              <View collapsable={false}>
-                {showLegacySelectionBar ? (
-                  <View
-                    style={[
-                      tw`flex-row items-center justify-between px-4 py-2.5 mb-1`,
-                      { backgroundColor: V.bgSurface, borderBottomWidth: 0.5, borderBottomColor: V.border },
-                    ]}
-                  >
-                    <TouchableOpacity onPress={exitSelectionMode}>
-                      <Text style={[tw`text-[14px]`, { color: V.accentSage }]}>Отмена</Text>
-                    </TouchableOpacity>
-                    <Text style={[tw`text-[13px] font-medium`, { color: V.textPrimary }]}>
-                      {selectedIds.size} выбрано
-                    </Text>
-                    <TouchableOpacity
-                      onPress={batchDeleteForMe}
-                      disabled={selectedIds.size === 0}
-                      style={{ opacity: selectedIds.size === 0 ? 0.35 : 1 }}
-                    >
-                      <Trash2 size={20} color={V.dangerMuted} strokeWidth={1.5} />
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-                {needsTopSpacer ? (
-                  <View style={{ height: listPaddingTop }} collapsable={false} />
-                ) : null}
-              </View>
-            );
-          })()
-        }
-        contentContainerStyle={[
-          tw`pt-1`,
-          chatRoomHeader && typeof listPaddingTop === 'number' && listPaddingTop > 0 ? null : tw`pb-2`,
-          bottomOverlayH > 0 ? { paddingTop: bottomOverlayH } : inputBarH > 0 ? { paddingTop: inputBarH } : null,
-        ]}
-        onContentSizeChange={() => {
-          pendingLayoutMutationsRef.current += 1;
-          layoutStableRef.current = false;
-          if (!layoutReadyRef.current) {
-            layoutReadyRef.current = true;
+      <View style={{ flex: 1 }}>
+        {messagesLoading && (
+          <View
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 10,
+            }}
+          >
+            <ActivityIndicator size="small" color={V.accentSage} />
+          </View>
+        )}
+        <Reanimated.FlatList
+          ref={flatListRef}
+          data={formattedMessages}
+          inverted
+          keyExtractor={(item) =>
+            item.clientRowKey != null && item.clientRowKey !== ''
+              ? String(item.clientRowKey)
+              : String(item.id)
           }
-          setLayoutSignal((s) => s + 1);
-        }}
-        ListEmptyComponent={
-          <Text style={[tw`text-center py-6 text-[13px]`, { color: V.textMuted }]}>
-            Начни общение!
-          </Text>
-        }
-      />
+          renderItem={renderItem}
+          extraData={listExtraDataStable}
+          initialNumToRender={16}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          onScroll={onScrollReanimated}
+          scrollEventThrottle={32}
+          decelerationRate={Platform.OS === 'ios' ? 0.992 : 'fast'}
+          style={[
+            tw`flex-1`,
+            chatRoomHeader ? { backgroundColor: 'transparent' } : null,
+            { zIndex: 1 },
+            listAnimatedStyle,
+          ]}
+          removeClippedSubviews={Platform.OS === 'android'}
+          ListFooterComponent={listFooterComponent}
+          contentContainerStyle={[
+            tw`pt-1`,
+            chatRoomHeader && typeof listPaddingTop === 'number' && listPaddingTop > 0 ? null : tw`pb-2`,
+            listBottomInsetH > 0 ? { paddingTop: listBottomInsetH } : null,
+          ]}
+          onContentSizeChange={() => {
+            if (!layoutReadyRef.current) {
+              layoutReadyRef.current = true;
+              initialScrollDoneRef.current = true;
+            }
+            if (stickToBottomRef.current) {
+              flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+            }
+          }}
+          ListEmptyComponent={
+            messagesLoading ? null : (
+              <Text style={[tw`text-center py-6 text-[13px]`, { color: V.textMuted }]}>
+                Начни общение!
+              </Text>
+            )
+          }
+        />
+      </View>
 
       {chatRoomHeader != null ? (
         <View
@@ -2661,7 +3123,10 @@ export default function Chat({
           }}
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height;
-            if (h > 0) onTopOverlayHeight?.(h);
+            if (h > 0) {
+              onTopOverlayHeight?.(h);
+              headerMeasured.value = 1;
+            }
           }}
         >
           <ChatRoomHeader
@@ -2680,7 +3145,7 @@ export default function Chat({
         </View>
       ) : null}
 
-      <Animated.View
+      <Reanimated.View
         pointerEvents="box-none"
         onLayout={(e) => {
           const h = e.nativeEvent.layout.height;
@@ -2695,33 +3160,40 @@ export default function Chat({
             zIndex: 2,
             elevation: 2,
           },
-          { transform: [{ translateY: Animated.multiply(keyboardPadding, -1) }] },
+          inputBarAnimatedStyle,
         ]}
       >
         {/* Reply preview bar */}
-        {replyTo && (
-          <View
-            style={[
-              tw`flex-row items-center px-3 py-2`,
-              { backgroundColor: V.bgSurface, borderTopWidth: 0.5, borderTopColor: V.border },
-            ]}
-          >
-            <View style={[tw`flex-1 pl-2`, { borderLeftWidth: 2, borderLeftColor: V.accentSage }]}>
-              <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]} numberOfLines={1}>
-                {replyTo.player_name}
-              </Text>
-              <Text style={[tw`text-[10px]`, { color: V.textSecondary }]} numberOfLines={1}>
-                {replyTo.text}
-              </Text>
+        {visibleReplyTo && (
+          <Reanimated.View style={[{ overflow: 'hidden' }, replyTargetAnimatedStyle]}>
+            <View
+              style={[
+                tw`flex-row items-center px-3 py-2`,
+                {
+                  height: REPLY_TARGET_PREVIEW_H,
+                  backgroundColor: V.bgSurface,
+                  borderTopWidth: 0.5,
+                  borderTopColor: V.border,
+                },
+              ]}
+            >
+              <View style={[tw`flex-1 pl-2`, { borderLeftWidth: 2, borderLeftColor: V.accentSage }]}>
+                <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]} numberOfLines={1}>
+                  {visibleReplyTo.player_name}
+                </Text>
+                <Text style={[tw`text-[10px]`, { color: V.textSecondary }]} numberOfLines={1}>
+                  {visibleReplyTo.text}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyTarget(null)} style={tw`ml-2 p-1`}>
+                <X size={16} color={V.textMuted} strokeWidth={1.5} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setReplyTo(null)} style={tw`ml-2 p-1`}>
-              <X size={16} color={V.textMuted} strokeWidth={1.5} />
-            </TouchableOpacity>
-          </View>
+          </Reanimated.View>
         )}
 
         {/* Emoji picker panel */}
-        {showEmojiPicker && (
+        {uiReady && showEmojiPicker && (
           <View style={{ borderTopWidth: 0.5, borderTopColor: V.border, backgroundColor: V.bgSurface }}>
             <ScrollView
               style={{ height: 220 }}
@@ -2959,18 +3431,21 @@ export default function Chat({
           </SafeBlurView>
 
           {/* VoiceRecorder: absolute overlay on depth-ring; renders mic in IDLE, full UI when active */}
-          {(!text.trim() || isRecordingVoice) && (
+          {uiReady && (!text.trim() || isRecordingVoice) && (
             <VoiceRecorder
               onSendAudio={handleSendVoice}
               onRecordingChange={setIsRecordingVoice}
               uploadMedia={uploadMedia}
               sendMediaMessage={sendMediaMessage}
-              onOpen={() => setActiveVideoId(null)}
+              onOpen={onVoiceRecorderOpen}
+              onVideoRecorded={handleVideoRecorded}
+              onVideoSendError={handleVideoSendError}
             />
           )}
           </View>
         </View>
-      </Animated.View>
-    </Animated.View>
+      </Reanimated.View>
+    </Reanimated.View>
+    </EphemeralClockContext.Provider>
   );
 }

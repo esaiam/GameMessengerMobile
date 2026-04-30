@@ -304,15 +304,11 @@ export default function DiceThrow3D({ dice, startPos, endPos, boardWidth, boardH
   const cbRef = useRef(onComplete);
   cbRef.current = onComplete;
 
-  const simRef = useRef(null);
-  if (!simRef.current && dice && startPos && endPos)
-    simRef.current = buildSim(startPos, endPos, boardWidth || 360, boardHeight || 260, dice);
-
   useEffect(() => () => { aliveRef.current = false; }, []);
 
   const onGL = useCallback((gl) => {
-    const sim = simRef.current;
-    if (!sim) return;
+    console.log('[DICE] GL started', Date.now());
+    if (!dice || !startPos || !endPos) return;
     const bw = boardWidth || 360;
     const bh = boardHeight || 260;
 
@@ -349,82 +345,108 @@ export default function DiceThrow3D({ dice, startPos, endPos, boardWidth, boardH
     scene.add(d1); scene.add(d2);
     scene.add(sh1); scene.add(sh2);
 
-    let t0 = Date.now();
-    let pausedAt = 0;
-    const half = DIE / 2;
-    const fLen = sim.f1.length;
+    let lastFrameTime = 0;
+    const TARGET_FRAME_MS = 1000 / 60;
 
-    const lerp = (a, b, t) => a + (b - a) * t;
-    const easeOB = (t) => { const c = 1.7; return 1 + (t - 1) ** 3 + c * (t - 1) ** 2; };
+    requestAnimationFrame(() => {
+      const sim = buildSim(startPos, endPos, bw, bh, dice);
+      let t0 = Date.now();
+      let pausedAt = 0;
+      const half = DIE / 2;
+      const fLen = sim.f1.length;
 
-    const loop = () => {
-      if (!aliveRef.current) return;
-      if (pausedRef?.current) {
-        if (!pausedAt) pausedAt = Date.now();
-        setTimeout(loop, 50);
-        return;
-      }
-      if (pausedAt) {
-        t0 += Date.now() - pausedAt;
-        pausedAt = 0;
-      }
-      requestAnimationFrame(loop);
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const easeOB = (t) => { const c = 1.7; return 1 + (t - 1) ** 3 + c * (t - 1) ** 2; };
 
-      const ms = Date.now() - t0;
-      const p = Math.min(ms / sim.dur, 1);
-      const raw = p * (fLen - 1);
-      const i = Math.min(Math.floor(raw), fLen - 2);
-      const fr = raw - i;
-
-      // Die 1
-      const a = sim.f1[i], b = sim.f1[i + 1];
-      const x1 = lerp(a.x, b.x, fr), y1 = bh - lerp(a.y, b.y, fr);
-      d1.position.set(x1, y1, half);
-      d1.rotation.set(lerp(a.rx, b.rx, fr) + TILT_X, lerp(a.ry, b.ry, fr), lerp(a.rz, b.rz, fr));
-
-      // Die 2
-      const c1 = sim.f2[i], e = sim.f2[i + 1];
-      const x2 = lerp(c1.x, e.x, fr), y2 = bh - lerp(c1.y, e.y, fr);
-      d2.position.set(x2, y2, half);
-      d2.rotation.set(lerp(c1.rx, e.rx, fr) + TILT_X, lerp(c1.ry, e.ry, fr), lerp(c1.rz, e.rz, fr));
-
-      // Shadows
-      sh1.position.set(x1, y1, 0.05);
-      sh2.position.set(x2, y2, 0.05);
-
-      // Scale-in
-      const st1 = Math.min(ms / 200, 1);
-      const scl1 = st1 < 1 ? 0.3 + 0.7 * easeOB(st1) : 1;
-      d1.scale.setScalar(scl1);
-      sh1.scale.setScalar(scl1);
-      const st2 = Math.min((ms - 40) / 200, 1);
-      const scl2 = st2 > 0 ? (st2 < 1 ? 0.3 + 0.7 * easeOB(st2) : 1) : 0.01;
-      d2.scale.setScalar(scl2);
-      sh2.scale.setScalar(scl2);
-
-      // Settle bounce + fire callback
-      if (p >= 1 && !doneRef.current) {
-        const be = ms - sim.dur;
-        if (be < 200) {
-          const bt = be / 200;
-          const bounce = 1 + 0.06 * Math.sin(bt * Math.PI) * (1 - bt);
-          d1.scale.setScalar(bounce);
-          d2.scale.setScalar(bounce);
-          sh1.scale.setScalar(bounce);
-          sh2.scale.setScalar(bounce);
-        } else if (be >= 500) {
-          doneRef.current = true;
-          cbRef.current?.();
+      let loggedFirstLoopRaf = false;
+      const loop = () => {
+        if (!aliveRef.current) return;
+        if (pausedRef?.current) {
+          if (!pausedAt) pausedAt = Date.now();
+          setTimeout(loop, 50);
+          return;
         }
-      }
+        if (pausedAt) {
+          t0 += Date.now() - pausedAt;
+          pausedAt = 0;
+        }
 
-      renderer.render(scene, cam);
-      gl.endFrameEXP();
-    };
-    loop();
-  }, [boardWidth, boardHeight]);
+        const now = performance.now();
+        const elapsed = now - lastFrameTime;
+        if (elapsed < TARGET_FRAME_MS) {
+          if (!loggedFirstLoopRaf) {
+            console.log('[DICE] loop starting', Date.now());
+            loggedFirstLoopRaf = true;
+          }
+          requestAnimationFrame(loop);
+          return;
+        }
+        lastFrameTime = now - (elapsed % TARGET_FRAME_MS);
 
-  if (!simRef.current) return null;
+        const ms = Date.now() - t0;
+        const p = Math.min(ms / sim.dur, 1);
+        const raw = p * (fLen - 1);
+        const i = Math.min(Math.floor(raw), fLen - 2);
+        const fr = raw - i;
+
+        // Die 1
+        const a = sim.f1[i], b = sim.f1[i + 1];
+        const x1 = lerp(a.x, b.x, fr), y1 = bh - lerp(a.y, b.y, fr);
+        d1.position.set(x1, y1, half);
+        d1.rotation.set(lerp(a.rx, b.rx, fr) + TILT_X, lerp(a.ry, b.ry, fr), lerp(a.rz, b.rz, fr));
+
+        // Die 2
+        const c1 = sim.f2[i], e = sim.f2[i + 1];
+        const x2 = lerp(c1.x, e.x, fr), y2 = bh - lerp(c1.y, e.y, fr);
+        d2.position.set(x2, y2, half);
+        d2.rotation.set(lerp(c1.rx, e.rx, fr) + TILT_X, lerp(c1.ry, e.ry, fr), lerp(c1.rz, e.rz, fr));
+
+        // Shadows
+        sh1.position.set(x1, y1, 0.05);
+        sh2.position.set(x2, y2, 0.05);
+
+        // Scale-in
+        const st1 = Math.min(ms / 200, 1);
+        const scl1 = st1 < 1 ? 0.3 + 0.7 * easeOB(st1) : 1;
+        d1.scale.setScalar(scl1);
+        sh1.scale.setScalar(scl1);
+        const st2 = Math.min((ms - 40) / 200, 1);
+        const scl2 = st2 > 0 ? (st2 < 1 ? 0.3 + 0.7 * easeOB(st2) : 1) : 0.01;
+        d2.scale.setScalar(scl2);
+        sh2.scale.setScalar(scl2);
+
+        // Settle bounce + fire callback
+        if (p >= 1 && !doneRef.current) {
+          const be = ms - sim.dur;
+          if (be < 200) {
+            const bt = be / 200;
+            const bounce = 1 + 0.06 * Math.sin(bt * Math.PI) * (1 - bt);
+            d1.scale.setScalar(bounce);
+            d2.scale.setScalar(bounce);
+            sh1.scale.setScalar(bounce);
+            sh2.scale.setScalar(bounce);
+          } else if (be >= 500) {
+            doneRef.current = true;
+            renderer.render(scene, cam);
+            gl.endFrameEXP();
+            cbRef.current?.();
+            return;
+          }
+        }
+
+        renderer.render(scene, cam);
+        gl.endFrameEXP();
+        if (!loggedFirstLoopRaf) {
+          console.log('[DICE] loop starting', Date.now());
+          loggedFirstLoopRaf = true;
+        }
+        requestAnimationFrame(loop);
+      };
+      loop();
+    });
+  }, [boardWidth, boardHeight, dice, startPos, endPos]);
+
+  if (!dice || !startPos || !endPos) return null;
 
   return (
     <GLView

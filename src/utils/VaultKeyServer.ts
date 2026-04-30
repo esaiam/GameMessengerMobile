@@ -30,6 +30,10 @@ import { getPublicKeyBase64 } from './VaultKeyStore';
 
 const keyCache = new Map<string, string>();
 
+export function getKeyFromCache(playerName: string): string | null {
+  return keyCache.get(playerName) ?? null;
+}
+
 export type PublicKeyRecord = {
   player_name: string;
   public_key_b64: string;

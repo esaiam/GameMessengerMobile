@@ -15,8 +15,8 @@ import { UserAvatar } from './UserAvatar';
 import { ArrowLeft, X, Copy, Forward, Trash2 } from '../icons/lucideIcons';
 import { V } from '../theme';
 
-const HEADER_BLUR_INTENSITY_IOS = 78;
-const HEADER_BLUR_INTENSITY_ANDROID = 56;
+const HEADER_BLUR_INTENSITY_IOS = 100;
+const HEADER_BLUR_INTENSITY_ANDROID = 72;
 const HEADER_FROST_TINT_OPACITY = 0.28;
 const AVATAR_SIZE = 42;
 /** Левая зона (назад / крестик) и действия выделения — один визуальный размер */

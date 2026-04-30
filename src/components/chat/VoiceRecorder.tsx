@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -31,8 +31,7 @@ import {
   useAudioPlayerStatus,
   setIsAudioActiveAsync,
 } from 'expo-audio';
-import { Mic, Lock, Unlock, SendHorizontal, Trash2, Pause, Play } from '../../icons/lucideIcons';
-import { Video as VideoIcon } from 'lucide-react-native';
+import { Mic, Lock, Unlock, SendHorizontal, Trash2, Pause, Play, Video as VideoIcon } from '../../icons/lucideIcons';
 import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H } from '../../theme';
 import { setAudioModeAsync } from '../../utils/audioMode';
 import { pauseDiceSound } from '../../utils/diceSound';
@@ -51,13 +50,14 @@ const RAIL_LOCK_PX = 14;
 const SPRING_RAIL_RETURN = { damping: 18, stiffness: 280 } as const;
 /** padding between depth-ring and SafeBlurView */
 const DEPTH = 0;
-/** Визуальный спек микрофона в инпут-баре */
-const MIC_INNER = 44;
-const MIC_OUTER = 52;
+/** Визуальный спек микрофона в инпут-баре (−10% к прежним 44 / 52) */
+const MIC_INNER = 40;
+const MIC_OUTER = 47;
 /** Кружок под плавающие Lock / Pause над микрофоном */
 const FLOAT_ICON_CIRCLE = 36;
-const MIC_ICON_SPEC = 20;
-const MIC_ICON_RECORDING = '#8ECECA';
+const MIC_ICON_SPEC = 18;
+/** Как кнопка play в VoiceMessagePlayer (белый глиф на sage) */
+const MIC_ICON_ON_SAGE = '#FFFFFF';
 /** Масштаб кнопки при активной записи (меньше, чем «полный» ×3) */
 const RECORD_LIFT = 2;
 /** Сдвиг замка вверх при увеличении кнопки */
@@ -81,6 +81,8 @@ interface Props {
   uploadMedia: (uri: string, folder: string, ext: string, contentType: string) => Promise<string>;
   sendMediaMessage: (type: string, url: string, extra?: Record<string, unknown>) => Promise<void>;
   onOpen?: () => void;
+  onVideoRecorded?: (localUri: string) => void;
+  onVideoSendError?: () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -147,12 +149,14 @@ function WaveformSvg({
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function VoiceRecorder({
+function VoiceRecorder({
   onSendAudio,
   onRecordingChange,
   uploadMedia,
   sendMediaMessage,
   onOpen,
+  onVideoRecorded,
+  onVideoSendError,
 }: Props) {
   const [state, setState] = useState<RS>('IDLE');
   const [dur, setDur] = useState(0);
@@ -186,7 +190,6 @@ export default function VoiceRecorder({
     isMeteringEnabled: true,
   } as Parameters<typeof useAudioRecorder>[0]);
   const recStatus = useAudioRecorderState(recorder, 100);
-  console.log('[RECORDER STATUS]', recStatus);
 
   // ── Reanimated shared values ────────────────────────────────────────────────
   /** Удержание пальца: 0.93 → spring 1 (спек onPressIn / onPressOut) */
@@ -243,7 +246,6 @@ export default function VoiceRecorder({
 
   // ── Amplitude collection ────────────────────────────────────────────────────
   useEffect(() => {
-    console.log('[METERING] raw value:', recStatus.metering, '| state:', stateRef.current);
     const s = stateRef.current;
     if (s !== 'RECORDING' && s !== 'LOCKED') return;
     const now = Date.now();
@@ -300,7 +302,7 @@ export default function VoiceRecorder({
       // Don't fight audio recording state machine.
       if (stateRef.current === 'RECORDING' || stateRef.current === 'LOCKED' || stateRef.current === 'PAUSED') return;
       overlayOp.value = withTiming(0, { duration: 150 });
-      recordLiftSV.value = withSpring(1, { damping: 14, stiffness: 140 });
+      recordLiftSV.value = withSpring(1, { damping: 14, stiffness: 140, overshootClamping: true });
       micDragSV.value = 0;
       railSV.value = 0;
       txSV.value = withSpring(0, SPRING_RAIL_RETURN);
@@ -627,7 +629,6 @@ export default function VoiceRecorder({
         const shouldLock = videoLockArmedRef.current && !cancelSlide;
         videoLockArmedRef.current = false;
         if (shouldLock) {
-          console.log('[VoiceRecorder] calling lock');
           setIsVideoLocked(true);
           videoRecorderRef.current?.lock();
         } else {
@@ -808,7 +809,6 @@ export default function VoiceRecorder({
   /** Поднять слой только когда поверх лежит inline-overlay VideoRecorder (z 201) */
   const micLayerAboveVideo =
     mediaMode === 'video' && (isVideoRecording || isVideoLocked);
-  console.log('[VoiceRecorder] render', { state, isVideoRecording, isVideoLocked, isMicActive, mediaMode });
 
   // ── Mic: слот фиксированной ширины (правый край капсулы не смещается), ×3 + glow ─
   const micEl = (
@@ -825,28 +825,30 @@ export default function VoiceRecorder({
             />
           ) : null}
           <View style={styles.micGlowRing} pointerEvents="none" />
-          <View
-            style={[
-              styles.micCircle,
-              isMicActive ? styles.micCircleRecording : styles.micCircleIdle,
-            ]}
-          >
-            {/* Icon morph: Mic ↔ Video (only meaningful in IDLE) */}
-            <View style={styles.micIconStack} pointerEvents="none">
-              <Animated.View style={[styles.micIconAbs, micIconMicAnimStyle]}>
-                <Mic
-                  size={MIC_ICON_SPEC}
-                  color={V.textPrimary}
-                  strokeWidth={3}
-                />
-              </Animated.View>
-              <Animated.View style={[styles.micIconAbs, micIconVideoAnimStyle]}>
-                <VideoIcon
-                  size={MIC_ICON_SPEC}
-                  color={V.textPrimary}
-                  strokeWidth={3}
-                />
-              </Animated.View>
+          <View style={styles.micInsetWell} pointerEvents="none">
+            <View
+              style={[
+                styles.micCircle,
+                isMicActive ? styles.micCircleRecording : styles.micCircleIdle,
+              ]}
+            >
+              {/* Icon morph: Mic ↔ Video (only meaningful in IDLE) */}
+              <View style={styles.micIconStack} pointerEvents="none">
+                <Animated.View style={[styles.micIconAbs, micIconMicAnimStyle]}>
+                  <Mic
+                    size={MIC_ICON_SPEC}
+                    color={MIC_ICON_ON_SAGE}
+                    strokeWidth={1.5}
+                  />
+                </Animated.View>
+                <Animated.View style={[styles.micIconAbs, micIconVideoAnimStyle]}>
+                  <VideoIcon
+                    size={MIC_ICON_SPEC}
+                    color={MIC_ICON_ON_SAGE}
+                    strokeWidth={1.5}
+                  />
+                </Animated.View>
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -969,6 +971,8 @@ export default function VoiceRecorder({
       uploadMedia={uploadMedia}
       sendMediaMessage={sendMediaMessage}
       onOpen={onOpen}
+      onVideoRecorded={onVideoRecorded}
+      onVideoSendError={onVideoSendError}
       onRecordingChange={(active) => {
         setIsVideoRecording(active);
         if (!active) setIsVideoLocked(false);
@@ -1038,7 +1042,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     borderColor: 'transparent',
   },
-  /** Внешнее кольцо-свечение 52px */
+  /** Внешнее кольцо-свечение (под размер MIC_OUTER) */
   micGlowRing: {
     position: 'absolute',
     width: MIC_OUTER,
@@ -1047,6 +1051,17 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     borderColor: 'transparent',
     backgroundColor: 'transparent',
+  },
+  /** «Гнездо»: тёмное кольцо вокруг диска (без внешней тени — иначе кружок снова «выпирает») */
+  micInsetWell: {
+    width: MIC_OUTER,
+    height: MIC_OUTER,
+    borderRadius: MIC_OUTER / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(13, 15, 20, 0.4)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0, 0, 0, 0.45)',
   },
   micCircle: {
     width: MIC_INNER,
@@ -1059,28 +1074,26 @@ const styles = StyleSheet.create({
   },
   micCircleIdle: {
     backgroundColor: V.accentSage,
-    ...Platform.select({
-      ios: {
-        shadowColor: V.bgApp,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.42,
-        shadowRadius: 12,
-      },
-      android: { elevation: 7 },
-    }),
+    /** Вдавленная кнопка: тёмный верх/левый край, светлый низ/право (без внешнего «подъёма») */
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.32)',
+    borderLeftColor: 'rgba(0, 0, 0, 0.24)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.12)',
+    borderRightColor: 'rgba(255, 255, 255, 0.07)',
   },
   micCircleRecording: {
     backgroundColor: V.accentSage,
-    /** Основная тень снята — пульс на micEdgeGlow, без раздувания пятна */
-    ...Platform.select({
-      ios: {
-        shadowColor: V.bgApp,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-      },
-      android: { elevation: 6 },
-    }),
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.32)',
+    borderLeftColor: 'rgba(0, 0, 0, 0.24)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.12)',
+    borderRightColor: 'rgba(255, 255, 255, 0.07)',
   },
   micIconStack: {
     width: MIC_ICON_SPEC,
@@ -1507,3 +1520,7 @@ function PausedPreviewBar({ uri, bars, dur, onTrim, onCancel, onSend }: PausedPr
     </View>
   );
 }
+
+const VoiceRecorderMemo = memo(VoiceRecorder);
+VoiceRecorderMemo.displayName = 'VoiceRecorder';
+export default VoiceRecorderMemo;

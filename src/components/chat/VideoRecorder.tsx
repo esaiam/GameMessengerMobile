@@ -3,24 +3,28 @@
  * Удержание кнопки микрофона (видеорежим): запись в круглом превью над инпутом, без полноэкранной камеры.
  */
 
-import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   Text,
+  Image,
   Animated,
   Alert,
   Platform,
-  InteractionManager,
   TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import type { VideoCodec } from 'expo-camera';
 import { setIsAudioActiveAsync } from 'expo-audio';
-import { Trash2, SendHorizontal } from 'lucide-react-native';
+import { Trash2, SendHorizontal } from '../../icons/lucideIcons';
 import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H } from '../../theme';
 import { setAudioModeAsync } from '../../utils/audioMode';
+import SafeBlurView from '../SafeBlurView';
+
+/** Тот же кадр, что фон чата — под блюром даёт «размытое фото», а не пустой серый */
+const CAMERA_WARMUP_TEXTURE = require('../../../assets/chat-room-wallpaper.jpg');
 
 export interface VideoRecorderHandle {
   beginInlineHold: () => Promise<void>;
@@ -37,15 +41,20 @@ interface VideoRecorderProps {
   onOpen?: () => void;
   onRecordingChange?: (active: boolean) => void;
   cancelActive?: boolean;
+  /** Вызывается немедленно после остановки записи с локальным URI — для оптимистичного UI */
+  onVideoRecorded?: (localUri: string) => void;
+  /** Вызывается если загрузка/отправка провалились — для отката оптимистичного сообщения */
+  onVideoSendError?: () => void;
 }
 
 const MAX_DURATION_MS = 60_000;
 /** Диаметр круга превью над кнопкой */
 const INLINE_CIRCLE = 168;
-const MIC_OUTER = 52;
+/** Совпадает с VoiceRecorder (слот под капсулой) */
+const MIC_OUTER = 47;
 
 const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
-  function VideoRecorder({ uploadMedia, sendMediaMessage, onOpen, onRecordingChange, cancelActive }, ref) {
+  function VideoRecorder({ uploadMedia, sendMediaMessage, onOpen, onRecordingChange, cancelActive, onVideoRecorded, onVideoSendError }, ref) {
     const insets = useSafeAreaInsets();
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const [micPermission, requestMicPermission] = useMicrophonePermissions();
@@ -54,13 +63,19 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
     const [isRecording, setIsRecording] = useState(false);
     const [isLocked, setIsLocked] = useState(false);
     const [elapsedMs, setElapsedMs] = useState(0);
+    /** Первый кадр превью ещё не пришёл — показываем frosted вместо чёрного сенсора */
+    const [cameraSurfaceReady, setCameraSurfaceReady] = useState(false);
 
     const cameraRef = useRef<CameraView>(null);
     const cameraReadyRef = useRef(false);
+    /** Resolve-функция Promise, ожидающей onCameraReady — для event-driven старта записи */
+    const cameraReadyPromiseResolveRef = useRef<(() => void) | null>(null);
     /** Прервать только фазу ожидания камеры (до старта recordAsync) */
     const abortOpeningRef = useRef(false);
     const discardResultRef = useRef(false);
     const isRecordingNativeRef = useRef(false);
+    /** true — анимация возврата кнопки уже запущена в endInlineHold, не дублировать в runRecordSession */
+    const stopAnimAppliedRef = useRef(false);
     const progressAnim = useRef(new Animated.Value(0)).current;
     const circleTranslateX = useRef(new Animated.Value(0)).current;
     const circleTranslateY = useRef(new Animated.Value(0)).current;
@@ -69,6 +84,10 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
     const recordingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
     const elapsedInterval = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTime = useRef(0);
+
+    useEffect(() => {
+      if (!inlineVisible) setCameraSurfaceReady(false);
+    }, [inlineVisible]);
 
     const prepareRecordingAudioSession = useCallback(async () => {
       try {
@@ -131,23 +150,31 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
         const recordOpts: { maxDuration: number; codec?: VideoCodec } = { maxDuration: 60 };
         if (Platform.OS === 'ios') {
           recordOpts.codec = 'avc1';
+        } else {
+          // Android: avc1 даёт более стабильную синхронизацию аудио/видео
+          recordOpts.codec = 'avc1' as VideoCodec;
         }
 
         const result = await cameraRef.current.recordAsync(recordOpts);
 
         clearRecordingTimers();
         isRecordingNativeRef.current = false;
-        setIsRecording(false);
-        onRecordingChange?.(false);
-        Animated.spring(circleScale, {
-          toValue: 1,
-          damping: 14,
-          stiffness: 140,
-          useNativeDriver: true,
-        }).start();
-        circleTranslateX.setValue(0);
-        circleTranslateY.setValue(0);
-        progressAnim.setValue(0);
+        // Анимация кнопки могла быть уже запущена в endInlineHold при отпускании пальца
+        if (!stopAnimAppliedRef.current) {
+          setIsRecording(false);
+          onRecordingChange?.(false);
+          Animated.spring(circleScale, {
+            toValue: 1,
+            damping: 14,
+            stiffness: 140,
+            overshootClamping: true,
+            useNativeDriver: true,
+          }).start();
+          circleTranslateX.setValue(0);
+          circleTranslateY.setValue(0);
+          progressAnim.setValue(0);
+        }
+        stopAnimAppliedRef.current = false;
 
         if (discardResultRef.current) {
           setInlineVisible(false);
@@ -155,11 +182,15 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
         }
 
         if (result?.uri) {
+          // Показываем сообщение немедленно с локальным URI (оптимистичный UI)
+          onVideoRecorded?.(result.uri);
           setInlineVisible(false);
           try {
             const url = await uploadMedia(result.uri, 'video', 'mp4', 'video/mp4');
             await sendMediaMessage('video', url);
           } catch (e) {
+            // Откатываем оптимистичное сообщение
+            onVideoSendError?.();
             Alert.alert('Ошибка', 'Не удалось отправить видео. Попробуй ещё раз.');
             console.error('VideoRecorder: ошибка отправки', e);
           }
@@ -167,17 +198,21 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       } catch (e) {
         clearRecordingTimers();
         isRecordingNativeRef.current = false;
-        setIsRecording(false);
-        onRecordingChange?.(false);
-        Animated.spring(circleScale, {
-          toValue: 1,
-          damping: 14,
-          stiffness: 140,
-          useNativeDriver: true,
-        }).start();
-        circleTranslateX.setValue(0);
-        circleTranslateY.setValue(0);
-        progressAnim.setValue(0);
+        if (!stopAnimAppliedRef.current) {
+          setIsRecording(false);
+          onRecordingChange?.(false);
+          Animated.spring(circleScale, {
+            toValue: 1,
+            damping: 14,
+            stiffness: 140,
+            overshootClamping: true,
+            useNativeDriver: true,
+          }).start();
+          circleTranslateX.setValue(0);
+          circleTranslateY.setValue(0);
+          progressAnim.setValue(0);
+        }
+        stopAnimAppliedRef.current = false;
         setInlineVisible(false);
         console.warn('VideoRecorder: ошибка записи', e);
       }
@@ -208,15 +243,23 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       if (abortOpeningRef.current) return;
 
       cameraReadyRef.current = false;
+      setCameraSurfaceReady(false);
       setElapsedMs(0);
       progressAnim.setValue(0);
       setInlineVisible(true);
 
-      let spins = 0;
-      while (!cameraReadyRef.current && !abortOpeningRef.current && spins < 40) {
-        await new Promise<void>((r) => setTimeout(r, 50));
-        spins++;
-      }
+      // Event-driven: ждём onCameraReady вместо polling-цикла
+      await new Promise<void>((resolve) => {
+        if (cameraReadyRef.current) { resolve(); return; }
+        const timeout = setTimeout(() => {
+          cameraReadyPromiseResolveRef.current = null;
+          resolve();
+        }, 2000);
+        cameraReadyPromiseResolveRef.current = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+      });
       if (abortOpeningRef.current) {
         setInlineVisible(false);
         return;
@@ -224,12 +267,6 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       if (!cameraReadyRef.current) {
         setInlineVisible(false);
         Alert.alert('Камера', 'Сессия камеры не успела запуститься. Попробуй ещё раз.');
-        return;
-      }
-
-      await new Promise<void>((r) => InteractionManager.runAfterInteractions(() => r()));
-      if (abortOpeningRef.current) {
-        setInlineVisible(false);
         return;
       }
 
@@ -255,8 +292,27 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
         } catch {
           /* ignore */
         }
-        if (!isRecordingNativeRef.current) {
+        if (isRecordingNativeRef.current) {
+          // Запись идёт — сразу уменьшаем кнопку, не ждём recordAsync
+          stopAnimAppliedRef.current = true;
+          setIsRecording(false);
+          onRecordingChange?.(false);
+          Animated.spring(circleScale, {
+            toValue: 1,
+            damping: 14,
+            stiffness: 140,
+            overshootClamping: true,
+            useNativeDriver: true,
+          }).start();
+          circleTranslateX.setValue(0);
+          circleTranslateY.setValue(0);
+          progressAnim.setValue(0);
+          // setInlineVisible(false) — НЕ здесь: кружок камеры остаётся пока recordAsync не завершится
+        } else {
           abortOpeningRef.current = true;
+          // Немедленно резолвим ожидание камеры, чтобы не ждать 2-секундный таймаут
+          cameraReadyPromiseResolveRef.current?.();
+          cameraReadyPromiseResolveRef.current = null;
           clearRecordingTimers();
           setIsRecording(false);
           onRecordingChange?.(false);
@@ -264,6 +320,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
             toValue: 1,
             damping: 14,
             stiffness: 140,
+            overshootClamping: true,
             useNativeDriver: true,
           }).start();
           circleTranslateX.setValue(0);
@@ -291,7 +348,6 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
     );
 
     const lock = useCallback(() => {
-      console.log('[VideoRecorder] lock called');
       setIsLocked(true);
       circleTranslateX.setValue(0);
       circleTranslateY.setValue(0);
@@ -337,7 +393,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       TAB_BAR_LAYOUT.floatBottom +
       TAB_BAR_INNER_ROW_H +
       TAB_BAR_LAYOUT.topPad +
-      52;
+      MIC_OUTER;
 
     return inlineVisible ? (
           <View style={styles.inlineLayer} pointerEvents="box-none">
@@ -363,12 +419,26 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
                 style={StyleSheet.absoluteFillObject}
                 facing="front"
                 mode="video"
-                videoQuality="480p"
+                videoQuality="720p"
                 mute={false}
                 onCameraReady={() => {
                   cameraReadyRef.current = true;
+                  setCameraSurfaceReady(true);
+                  cameraReadyPromiseResolveRef.current?.();
+                  cameraReadyPromiseResolveRef.current = null;
                 }}
               />
+              {!cameraSurfaceReady ? (
+                <View style={styles.cameraWarmupOverlay} pointerEvents="none">
+                  <Image
+                    source={CAMERA_WARMUP_TEXTURE}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode="cover"
+                    accessibilityIgnoresInvertColors
+                  />
+                  <SafeBlurView intensity={48} tint="dark" style={StyleSheet.absoluteFillObject} />
+                </View>
+              ) : null}
               <View style={styles.circleOverlay} pointerEvents="none">
                 <View style={styles.circleRing} />
                 {isRecording ? (
@@ -382,7 +452,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
                     style={[
                       styles.progressArcFill,
                       { width: progressWidth },
-                      isRecording && { backgroundColor: '#E05A5A' },
+                      isRecording && { backgroundColor: V.dangerMuted },
                     ]}
                   />
                 </View>
@@ -530,6 +600,12 @@ const styles = StyleSheet.create({
     backgroundColor: V.bgSurface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: V.sageBorder,
+  },
+  /** До onCameraReady: размытая «мутность» вместо пустого чёрного превью */
+  cameraWarmupOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: INLINE_CIRCLE / 2,
+    overflow: 'hidden',
   },
   circleOverlay: {
     ...StyleSheet.absoluteFillObject,

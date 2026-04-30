@@ -43,8 +43,6 @@ import {
 import { playDiceRollSound, preloadDiceSound, unloadDiceSound } from '../utils/diceSound';
 const NICKNAME_KEY = '@backgammon_nickname';
 const SWIPE_HINT_KEY = '@backgammon_swipe_hint_seen';
-/** Полоса игрового статуса между frosted-шапкой чата и доской (телефон) */
-const GAME_STATUS_STRIP_H = 24;
 /** Как у ChatRoomHeader.js — frosted шапка чата */
 const HANDLE_BLUR_INTENSITY_IOS = 78;
 const HANDLE_BLUR_INTENSITY_ANDROID = 56;
@@ -59,6 +57,7 @@ export default function GameScreen({ route, navigation }) {
   const roomId = route.params?.roomId;
   const initialPlayerNumber = route.params?.playerNumber;
   const selfPlay = route.params?.selfPlay === true;
+  const routePeerName = route.params?.peerName || route.params?.title || null;
   const [nickname, setNickname] = useState(route.params?.nickname || '');
 
   const [room, setRoom] = useState(null);
@@ -70,10 +69,15 @@ export default function GameScreen({ route, navigation }) {
   const sessionChannelRef = useRef(null);
   const presenceChannelRef = useRef(null);
   const [activeSessionId, setActiveSessionId] = useState(null);
+  const activeSessionIdRef = useRef(activeSessionId);
   const [useLegacyRoomState, setUseLegacyRoomState] = useState(false);
 
   const [diceAnimating, setDiceAnimating] = useState(false);
   const [showAnimDice, setShowAnimDice] = useState(false);
+  const showAnimDiceRef = useRef(false);
+  useEffect(() => {
+    showAnimDiceRef.current = showAnimDice;
+  }, [showAnimDice]);
   const [animDice, setAnimDice] = useState(null);
   const [uiDice, setUiDice] = useState(null);
 
@@ -84,15 +88,15 @@ export default function GameScreen({ route, navigation }) {
 
   const opponentName = useMemo(() => {
     if (selfPlay) return nickname;
-    if (!room || !nickname) return null;
+    if (!room || !nickname) return routePeerName;
     const u1 = room?.user1_id || room?.player1_name || null;
     const u2 = room?.user2_id || room?.player2_name || null;
-    if (!u1 && !u2) return null;
+    if (!u1 && !u2) return routePeerName;
     if (u1 === nickname) return u2;
     if (u2 === nickname) return u1;
     // fallback: if nickname isn't on the room record yet, pick "other" heuristically
-    return u2 || u1;
-  }, [room, nickname, selfPlay]);
+    return routePeerName || u2 || u1;
+  }, [room, nickname, selfPlay, routePeerName]);
   const [swipeStart, setSwipeStart] = useState(null);
   const [swipeEnd, setSwipeEnd] = useState(null);
   const [throwKey, setThrowKey] = useState(0);
@@ -110,6 +114,9 @@ export default function GameScreen({ route, navigation }) {
   // Pre-start roll: each player rolls ONE die in turn to decide who starts
   const isPreStart = gameStarted && gameState.turnPhase === 'preroll';
   const effectiveGameState = boardMode === 'sandbox' ? sandboxState : gameState;
+
+  /** Вызов из setTimeout удалённого броска — ref обновляется после объявления pauseJsForDiceThrow */
+  const pauseJsForDiceThrowRef = useRef(() => {});
 
   const diceEqual = useCallback((a, b) => {
     if (a === b) return true;
@@ -163,6 +170,7 @@ export default function GameScreen({ route, navigation }) {
       playDiceRollSound();
 
       pendingRollRef.current = null;
+      pauseJsForDiceThrowRef.current();
       setAnimDice(evtDice);
       setSwipeStart(startPos);
       setSwipeEnd(endPos);
@@ -211,6 +219,7 @@ export default function GameScreen({ route, navigation }) {
 
     // Opponent roll animation (fixed throw vector so it looks like a throw)
     pendingRollRef.current = null;
+    pauseJsForDiceThrowRef.current();
     setAnimDice(nextDice);
     setSwipeStart({ x: 42, y: pointH * 1.25 });
     setSwipeEnd({ x: (windowW || Dimensions.get('window').width) - 42, y: pointH * 0.75 });
@@ -277,6 +286,11 @@ export default function GameScreen({ route, navigation }) {
   }, [selfPlay, gameState.currentPlayer]);
 
   const HANDLE_H = 28;
+  /** Высота капсулы аудио: AudioMessage — paddingVertical 10×2 + waveRow 40 (≥ playHit 36) */
+  const AUDIO_MSG_H = 60;
+  const BOTTOM_GAP = AUDIO_MSG_H + 8;
+  const BOARD_TOP_GAP = 4;
+  const BOARD_SIDE_GAP = 8;
   const DEFAULT_PH = 130;
   const MIN_PH = 50;
   const BOARD_CHROME = 32;
@@ -292,6 +306,8 @@ export default function GameScreen({ route, navigation }) {
   const [swipeHintSeen, setSwipeHintSeen] = useState(true);
 
   const renderPausedRef = useRef(false);
+  /** Не совмещать с renderPausedRef: pauseRendering() ставит ref в true и иначе остановит RAF в DiceThrow3D */
+  const diceGlPausedRef = useRef(false);
   const boardRef = useRef(null);
   const boardMountedRef = useRef(false);
   const [boardMounted, setBoardMounted] = useState(false);
@@ -299,12 +315,38 @@ export default function GameScreen({ route, navigation }) {
   const boardColTopYRef = useRef(null);
   const chatInputTopYRef = useRef(null);
   const boardOpenRef = useRef(false);
+  /** Не вызывать setAvailableH во время анимации доски — меньше ререндеров и джанка layout */
+  const suppressAvailableHRef = useRef(false);
 
   const handleStretchAnim = useRef(new Animated.Value(0)).current;
   const handleWidthAnim = useRef(new Animated.Value(0)).current;
   const boardDropAnim = useRef(new Animated.Value(0)).current;
   const middlePulseAnim = useRef(new Animated.Value(0)).current;
   const boardDropStartRef = useRef(0);
+
+  const pauseJsForDiceThrow = useCallback(() => {
+    renderPausedRef.current = true;
+    boardDropAnim.stopAnimation();
+    handleWidthAnim.stopAnimation();
+    handleStretchAnim.stopAnimation();
+    middlePulseAnim.stopAnimation();
+    boardRef.current?.pauseRendering();
+  }, [boardDropAnim, handleWidthAnim, handleStretchAnim, middlePulseAnim]);
+
+  pauseJsForDiceThrowRef.current = pauseJsForDiceThrow;
+
+  useEffect(() => {
+    if (!showAnimDice) {
+      renderPausedRef.current = false;
+      if (boardOpenRef.current) {
+        const maxH = maxSlideRef.current;
+        boardDropAnim.setValue(maxH);
+        handleWidthAnim.setValue(1);
+        handleStretchAnim.setValue(0);
+        middlePulseAnim.setValue(0);
+      }
+    }
+  }, [showAnimDice, boardDropAnim, handleWidthAnim, handleStretchAnim, middlePulseAnim]);
 
   const DRAG_MAX_EXTRA_H = HANDLE_H;
   const MIN_DRAG_THRESHOLD = 20;
@@ -314,19 +356,16 @@ export default function GameScreen({ route, navigation }) {
     const bY = boardColTopYRef.current;
     const iY = chatInputTopYRef.current;
     if (typeof bY === 'number' && typeof iY === 'number') {
-      const avail = Math.max(200, iY - bY - HANDLE_H - 8);
+      const avail = Math.max(200, iY - bY - HANDLE_H - BOTTOM_GAP);
       maxSlideRef.current = avail;
-      setAvailableH(avail);
+      if (!suppressAvailableHRef.current) setAvailableH(avail);
     } else {
       maxSlideRef.current = 600;
     }
   }, []);
 
   const runOpenSequence = useCallback(() => {
-    if (!boardMountedRef.current) {
-      boardMountedRef.current = true;
-      setBoardMounted(true);
-    }
+    suppressAvailableHRef.current = true;
     boardOpenRef.current = true;
     middlePulseAnim.setValue(0);
 
@@ -344,43 +383,59 @@ export default function GameScreen({ route, navigation }) {
       useNativeDriver: false,
     }).start(() => {
       const maxH = maxSlideRef.current;
-      Animated.timing(boardDropAnim, {
-        toValue: maxH,
-        duration: 380,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: false,
-      }).start(() => {
-        Animated.sequence([
-          Animated.timing(boardDropAnim, {
-            toValue: maxH - 18,
-            duration: 100,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: false,
-          }),
-          Animated.timing(boardDropAnim, {
-            toValue: maxH,
-            duration: 100,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: false,
-          }),
-          Animated.timing(boardDropAnim, {
-            toValue: maxH - 5,
-            duration: 60,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: false,
-          }),
-          Animated.timing(boardDropAnim, {
-            toValue: maxH,
-            duration: 60,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: false,
-          }),
-        ]).start();
-      });
+      const firstMount = !boardMountedRef.current;
+      if (firstMount) {
+        boardMountedRef.current = true;
+        setBoardMounted(true);
+      }
+      const startBoardDrop = () => {
+        Animated.timing(boardDropAnim, {
+          toValue: maxH,
+          duration: 380,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: false,
+        }).start(() => {
+          Animated.sequence([
+            Animated.timing(boardDropAnim, {
+              toValue: maxH - 18,
+              duration: 100,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: false,
+            }),
+            Animated.timing(boardDropAnim, {
+              toValue: maxH,
+              duration: 100,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: false,
+            }),
+            Animated.timing(boardDropAnim, {
+              toValue: maxH - 5,
+              duration: 60,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: false,
+            }),
+            Animated.timing(boardDropAnim, {
+              toValue: maxH,
+              duration: 60,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: false,
+            }),
+          ]).start(() => {
+            suppressAvailableHRef.current = false;
+            computeMaxSlide();
+          });
+        });
+      };
+      if (firstMount) {
+        requestAnimationFrame(() => requestAnimationFrame(startBoardDrop));
+      } else {
+        startBoardDrop();
+      }
     });
-  }, [handleStretchAnim, handleWidthAnim, boardDropAnim, middlePulseAnim]);
+  }, [handleStretchAnim, handleWidthAnim, boardDropAnim, middlePulseAnim, computeMaxSlide]);
 
   const runCloseSequence = useCallback(() => {
+    suppressAvailableHRef.current = true;
     boardOpenRef.current = false;
     handleStretchAnim.stopAnimation();
     handleWidthAnim.stopAnimation();
@@ -396,7 +451,11 @@ export default function GameScreen({ route, navigation }) {
         easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
       }).start(() => {
-        renderPausedRef.current = false;
+        if (!showAnimDiceRef.current) {
+          renderPausedRef.current = false;
+        }
+        suppressAvailableHRef.current = false;
+        computeMaxSlide();
       });
     };
 
@@ -422,7 +481,7 @@ export default function GameScreen({ route, navigation }) {
         }).start(collapseBoardHeightOnly);
       }
     });
-  }, [handleStretchAnim, handleWidthAnim, boardDropAnim, middlePulseAnim]);
+  }, [handleStretchAnim, handleWidthAnim, boardDropAnim, middlePulseAnim, computeMaxSlide]);
 
   const openRef = useRef(runOpenSequence);
   const closeRef = useRef(runCloseSequence);
@@ -496,6 +555,7 @@ export default function GameScreen({ route, navigation }) {
 
   const [kbVisible, setKbVisible] = useState(false);
   const [kbTransitioning, setKbTransitioning] = useState(false);
+  const kbTransitionTimerRef = useRef(null);
 
   useEffect(() => {
     if (route.params?.nickname && route.params.nickname !== nickname) {
@@ -516,11 +576,22 @@ export default function GameScreen({ route, navigation }) {
     const mark = (vis) => {
       setKbTransitioning(true);
       setKbVisible(vis);
-      setTimeout(() => setKbTransitioning(false), 420);
+      if (kbTransitionTimerRef.current) {
+        clearTimeout(kbTransitionTimerRef.current);
+        kbTransitionTimerRef.current = null;
+      }
+      kbTransitionTimerRef.current = setTimeout(() => {
+        kbTransitionTimerRef.current = null;
+        setKbTransitioning(false);
+      }, 420);
     };
     const sub1 = Keyboard.addListener(showEvt, () => mark(true));
     const sub2 = Keyboard.addListener(hideEvt, () => mark(false));
-    return () => { sub1.remove(); sub2.remove(); };
+    return () => {
+      sub1.remove();
+      sub2.remove();
+      if (kbTransitionTimerRef.current) clearTimeout(kbTransitionTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -540,6 +611,7 @@ export default function GameScreen({ route, navigation }) {
       const parent = navigation.getParent?.();
       parent?.setOptions?.({ tabBarStyle: { display: 'none' } });
       return () => {
+        suppressAvailableHRef.current = false;
         Keyboard.dismiss();
         setKbVisible(false);
         parent?.setOptions?.({ tabBarStyle: undefined });
@@ -581,6 +653,10 @@ export default function GameScreen({ route, navigation }) {
       AsyncStorage.setItem(SWIPE_HINT_KEY, '1');
     }
   }, [gameStarted]);
+
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
 
   useEffect(() => {
     const loadRoom = async () => {
@@ -655,6 +731,10 @@ export default function GameScreen({ route, navigation }) {
     };
 
     loadRoom();
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!roomId) return;
 
     const channel = supabase
       .channel(`room-${roomId}`)
@@ -668,48 +748,68 @@ export default function GameScreen({ route, navigation }) {
         },
         (payload) => {
           const updated = payload.new;
-          setRoom(updated);
+          setRoom((prev) => {
+            if (JSON.stringify(prev) === JSON.stringify(updated)) return prev;
+            return updated;
+          });
         }
       )
       .subscribe();
 
     channelRef.current = channel;
 
-    // Subscribe to sessions only when modern mode is active
-    let sessChannel = null;
-    if (!useLegacyRoomState) {
-      sessChannel = supabase
-        .channel(`game-sessions-${roomId}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'game_sessions', filter: `room_id=eq.${roomId}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              setActiveSessionId(payload.new.id);
-              if (payload.new.board_state) {
-                setGameState(migrateGameState(payload.new.board_state));
+    return () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!roomId || useLegacyRoomState) {
+      if (sessionChannelRef.current) {
+        supabase.removeChannel(sessionChannelRef.current);
+        sessionChannelRef.current = null;
+      }
+      return;
+    }
+
+    const sessChannel = supabase
+      .channel(`game-sessions-${roomId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'game_sessions', filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setActiveSessionId(payload.new.id);
+            if (payload.new.board_state) {
+              const current = gameStateRef.current;
+              const incoming = migrateGameState(payload.new.board_state);
+              if (JSON.stringify(incoming) !== JSON.stringify(current)) {
+                setGameState(incoming);
                 setSelectedPoint(null);
                 setHighlightedMoves([]);
               }
-              return;
             }
-            if (payload.new?.id && payload.new.id !== activeSessionId) return;
-            if (payload.eventType === 'UPDATE' && payload.new?.board_state) {
-              setGameState(migrateGameState(payload.new.board_state));
+            return;
+          }
+          if (payload.new?.id && payload.new.id !== activeSessionIdRef.current) return;
+          if (payload.eventType === 'UPDATE' && payload.new?.board_state) {
+            const current = gameStateRef.current;
+            const incoming = migrateGameState(payload.new.board_state);
+            if (JSON.stringify(incoming) !== JSON.stringify(current)) {
+              setGameState(incoming);
               setSelectedPoint(null);
               setHighlightedMoves([]);
             }
           }
-        )
-        .subscribe();
-      sessionChannelRef.current = sessChannel;
-    }
+        }
+      )
+      .subscribe();
+    sessionChannelRef.current = sessChannel;
 
     return () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
       if (sessionChannelRef.current) supabase.removeChannel(sessionChannelRef.current);
     };
-  }, [roomId, activeSessionId, useLegacyRoomState]);
+  }, [roomId, useLegacyRoomState]);
 
   const syncGameState = useCallback(
     async (newState) => {
@@ -900,10 +1000,8 @@ export default function GameScreen({ route, navigation }) {
       setDiceAnimating(false);
     } else {
       setDiceAnimating(false);
-      setTimeout(() => {
-        setShowAnimDice(false);
-        setAnimDice(null);
-      }, 1200);
+      setShowAnimDice(false);
+      setAnimDice(null);
     }
   }, [playerNumber, syncGameState]);
 
@@ -929,15 +1027,21 @@ export default function GameScreen({ route, navigation }) {
 
       if (!isRealRoll && !isAntiStress) return;
 
+      console.log('[DICE] swipe received', Date.now());
+
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       playDiceRollSound();
 
       const dice = gameState.turnPhase === 'preroll' ? [rollDice()[0], rollDice()[0]] : rollDice();
+      console.log('[DICE] before pause', Date.now());
+      pauseJsForDiceThrow();
       setAnimDice(dice);
-      if (inSandbox) setSandboxUiDice(dice);
-      else setUiDice(dice);
+      if (isRealRoll) {
+        setUiDice(dice);
+      }
       setSwipeStart({ x: swipe.startX, y: swipe.startY });
       setSwipeEnd({ x: swipe.endX, y: swipe.endY });
+      console.log('[DICE] before showAnim', Date.now());
       setShowAnimDice(true);
       setDiceAnimating(true);
       setThrowKey((k) => k + 1);
@@ -968,7 +1072,7 @@ export default function GameScreen({ route, navigation }) {
       }
       pendingRollRef.current = isRealRoll ? dice : null;
     },
-    [diceAnimating, showAnimDice, isMyTurn, isPreStart, gameState, roomStatus, gameStarted, boardMode, playerNumber, syncGameState]
+    [diceAnimating, showAnimDice, isMyTurn, isPreStart, gameState, roomStatus, gameStarted, boardMode, playerNumber, syncGameState, pauseJsForDiceThrow]
   );
 
   const handleRollDice = useCallback(() => {
@@ -1092,18 +1196,6 @@ export default function GameScreen({ route, navigation }) {
     setHighlightedMoves([]);
     await syncGameState(newState);
   }, [gameState, playerNumber, syncGameState, boardMode]);
-
-  const statusText = () => {
-    if (!room) return 'Загрузка...';
-    if (roomStatus === 'waiting') return 'Ожидание соперника...';
-    const u1 = selfPlay ? nickname : (room?.user1_id || room?.player1_name);
-    const u2 = selfPlay ? nickname : (room?.user2_id || room?.player2_name);
-    if (gameState.gameOver) return `Победитель: ${gameState.winner === 1 ? u1 : u2}`;
-    if (boardMode === 'sandbox') return '';
-    if (!gameStarted) return '';
-    if (gameState.turnPhase === 'preroll') return 'Бросьте по одному кубику, чтобы определить первый ход';
-    return isMyTurn ? 'Твой ход' : 'Ход соперника';
-  };
 
   const canEndTurn =
     isMyTurn &&
@@ -1246,48 +1338,21 @@ export default function GameScreen({ route, navigation }) {
 
   const boardRenderW = useMemo(() => {
     const w = boardColW > 0 ? boardColW : fullStripW;
-    if (!w) return windowW || Dimensions.get('window').width;
-    if (typeof BOARD_MAX_W === 'number' && BOARD_MAX_W > 0) return Math.floor(Math.min(w, BOARD_MAX_W));
-    return Math.floor(w);
-  }, [boardColW, fullStripW, windowW, BOARD_MAX_W]);
+    const fallbackW = windowW || Dimensions.get('window').width;
+    const raw = w || fallbackW;
+    const insetW = Math.max(0, raw - BOARD_SIDE_GAP * 2);
+    if (typeof BOARD_MAX_W === 'number' && BOARD_MAX_W > 0) return Math.floor(Math.min(insetW, BOARD_MAX_W));
+    return Math.floor(insetW);
+  }, [boardColW, fullStripW, windowW, BOARD_MAX_W, BOARD_SIDE_GAP]);
 
   const listPaddingTop = frostedHeaderH > 0 ? frostedHeaderH : insets.top + 75;
-  const gameStatusLabel = statusText();
-  const showGameStatus = !kbVisible && !!gameStatusLabel;
-  const showWideTabletStatusStrip = isWideTablet && showGameStatus;
-  const phoneStatusStripH = !isWideTablet && showGameStatus ? GAME_STATUS_STRIP_H : 0;
-  const boardTopOffset = listPaddingTop + phoneStatusStripH;
-  const chatHeaderTopPaddingOverride = showWideTabletStatusStrip ? 10 : undefined;
+  const boardTopOffset = listPaddingTop + BOARD_TOP_GAP;
 
   return (
     <View
       style={[tw`flex-1`, { backgroundColor: V.bgApp }]}
     >
-      {/* Планшет: тонкая полоса статуса игры на всю ширину (доска слева без отдельной шапки) */}
-      {showWideTabletStatusStrip ? (
-        <View
-          style={{
-            paddingTop: insets.top + 8,
-            paddingBottom: 6,
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: V.border,
-          }}
-        >
-          <Text
-            style={[
-              tw`text-center text-[10px]`,
-              {
-                color: isMyTurn ? V.accentGold : V.textMuted,
-                fontWeight: isMyTurn ? '500' : '400',
-              },
-            ]}
-          >
-            {gameStatusLabel}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Body: доска → ручка → чат; на телефоне полоса статуса между шапкой чата и доской — absolute */}
+      {/* Body: доска → ручка → чат */}
       <View
         style={[
           tw`flex-1`,
@@ -1312,7 +1377,7 @@ export default function GameScreen({ route, navigation }) {
             pointerEvents="box-none"
             style={[
               isWideTablet ? { width: Math.max(360, Math.floor(windowW * 0.58)) } : null,
-              isWideTablet && !showWideTabletStatusStrip ? { paddingTop: insets.top } : null,
+              isWideTablet ? { paddingTop: insets.top } : null,
               !isWideTablet
                 ? {
                     position: 'absolute',
@@ -1337,11 +1402,15 @@ export default function GameScreen({ route, navigation }) {
               pointerEvents="box-none"
             >
               {boardMounted && (
-                <View style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: BOARD_SIDE_GAP }}>
                   <BackgammonBoard
                     ref={boardRef}
                     renderPausedRef={renderPausedRef}
                     gameState={effectiveGameState}
+                    isMyTurn={isMyTurn}
+                    turnPhase={gameState.turnPhase}
+                    selfPlay={selfPlay}
+                    opponentOnline={opponentOnline}
                     playerNumber={playerNumber}
                     selectedPoint={selectedPoint}
                     highlightedMoves={highlightedMoves}
@@ -1374,7 +1443,7 @@ export default function GameScreen({ route, navigation }) {
                           boardWidth={boardRenderW}
                           boardHeight={pointH * 2}
                           onComplete={handleDiceAnimComplete}
-                          pausedRef={renderPausedRef}
+                          pausedRef={diceGlPausedRef}
                         />
                       )
                     }
@@ -1480,8 +1549,8 @@ export default function GameScreen({ route, navigation }) {
                   overflow: 'hidden',
                   borderWidth: StyleSheet.hairlineWidth,
                   borderColor: V.border,
-                  borderTopLeftRadius: 0,
-                  borderTopRightRadius: 0,
+                  borderTopLeftRadius: bottomR,
+                  borderTopRightRadius: bottomR,
                   borderBottomLeftRadius: bottomR,
                   borderBottomRightRadius: bottomR,
                 },
@@ -1531,34 +1600,6 @@ export default function GameScreen({ route, navigation }) {
           </View>
         )}
 
-        {!isWideTablet && showGameStatus ? (
-          <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: listPaddingTop,
-              left: 0,
-              right: 0,
-              height: GAME_STATUS_STRIP_H,
-              zIndex: 15,
-              elevation: 15,
-              justifyContent: 'center',
-            }}
-          >
-            <Text
-              style={[
-                tw`text-center text-[10px]`,
-                {
-                  color: isMyTurn ? V.accentGold : V.textMuted,
-                  fontWeight: isMyTurn ? '500' : '400',
-                },
-              ]}
-            >
-              {gameStatusLabel}
-            </Text>
-          </View>
-        ) : null}
-
         {/* Chat column */}
         <View
           style={[
@@ -1571,14 +1612,14 @@ export default function GameScreen({ route, navigation }) {
             roomId={roomId}
             roomCode={room?.code}
             nickname={nickname}
-            compact
+            peerName={opponentName}
+            renderPausedRef={renderPausedRef}
             listPaddingTop={listPaddingTop}
             onTopOverlayHeight={setFrostedHeaderH}
             chatRoomHeader={{
               title: opponentName || 'Чат',
               contactOnline: selfPlay ? true : opponentOnline,
               navigation,
-              topPaddingOverride: chatHeaderTopPaddingOverride,
               headerRight: (
                 <TouchableOpacity
                   onPress={() => Alert.alert('Звонок', 'Голосовые звонки скоро!')}

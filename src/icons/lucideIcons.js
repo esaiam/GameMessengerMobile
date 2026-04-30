@@ -8,6 +8,7 @@ import {
   X,
   Plus,
   MessageCircle,
+  Search,
   Smile,
   Keyboard,
   Camera,
@@ -41,6 +42,9 @@ import {
   Square,
   Copy,
   Forward,
+  Pin,
+  Reply,
+  Video,
 } from 'lucide-react-native/icons';
 
 /** В lucide-react-native нет `Unlock` — это `LockOpen` */
@@ -58,6 +62,7 @@ export {
   X,
   Plus,
   MessageCircle,
+  Search,
   Smile,
   Keyboard,
   KeyboardIcon,
@@ -94,4 +99,7 @@ export {
   Square,
   Copy,
   Forward,
+  Pin,
+  Reply,
+  Video,
 };

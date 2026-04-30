@@ -33,5 +33,6 @@ export function decrypt(ciphertext, passphrase) {
 export function looksLikeEncryptedPayload(text) {
   if (!text || typeof text !== 'string') return false;
   const t = text.trim();
+  if (t.startsWith('VM2:')) return true;
   return t.startsWith('U2FsdGVkX1') || (t.length > 40 && /^[A-Za-z0-9+/=\s]+$/.test(t));
 }
