@@ -274,6 +274,8 @@ export default function Chat({
   }, [formattedMessages, unlockedVideoIds]);
 
   const rowEnvRef = useRef({});
+  /** Голос/видео плеер — обновляется каждый рендер; renderMessageContent читает .current, чтобы не пересоздавать замыкание на каждый тик статуса. */
+  const playbackEnvRef = useRef({});
   const fmtLenRef = useRef(0);
   const inputRef = useRef(null);
   const sendInProgressRef = useRef(false);
@@ -611,27 +613,26 @@ export default function Chat({
 
   /* ── Renderers ── */
 
+  playbackEnvRef.current = {
+    activeVoiceUri,
+    activePlayerStatus,
+    activeVoiceMessageId,
+    activeVideoId,
+    isRecordingVoice,
+  };
+
   const renderMessageContent = useMemo(
     () =>
       createRenderMessageContent({
         setFullScreenImage,
-        isRecordingVoice,
         setActiveVoiceMessageId,
         handleVoicePlay,
-        activeVoiceMessageId,
-        activePlayerStatus,
-        activeVideoId,
         setActiveVideoId,
         activatedVideoIdsRef: activatedVideoIds,
         rowEnvRef,
+        playbackEnvRef,
       }),
-    [
-      isRecordingVoice,
-      handleVoicePlay,
-      activeVoiceMessageId,
-      activePlayerStatus,
-      activeVideoId,
-    ]
+    [handleVoicePlay, setFullScreenImage, setActiveVoiceMessageId, setActiveVideoId]
   );
 
   /** Меняется редко (выбор, мультиселект) — extraData FlatList, MessageRow.memo сравнивает по ссылке. */
@@ -650,11 +651,6 @@ export default function Chat({
     activePlayerStatus.currentTime,
     activePlayerStatus.duration,
   ]);
-
-  const activePlayback = useMemo(
-    () => ({ activeVoiceUri, activePlayerStatus, activeVideoId, isRecordingVoice, activeVoiceMessageId }),
-    [activeVoiceUri, activePlayerStatus, activeVideoId, isRecordingVoice, activeVoiceMessageId]
-  );
 
   const onMessagePress = useCallback((event, item) => {
     rowEnvRef.current.handleMessagePress(event, item);
@@ -714,7 +710,6 @@ export default function Chat({
     handleMessageLongPress,
     toggleReaction,
     setActiveVideoId,
-    activePlayback,
     replyToMessage,
     isAriaChat,
     ariaPeerName: ARIA_CONTACT.display_name,

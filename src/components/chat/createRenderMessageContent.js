@@ -13,17 +13,15 @@ import { parseVoiceCaptionDurationSec } from './chatMessageListFormat';
  */
 export function createRenderMessageContent({
   setFullScreenImage,
-  isRecordingVoice,
   setActiveVoiceMessageId,
   handleVoicePlay,
-  activeVoiceMessageId,
-  activePlayerStatus,
-  activeVideoId,
   setActiveVideoId,
   activatedVideoIdsRef,
   rowEnvRef,
+  playbackEnvRef,
 }) {
   return function renderMessageContent(item, isMine) {
+    const pe = playbackEnvRef.current;
     const type = item.message_type || 'text';
     const bodyColor = V.textPrimary;
     const titleLocStyle = {
@@ -55,14 +53,14 @@ export function createRenderMessageContent({
           <ChatVoicePlayer
             url={item.media_url}
             messageId={item.id}
-            isRecordingVoice={isRecordingVoice}
+            isRecordingVoice={pe.isRecordingVoice}
             waveformRaw={item.waveform}
             onPlay={(uri) => {
               setActiveVoiceMessageId(item.id);
               handleVoicePlay(uri);
             }}
-            activeVoiceMessageId={activeVoiceMessageId}
-            activePlayerStatus={activePlayerStatus}
+            activeVoiceMessageId={pe.activeVoiceMessageId}
+            activePlayerStatus={pe.activePlayerStatus}
             idleDurationSec={parseVoiceCaptionDurationSec(item.text)}
           />
         );
@@ -94,7 +92,7 @@ export function createRenderMessageContent({
           <VideoMessage
             url={item.media_url}
             messageId={item.id}
-            activeVideoId={activeVideoId}
+            activeVideoId={pe.activeVideoId}
             wasActivated={activatedVideoIdsRef.current.has(item.id)}
             onActivate={(id) => {
               if (id) activatedVideoIdsRef.current.add(id);
