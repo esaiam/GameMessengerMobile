@@ -54,6 +54,7 @@ import {
 } from './chat/chatMessageListFormat';
 import { sendAriaChatTextMessage } from './chat/ariaTextComposerSend';
 import { startAriaVoiceComposerSend } from './chat/ariaVoiceComposerSend';
+import { useAriaChatListBootstrap } from './chat/useAriaChatListBootstrap';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -326,12 +327,7 @@ export default function Chat({
     if (nickname) initE2E();
   }, [nickname]);
 
-  useEffect(() => {
-    if (isAriaChat) {
-      setMessagesLoading(false);
-      listOpacity.value = 1;
-    }
-  }, [isAriaChat, listOpacity]);
+  useAriaChatListBootstrap(isAriaChat, setMessagesLoading, listOpacity);
 
   useEffect(() => {
     pauseVoice();
