@@ -59,6 +59,67 @@ export function messageRowContentSig(m) {
 }
 
 /**
+ * `next` — это `prev` с одним новым сообщением в конце (хронология: старые → новые).
+ * @param {import('./chatMessageTypes').ChatMessageRow[]|null|undefined} prev
+ * @param {import('./chatMessageTypes').ChatMessageRow[]} next
+ */
+export function isMessagesStrictAppend(prev, next) {
+  if (!prev || !next) return false;
+  if (next.length !== prev.length + 1) return false;
+  for (let i = 0; i < prev.length; i++) {
+    if (prev[i].id !== next[i].id) return false;
+  }
+  return true;
+}
+
+/**
+ * Одна строка inverted-ленты для пары (сообщение, сосед ниже по списку / старее по времени).
+ * @param {import('./chatMessageTypes').ChatMessageRow} msg
+ * @param {import('./chatMessageTypes').ChatMessageRow|null} above
+ * @param {Map<string, { row: import('./chatMessageTypes').ChatFormattedMessageRow, msgSig: string, aboveSig: string }>} cache
+ * @param {Set<string>} [seenOpt] — если передан, ключ добавляется для последующей очистки кэша.
+ */
+export function buildFormattedRowCached(msg, above, cache, seenOpt) {
+  const key = `${msg.id}\t${above ? above.id : ''}`;
+  const msgSig = messageRowContentSig(msg);
+  const aboveSig = above ? messageRowContentSig(above) : '';
+
+  const prev = cache.get(key);
+  if (prev && prev.msgSig === msgSig && prev.aboveSig === aboveSig) {
+    if (seenOpt) seenOpt.add(key);
+    return prev.row;
+  }
+
+  const dateLabel = formatDateLabel(msg.created_at);
+  const aboveDateLabel = above ? formatDateLabel(above.created_at) : null;
+  const row = {
+    ...msg,
+    _formattedTime: formatTime(msg.created_at),
+    _dateLabel: dateLabel,
+    _showDate: !above || dateLabel !== aboveDateLabel,
+    _sameDay: above ? dateLabel === aboveDateLabel : false,
+    _abovePlayerName: above ? above.player_name : null,
+  };
+  cache.set(key, { row, msgSig, aboveSig });
+  if (seenOpt) seenOpt.add(key);
+  return row;
+}
+
+/**
+ * Быстрый путь: новое сообщение только в хвосте `messages` — один новый formatted-row сверху,
+ * остальная лента без полного пересчёта.
+ * @returns {import('./chatMessageTypes').ChatFormattedMessageRow[]|null}
+ */
+export function prependFormattedWhenTailAppended(prevMessages, nextMessages, prevFormatted, cache) {
+  if (!isMessagesStrictAppend(prevMessages, nextMessages)) return null;
+  const n = nextMessages.length;
+  const newMsg = nextMessages[n - 1];
+  const above = n >= 2 ? nextMessages[n - 2] : null;
+  const row = buildFormattedRowCached(newMsg, above, cache);
+  return [row, ...prevFormatted];
+}
+
+/**
  * Лента для inverted FlatList: новые сообщения — меньший индекс.
  * Кэш по ключу `msg.id` + `above.id` и сигнатурам контента — сохраняем ссылки на объекты `item`,
  * чтобы MessageRow (React.memo) не перерисовывался при неизменных данных.
@@ -78,30 +139,7 @@ export function buildFormattedMessagesCached(messages, cache) {
   for (let index = 0; index < n; index++) {
     const msg = messages[n - 1 - index];
     const above = index + 1 < n ? messages[n - 1 - (index + 1)] : null;
-    const key = `${msg.id}\t${above ? above.id : ''}`;
-    const msgSig = messageRowContentSig(msg);
-    const aboveSig = above ? messageRowContentSig(above) : '';
-
-    const prev = cache.get(key);
-    if (prev && prev.msgSig === msgSig && prev.aboveSig === aboveSig) {
-      out[index] = prev.row;
-      seen.add(key);
-      continue;
-    }
-
-    const dateLabel = formatDateLabel(msg.created_at);
-    const aboveDateLabel = above ? formatDateLabel(above.created_at) : null;
-    const row = {
-      ...msg,
-      _formattedTime: formatTime(msg.created_at),
-      _dateLabel: dateLabel,
-      _showDate: !above || dateLabel !== aboveDateLabel,
-      _sameDay: above ? dateLabel === aboveDateLabel : false,
-      _abovePlayerName: above ? above.player_name : null,
-    };
-    cache.set(key, { row, msgSig, aboveSig });
-    out[index] = row;
-    seen.add(key);
+    out[index] = buildFormattedRowCached(msg, above, cache, seen);
   }
 
   for (const k of cache.keys()) {

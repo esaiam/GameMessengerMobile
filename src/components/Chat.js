@@ -58,7 +58,10 @@ import useChatReplyHelpers from './chat/useChatReplyHelpers';
 import useChatOptimisticVideo from './chat/useChatOptimisticVideo';
 import useChatComposerChrome from './chat/useChatComposerChrome';
 import { REPLY_TARGET_PREVIEW_H, EMOJI_PICKER_PANEL_H } from './chat/chatComposerConstants';
-import { buildFormattedMessagesCached } from './chat/chatMessageListFormat';
+import {
+  buildFormattedMessagesCached,
+  prependFormattedWhenTailAppended,
+} from './chat/chatMessageListFormat';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -223,11 +226,29 @@ export default function Chat({
   }, [messages, nickname, peerName]);
 
   const formattedMessagesCacheRef = useRef(new Map());
+  /** Для инкрементального append: предыдущий массив messages и зеркало formatted (без лишнего полного rebuild). */
+  const messagesStrictPrevRef = useRef(null);
+  const formattedMessagesAppendRef = useRef([]);
   const [formattedMessages, setFormattedMessages] = useState([]);
   useEffect(() => {
-    setFormattedMessages(
-      buildFormattedMessagesCached(messages, formattedMessagesCacheRef.current)
-    );
+    const prevMsg = messagesStrictPrevRef.current;
+    const cache = formattedMessagesCacheRef.current;
+    const prevFmt = formattedMessagesAppendRef.current;
+
+    let nextFormatted;
+    if (prevMsg != null) {
+      const quick = prependFormattedWhenTailAppended(prevMsg, messages, prevFmt, cache);
+      if (quick != null) {
+        nextFormatted = quick;
+      }
+    }
+    if (nextFormatted == null) {
+      nextFormatted = buildFormattedMessagesCached(messages, cache);
+    }
+
+    formattedMessagesAppendRef.current = nextFormatted;
+    messagesStrictPrevRef.current = messages;
+    setFormattedMessages(nextFormatted);
   }, [messages]);
 
   const onUnlockVideo = useCallback((id) => {
@@ -320,6 +341,8 @@ export default function Chat({
     pauseVoice();
     if (!roomId) {
       formattedMessagesCacheRef.current.clear();
+      messagesStrictPrevRef.current = null;
+      formattedMessagesAppendRef.current = [];
       return;
     }
     atBottomScrollShared.value = 1;
@@ -327,6 +350,8 @@ export default function Chat({
     layoutReadyRef.current = false;
     initialScrollDoneRef.current = false;
     formattedMessagesCacheRef.current.clear();
+    messagesStrictPrevRef.current = null;
+    formattedMessagesAppendRef.current = [];
     headerMeasured.value = 0;
   }, [roomId, pauseVoice]);
 
