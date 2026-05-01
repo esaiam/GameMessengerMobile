@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase';
 import { TAB_BAR_INNER_ROW_H, TAB_BAR_LAYOUT, V } from '../theme';
 import { UserPlus } from '../icons/lucideIcons';
 import { normalizeUserPair } from '../utils/roomIds';
+import { generateRoomCode } from '../utils/roomCode';
 import { useMessengerHeaderLayout } from './MessengerHeaderLayout';
 
 const HANDLE_PREFIX_DEBOUNCE_MS = 350;
@@ -34,15 +35,6 @@ function sanitizeHandleSlug(raw) {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
-
-function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
-}
 
 function AvatarCircle({ name }) {
   const letter = (name || '?')[0].toUpperCase();

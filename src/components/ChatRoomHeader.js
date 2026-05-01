@@ -161,7 +161,7 @@ export default function ChatRoomHeader({
             alignItems: 'center',
             justifyContent: 'center',
             marginLeft: -10,
-            marginRight: 2,
+            marginRight: 1,
           }}
         >
           <View

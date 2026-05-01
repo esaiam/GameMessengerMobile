@@ -48,10 +48,6 @@ import useChatReplyHelpers from './chat/useChatReplyHelpers';
 import useChatOptimisticVideo from './chat/useChatOptimisticVideo';
 import useChatComposerChrome from './chat/useChatComposerChrome';
 import { REPLY_TARGET_PREVIEW_H, EMOJI_PICKER_PANEL_H } from './chat/chatComposerConstants';
-import {
-  buildFormattedMessagesCached,
-  prependFormattedWhenTailAppended,
-} from './chat/chatMessageListFormat';
 import { sendAriaChatTextMessage } from './chat/ariaTextComposerSend';
 import { startAriaVoiceComposerSend } from './chat/ariaVoiceComposerSend';
 import { useAriaChatListBootstrap } from './chat/useAriaChatListBootstrap';
@@ -59,18 +55,15 @@ import { getAriaComposerSurfaceProps } from './chat/ariaComposerSurfaceProps';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedScrollHandler,
-  runOnJS,
 } from 'react-native-reanimated';
 import { V } from '../theme';
-
-const MAX_RENDERED_VIDEOS = 5;
-
-/** Расстояние до низа, меньше которого считаем пользователя «внизу» (как в Telegram). */
-const CHAT_AT_BOTTOM_THRESHOLD_PX = 40;
-
-/** Зазор между низом парящей шапки и первой строкой ленты (аватар). */
-const CHAT_HEADER_TO_LIST_GAP_PX = 8;
+import {
+  MAX_RENDERED_VIDEOS,
+  CHAT_HEADER_TO_LIST_GAP_PX,
+} from './chat/chatViewConstants';
+import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
+import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
+import { useChatInvertedListScroll } from '../hooks/useChatInvertedListScroll';
 
 export default function Chat({
   roomId,
@@ -158,53 +151,21 @@ export default function Chat({
 
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
-  const [ephemeralClockTick, setEphemeralClockTick] = useState(0);
 
-  /** 1 c тик только пока в ленте есть неистёкшие сгорающие сообщения (без глобального интервала «всегда»). */
-  useEffect(() => {
-    const hasUnexpiredEphemeral = () =>
-      messagesRef.current.some(
-        (m) => m.expires_at && new Date(m.expires_at).getTime() > Date.now()
-      );
-    if (!hasUnexpiredEphemeral()) return undefined;
-    const id = setInterval(() => {
-      if (renderPausedRef?.current) return;
-      setEphemeralClockTick((n) => n + 1);
-      if (!hasUnexpiredEphemeral()) {
-        clearInterval(id);
-      }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [messages]);
+  const listOpacity = useSharedValue(0);
+  const headerMeasured = useSharedValue(0);
 
-  const flatListRef = useRef(null);
-  /** Пользователь у низа inverted-ленты — при новых сообщениях держим offset 0. */
-  const stickToBottomRef = useRef(true);
-  /** FlatList уже отрисовал контент (onContentSizeChange). */
-  const layoutReadyRef = useRef(false);
-  /** Один раз после первого успешного initial scroll. */
-  const initialScrollDoneRef = useRef(false);
+  const {
+    flatListRef,
+    stickToBottomRef,
+    layoutReadyRef,
+    initialScrollDoneRef,
+    onScrollReanimated,
+  } = useChatInvertedListScroll(roomId, messages, headerMeasured);
 
-  const atBottomScrollShared = useSharedValue(1);
+  const ephemeralClockTick = useChatEphemeralClockTick(messages, renderPausedRef);
 
-  const syncAtBottomFromWorklet = useCallback((atBottom) => {
-    stickToBottomRef.current = atBottom;
-  }, []);
-
-  const onScrollReanimated = useAnimatedScrollHandler(
-    {
-      onScroll: (e) => {
-        const y = e.contentOffset.y;
-        const atBottom = y < CHAT_AT_BOTTOM_THRESHOLD_PX;
-        const next = atBottom ? 1 : 0;
-        if (next !== atBottomScrollShared.value) {
-          atBottomScrollShared.value = next;
-          runOnJS(syncAtBottomFromWorklet)(atBottom);
-        }
-      },
-    },
-    [syncAtBottomFromWorklet]
-  );
+  const formattedMessages = useChatFormattedMessagesState(messages, roomId);
 
   const messagesMap = useMemo(
     () => new Map(messages.map((m) => [m.id, m])),
@@ -218,32 +179,6 @@ export default function Chat({
     if (explicitPeer) return explicitPeer;
     return messages.find((m) => m.player_name !== nickname)?.player_name ?? null;
   }, [messages, nickname, peerName]);
-
-  const formattedMessagesCacheRef = useRef(new Map());
-  /** Для инкрементального append: предыдущий массив messages и зеркало formatted (без лишнего полного rebuild). */
-  const messagesStrictPrevRef = useRef(null);
-  const formattedMessagesAppendRef = useRef([]);
-  const [formattedMessages, setFormattedMessages] = useState([]);
-  useEffect(() => {
-    const prevMsg = messagesStrictPrevRef.current;
-    const cache = formattedMessagesCacheRef.current;
-    const prevFmt = formattedMessagesAppendRef.current;
-
-    let nextFormatted;
-    if (prevMsg != null) {
-      const quick = prependFormattedWhenTailAppended(prevMsg, messages, prevFmt, cache);
-      if (quick != null) {
-        nextFormatted = quick;
-      }
-    }
-    if (nextFormatted == null) {
-      nextFormatted = buildFormattedMessagesCached(messages, cache);
-    }
-
-    formattedMessagesAppendRef.current = nextFormatted;
-    messagesStrictPrevRef.current = messages;
-    setFormattedMessages(nextFormatted);
-  }, [messages]);
 
   const onUnlockVideo = useCallback((id) => {
     setUnlockedVideoIds((prev) => {
@@ -282,9 +217,6 @@ export default function Chat({
   }, [deletingIds]);
 
   const legacyCryptoKey = useMemo(() => (roomCode ? deriveKey(roomCode) : null), [roomCode]);
-
-  const listOpacity = useSharedValue(0);
-  const headerMeasured = useSharedValue(0);
 
   const {
     rootAnimatedStyle,
@@ -332,30 +264,7 @@ export default function Chat({
 
   useEffect(() => {
     pauseVoice();
-    if (!roomId) {
-      formattedMessagesCacheRef.current.clear();
-      messagesStrictPrevRef.current = null;
-      formattedMessagesAppendRef.current = [];
-      return;
-    }
-    atBottomScrollShared.value = 1;
-    stickToBottomRef.current = true;
-    layoutReadyRef.current = false;
-    initialScrollDoneRef.current = false;
-    formattedMessagesCacheRef.current.clear();
-    messagesStrictPrevRef.current = null;
-    formattedMessagesAppendRef.current = [];
-    headerMeasured.value = 0;
   }, [roomId, pauseVoice]);
-
-  useEffect(() => {
-    if (!initialScrollDoneRef.current) return;
-    if (!stickToBottomRef.current) return;
-    const id = requestAnimationFrame(() => {
-      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-    });
-    return () => cancelAnimationFrame(id);
-  }, [messages]);
 
   const decryptMsg = useMemo(
     () => createDecryptMsg({ nickname, cryptoKey: legacyCryptoKey }),

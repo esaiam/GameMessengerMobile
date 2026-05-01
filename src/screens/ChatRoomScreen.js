@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { View, Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createAudioPlayer, setIsAudioActiveAsync } from 'expo-audio';
 import { Audio } from 'expo-av';
@@ -13,7 +12,6 @@ import {
   ARIA_API_URL,
   ARIA_CONTACT,
   ARIA_MESSAGE_TYPING,
-  ARIA_TYPING_ROW_ID,
   createAriaMessageBaseRow,
   getAriaSeedMessages,
   isAriaPersistableMessage,
@@ -21,12 +19,7 @@ import {
 import { V } from '../theme';
 import { setAudioModeAsync } from '../utils/audioMode';
 
-const ARIA_CHAT_STORAGE_KEY = 'aria_chat_history';
-const ARIA_CHAT_MAX_MESSAGES = 100;
-
 const ARIA_REPLY_VOLUME = 0.3;
-const ARIA_REPLY_FALLBACK_URI =
-  'https://www.soundjay.com/buttons/sounds/button-09a.mp3';
 const ARIA_MESSAGE_RECEIVED_MP3 = require('../assets/sounds/message_received.mp3');
 
 let ariaReplyModeReady = false;
@@ -94,7 +87,7 @@ async function playAriaReplySound() {
       ariaReplyFallbackSound = null;
     }
     const { sound } = await Audio.Sound.createAsync(
-      { uri: ARIA_REPLY_FALLBACK_URI },
+      ARIA_MESSAGE_RECEIVED_MP3,
       { shouldPlay: true, volume: ARIA_REPLY_VOLUME }
     );
     ariaReplyFallbackSound = sound;
@@ -106,6 +99,24 @@ async function playAriaReplySound() {
   } catch {
     /* ignore */
   }
+}
+
+/** Строка из `aria_messages` → формат ленты Chat. */
+function ariaMessagesFromDbRows(rows, nickname) {
+  return rows.map((row) => {
+    const baseRow = createAriaMessageBaseRow();
+    const created_at = row.created_at || new Date().toISOString();
+    const isUser = row.role === 'user';
+    return {
+      ...baseRow,
+      id: `aria-db-${row.id}`,
+      player_name: isUser ? nickname : ARIA_CONTACT.display_name,
+      text: typeof row.text === 'string' ? row.text : '',
+      created_at,
+      read_at: created_at,
+      message_type: 'text',
+    };
+  });
 }
 
 function buildAriaRequestHistory(messages, opts = {}) {
@@ -132,38 +143,88 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [ariaMessages, setAriaMessages] = useState(() =>
     route.params?.isAriaChat ? getAriaSeedMessages() : []
   );
-  const ariaStorageHydratedRef = useRef(!route.params?.isAriaChat);
   const ariaMessagesRef = useRef(ariaMessages);
   ariaMessagesRef.current = ariaMessages;
+
+  /** null = ещё резолвим; string (в т.ч. '') = можно грузить историю и матчить «мои» сообщения */
+  const [ariaResolvedNickname, setAriaResolvedNickname] = useState(null);
 
   useEffect(() => {
     if (!isAriaChat) return;
     let cancelled = false;
     (async () => {
+      const fromRoute = typeof nickname === 'string' && nickname.trim() ? nickname.trim() : null;
+      if (fromRoute) {
+        if (!cancelled) setAriaResolvedNickname(fromRoute);
+        return;
+      }
       try {
-        const raw = await AsyncStorage.getItem(ARIA_CHAT_STORAGE_KEY);
+        const { data: auth, error: authErr } = await supabase.auth.getUser();
         if (cancelled) return;
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setAriaMessages(parsed.slice(-ARIA_CHAT_MAX_MESSAGES));
-          }
+        if (authErr) {
+          setAriaResolvedNickname('');
+          return;
         }
-      } catch {}
-      if (cancelled) return;
-      ariaStorageHydratedRef.current = true;
+        const user_id = auth?.user?.id;
+        if (!user_id) {
+          setAriaResolvedNickname('');
+          return;
+        }
+        const { data: profile, error: profErr } = await supabase
+          .from('profiles')
+          .select('handle')
+          .eq('id', user_id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (profErr) {
+          setAriaResolvedNickname('');
+          return;
+        }
+        const h = typeof profile?.handle === 'string' ? profile.handle.trim() : '';
+        setAriaResolvedNickname(h);
+      } catch {
+        if (!cancelled) setAriaResolvedNickname('');
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [isAriaChat]);
+  }, [isAriaChat, nickname]);
 
   useEffect(() => {
-    if (!isAriaChat || !ariaStorageHydratedRef.current) return;
-    const persistable = ariaMessages.filter(isAriaPersistableMessage);
-    const trimmed = persistable.slice(-ARIA_CHAT_MAX_MESSAGES);
-    AsyncStorage.setItem(ARIA_CHAT_STORAGE_KEY, JSON.stringify(trimmed)).catch(() => {});
-  }, [isAriaChat, ariaMessages]);
+    if (!isAriaChat) return;
+    if (ariaResolvedNickname === null) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: auth, error: authErr } = await supabase.auth.getUser();
+        if (authErr) throw authErr;
+        const user_id = auth?.user?.id;
+        if (!user_id || cancelled) return;
+
+        const { data, error } = await supabase
+          .from('aria_messages')
+          .select('id, role, text, created_at')
+          .eq('user_id', user_id)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (cancelled) return;
+        if (error) throw error;
+
+        const rows = Array.isArray(data) ? [...data].reverse() : [];
+        if (rows.length > 0) {
+          setAriaMessages(ariaMessagesFromDbRows(rows, ariaResolvedNickname));
+        }
+      } catch {
+        /* оставляем приветствие getAriaSeedMessages */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAriaChat, ariaResolvedNickname]);
 
   const sendToAria = useCallback(
     async (text, options = {}) => {
@@ -172,7 +233,9 @@ export default function ChatRoomScreen({ route, navigation }) {
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      const typingId = ARIA_TYPING_ROW_ID;
+      const typingId = `aria-typing-${Date.now()}`;
+      const displayNickname =
+        ariaResolvedNickname !== null ? ariaResolvedNickname : typeof nickname === 'string' ? nickname : '';
 
       const baseRow = createAriaMessageBaseRow();
 
@@ -187,7 +250,7 @@ export default function ChatRoomScreen({ route, navigation }) {
         const userRow = {
           ...baseRow,
           id: userMsgId,
-          player_name: nickname,
+          player_name: displayNickname,
           text: trimmed,
           created_at: now,
           read_at: now,
@@ -209,70 +272,95 @@ export default function ChatRoomScreen({ route, navigation }) {
 
       const stripTyping = (prev) => prev.filter((m) => m.id !== typingId);
 
-      try {
-        const { data: auth, error: authErr } = await supabase.auth.getUser();
-        if (authErr) throw authErr;
-        const user_id = auth?.user?.id;
-        if (!user_id) throw new Error('no_user');
-
-        const res = await fetch(`${ARIA_API_URL}/message`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id,
-            text: trimmed,
-            platform: 'vault',
-            history,
-          }),
-        });
-
-        let json = {};
+      void (async () => {
         try {
-          json = await res.json();
+          const { data: auth, error: authErr } = await supabase.auth.getUser();
+          if (authErr) throw authErr;
+          const user_id = auth?.user?.id;
+          if (!user_id) throw new Error('no_user');
+
+          try {
+            await supabase.from('aria_messages').insert({
+              user_id,
+              role: 'user',
+              text: trimmed,
+            });
+          } catch {
+            /* не блокируем отправку */
+          }
+
+          const res = await fetch(`${ARIA_API_URL}/message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id,
+              text: trimmed,
+              platform: 'vault',
+              history,
+            }),
+          });
+
+          let json = {};
+          try {
+            json = await res.json();
+          } catch {
+            json = {};
+          }
+          if (!res.ok) throw new Error(`http_${res.status}`);
+
+          const replyRaw = json?.reply;
+          const reply =
+            typeof replyRaw === 'string' && replyRaw.length > 0
+              ? replyRaw
+              : typeof json?.message === 'string' && json.message.length > 0
+                ? json.message
+                : '';
+
+          const aiNow = new Date().toISOString();
+          const replyText = reply || '—';
+          try {
+            const { error: ariaInsertError } = await supabase.from('aria_messages').insert({
+              user_id,
+              role: 'aria',
+              text: replyText,
+            });
+            if (ariaInsertError) console.warn('[Aria] insert aria error:', ariaInsertError);
+            else console.warn('[Aria] insert aria ok, user_id:', user_id, 'text:', replyText?.slice(0, 30));
+          } catch (e) {
+            console.warn('[Aria] insert aria catch:', e);
+          }
+
+          setAriaMessages((prev) => [
+            ...stripTyping(prev),
+            {
+              ...baseRow,
+              id: `aria-ai-${Date.now()}`,
+              player_name: ARIA_CONTACT.display_name,
+              text: replyText,
+              created_at: aiNow,
+              read_at: aiNow,
+              message_type: 'text',
+            },
+          ]);
+          void playAriaReplySound();
         } catch {
-          json = {};
+          const errNow = new Date().toISOString();
+          setAriaMessages((prev) => [
+            ...stripTyping(prev),
+            {
+              ...baseRow,
+              id: `aria-err-${Date.now()}`,
+              player_name: ARIA_CONTACT.display_name,
+              text: 'Aria недоступна',
+              created_at: errNow,
+              read_at: errNow,
+              message_type: 'text',
+            },
+          ]);
         }
-        if (!res.ok) throw new Error(`http_${res.status}`);
-
-        const replyRaw = json?.reply;
-        const reply =
-          typeof replyRaw === 'string' && replyRaw.length > 0
-            ? replyRaw
-            : typeof json?.message === 'string' && json.message.length > 0
-              ? json.message
-              : '';
-
-        const aiNow = new Date().toISOString();
-        setAriaMessages((prev) => [
-          ...stripTyping(prev),
-          {
-            ...baseRow,
-            id: `aria-ai-${Date.now()}`,
-            player_name: ARIA_CONTACT.display_name,
-            text: reply || '—',
-            created_at: aiNow,
-            read_at: aiNow,
-            message_type: 'text',
-          },
-        ]);
-        void playAriaReplySound();
-      } catch {
-        const errNow = new Date().toISOString();
-        setAriaMessages((prev) => [
-          ...stripTyping(prev),
-          {
-            ...baseRow,
-            id: `aria-err-${Date.now()}`,
-            player_name: ARIA_CONTACT.display_name,
-            text: 'Aria недоступна',
-            created_at: errNow,
-            read_at: errNow,
-            message_type: 'text',
-          },
-        ]);
-      }
+      })();
     },
-    [nickname]
+    [nickname, ariaResolvedNickname]
   );
 
   const handleAriaClearHistory = useCallback(() => {
@@ -286,7 +374,13 @@ export default function ChatRoomScreen({ route, navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem(ARIA_CHAT_STORAGE_KEY);
+              const { data: auth, error: authErr } = await supabase.auth.getUser();
+              if (!authErr) {
+                const uid = auth?.user?.id;
+                if (uid) {
+                  await supabase.from('aria_messages').delete().eq('user_id', uid);
+                }
+              }
             } catch {}
             setAriaMessages(getAriaSeedMessages());
           },
@@ -416,7 +510,9 @@ export default function ChatRoomScreen({ route, navigation }) {
       <Chat
         roomId={roomId}
         roomCode={roomCode}
-        nickname={nickname}
+        nickname={
+          isAriaChat && ariaResolvedNickname !== null ? ariaResolvedNickname : nickname
+        }
         peerName={isAriaChat ? contact?.display_name || ARIA_CONTACT.display_name : peerName || title}
         isAriaChat={!!isAriaChat}
         ariaMessages={isAriaChat ? ariaMessages : undefined}
