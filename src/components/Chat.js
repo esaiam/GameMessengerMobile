@@ -820,11 +820,12 @@ export default function Chat({
           }
           renderItem={renderItem}
           extraData={listExtraDataStable}
-          initialNumToRender={16}
-          maxToRenderPerBatch={6}
-          windowSize={5}
+          initialNumToRender={14}
+          maxToRenderPerBatch={5}
+          windowSize={4}
+          updateCellsBatchingPeriod={50}
           onScroll={onScrollReanimated}
-          scrollEventThrottle={32}
+          scrollEventThrottle={48}
           decelerationRate={Platform.OS === 'ios' ? 0.992 : 'fast'}
           style={[
             tw`flex-1`,
