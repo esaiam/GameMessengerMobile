@@ -35,6 +35,7 @@ import {
   parsePendingInvite,
   serializePendingInvite,
 } from './src/utils/inviteRedeem';
+import { registerPushToken } from './src/lib/notifications';
 
 /** RFC2606 .invalid — плейсхолдер до signUp (AuthScreen перезапишет serializePendingInvite с реальным email). */
 const VAULT_DEEPLINK_PENDING_EMAIL = 'pending-invite@invalid';
@@ -203,6 +204,7 @@ function BootstrapSplash() {
 
 function AppNavigationRoot() {
   const navRef = useRef(null);
+  const pushTokenRegisteredForUserRef = useRef(null);
   const {
     bootstrapped,
     session,
@@ -211,6 +213,18 @@ function AppNavigationRoot() {
     inviteCheckDone,
     passwordRecoveryPending,
   } = useAuthGate();
+
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid) {
+      pushTokenRegisteredForUserRef.current = null;
+      return;
+    }
+    if (!profileHandle) return;
+    if (pushTokenRegisteredForUserRef.current === uid) return;
+    pushTokenRegisteredForUserRef.current = uid;
+    registerPushToken(uid).catch(() => {});
+  }, [session?.user?.id, profileHandle]);
 
   const swipeTabsGesture = useMemo(() => {
     const MIN_DIST = 70;

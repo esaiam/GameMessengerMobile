@@ -307,7 +307,6 @@ export default function DiceThrow3D({ dice, startPos, endPos, boardWidth, boardH
   useEffect(() => () => { aliveRef.current = false; }, []);
 
   const onGL = useCallback((gl) => {
-    console.log('[DICE] GL started', Date.now());
     if (!dice || !startPos || !endPos) return;
     const bw = boardWidth || 360;
     const bh = boardHeight || 260;
@@ -358,7 +357,6 @@ export default function DiceThrow3D({ dice, startPos, endPos, boardWidth, boardH
       const lerp = (a, b, t) => a + (b - a) * t;
       const easeOB = (t) => { const c = 1.7; return 1 + (t - 1) ** 3 + c * (t - 1) ** 2; };
 
-      let loggedFirstLoopRaf = false;
       const loop = () => {
         if (!aliveRef.current) return;
         if (pausedRef?.current) {
@@ -374,10 +372,6 @@ export default function DiceThrow3D({ dice, startPos, endPos, boardWidth, boardH
         const now = performance.now();
         const elapsed = now - lastFrameTime;
         if (elapsed < TARGET_FRAME_MS) {
-          if (!loggedFirstLoopRaf) {
-            console.log('[DICE] loop starting', Date.now());
-            loggedFirstLoopRaf = true;
-          }
           requestAnimationFrame(loop);
           return;
         }
@@ -436,10 +430,6 @@ export default function DiceThrow3D({ dice, startPos, endPos, boardWidth, boardH
 
         renderer.render(scene, cam);
         gl.endFrameEXP();
-        if (!loggedFirstLoopRaf) {
-          console.log('[DICE] loop starting', Date.now());
-          loggedFirstLoopRaf = true;
-        }
         requestAnimationFrame(loop);
       };
       loop();

@@ -189,7 +189,7 @@ export default function AuthScreen() {
           </Text>
           <TextInput
             style={[
-              tw`w-full px-4 py-3.5 text-[13px] rounded-[10px]`,
+              tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
               {
                 backgroundColor: V.bgSurface,
                 color: V.textPrimary,
@@ -215,7 +215,7 @@ export default function AuthScreen() {
             </Text>
             <TextInput
               style={[
-                tw`w-full px-4 py-3.5 text-[13px] rounded-[10px]`,
+                tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
                 {
                   backgroundColor: V.bgSurface,
                   color: V.textPrimary,
@@ -253,7 +253,7 @@ export default function AuthScreen() {
             </Text>
             <TextInput
               style={[
-                tw`w-full px-4 py-3.5 text-[13px] rounded-[10px]`,
+                tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
                 {
                   backgroundColor: V.bgSurface,
                   color: V.textPrimary,
@@ -279,7 +279,7 @@ export default function AuthScreen() {
             </Text>
             <TextInput
               style={[
-                tw`w-full px-4 py-3.5 text-[13px] rounded-[10px]`,
+                tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
                 {
                   backgroundColor: V.bgSurface,
                   color: V.textPrimary,

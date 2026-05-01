@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type ColorValue } from 'react-native';
 
 type Props = {
   colors: readonly string[] | string[];
@@ -29,11 +29,21 @@ function BubbleLinearGradient({ colors, positions }: Props) {
     return defaultPositions(list.length);
   }, [positions, list.length]);
 
+  if (list.length < 2) {
+    return null;
+  }
+
+  const colorsTuple = list as unknown as readonly [ColorValue, ColorValue, ...ColorValue[]];
+  const locationsTuple =
+    loc.length >= 2 && loc.length === list.length
+      ? (loc as unknown as readonly [number, number, ...number[]])
+      : undefined;
+
   return (
     <LinearGradient
       pointerEvents="none"
-      colors={list}
-      locations={loc}
+      colors={colorsTuple}
+      locations={locationsTuple}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={StyleSheet.absoluteFillObject}

@@ -118,7 +118,7 @@ export default function PickHandleScreen() {
             <Text style={[tw`text-[13px] font-medium`, { color: V.textMuted }]}>@</Text>
             <TextInput
               style={[
-                tw`flex-1 py-3.5 px-1 text-[13px]`,
+                tw`flex-1 py-3.5 px-1 text-[16px]`,
                 { color: V.textPrimary },
               ]}
               placeholder="username"

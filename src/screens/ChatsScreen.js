@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   FlatList,
@@ -14,8 +15,10 @@ import {
   View,
 } from 'react-native';
 import SafeBlurView from '../components/SafeBlurView';
+import { AriaGradientAvatar } from '../components/chat/AriaChatUi';
 import tw from 'twrnc';
 import { supabase } from '../lib/supabase';
+import { ARIA_CONTACT, ARIA_ROOM_ID } from '../lib/aria';
 import { TAB_BAR_INNER_ROW_H, TAB_BAR_LAYOUT, V } from '../theme';
 import { deriveKey, decrypt, looksLikeEncryptedPayload } from '../utils/crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,6 +33,20 @@ import {
 } from '../components/MessengerHeaderLayout';
 
 const NICKNAME_KEY = '@backgammon_nickname';
+
+/** Строка Aria в списке чатов (не из `rooms`). */
+const ARIA_CHAT_LIST_ITEM = {
+  isAria: true,
+  roomId: ARIA_ROOM_ID,
+  roomCode: null,
+  contactName: ARIA_CONTACT.display_name,
+  last: {
+    id: 'aria-chats-preview',
+    text: 'Привет. Я здесь.',
+    message_type: 'text',
+    created_at: null,
+  },
+};
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -105,7 +122,7 @@ function Avatar({ name }) {
 const ChatRow = React.memo(
   function ChatRow({ item, nickname, onPress, isFirst }) {
     const ts = item.last?.created_at || null;
-    const preview = messagePreview(item.last, item.roomCode);
+    const preview = item.isAria ? 'Привет. Я здесь.' : messagePreview(item.last, item.roomCode);
     const [layout, setLayout] = useState({ w: 0, h: 0 });
     const [ripple, setRipple] = useState({ visible: false, x: 0, y: 0 });
     const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -203,12 +220,21 @@ const ChatRow = React.memo(
             />
           ) : null}
           <View style={tw`flex-row items-center`}>
-            <Avatar name={item.contactName} />
+            {item.isAria ? <AriaGradientAvatar size={48} /> : <Avatar name={item.contactName} />}
             <View style={tw`flex-1 ml-3`}>
               <View style={tw`flex-row items-center justify-between`}>
-                <Text style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
-                  {item.contactName}
-                </Text>
+                <View style={tw`flex-row items-center flex-1 min-w-0 mr-2`}>
+                  <Text style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
+                    {item.contactName}
+                  </Text>
+                  {item.isAria ? (
+                    <Text
+                      style={[tw`text-[10px] font-medium ml-1.5`, { color: V.accentSage, opacity: 0.8 }]}
+                    >
+                      AI
+                    </Text>
+                  ) : null}
+                </View>
                 <Text style={[tw`text-[10px]`, { color: V.textMuted }]}>{formatTime(ts)}</Text>
               </View>
               <Text style={[tw`text-[12px] mt-0.5`, { color: V.textSecondary }]} numberOfLines={1}>
@@ -221,6 +247,7 @@ const ChatRow = React.memo(
     );
   },
   (prev, next) =>
+    prev.item.isAria === next.item.isAria &&
     prev.item.roomId === next.item.roomId &&
     prev.item.last?.id === next.item.last?.id &&
     prev.item.last?.created_at === next.item.last?.created_at &&
@@ -440,24 +467,42 @@ export default function ChatsScreen({ route, navigation }) {
   const load = useCallback(async () => {
     if (!nickname) return;
 
-    const { data: rooms } = await supabase
+    const { data: rooms, error: roomsError } = await supabase
       .from('rooms')
       .select('id, code, user1_id, user2_id')
       .or(`user1_id.eq.${nickname},user2_id.eq.${nickname}`)
       .order('created_at', { ascending: false })
       .limit(50);
 
+    if (roomsError) {
+      Alert.alert(
+        'Ошибка загрузки',
+        'Не удалось загрузить чаты. Проверь подключение.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     const roomList = rooms || [];
     const roomIds = roomList.map((r) => r.id);
 
     let lastByRoom = {};
     if (roomIds.length > 0) {
-      const { data: messages } = await supabase
+      const { data: messages, error: messagesError } = await supabase
         .from('messages')
         .select('id, room_id, text, message_type, created_at, player_name')
         .in('room_id', roomIds)
         .order('created_at', { ascending: false })
         .limit(200);
+
+      if (messagesError) {
+        Alert.alert(
+          'Ошибка загрузки',
+          'Не удалось загрузить чаты. Проверь подключение.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
 
       (messages || []).forEach((m) => {
         if (!lastByRoom[m.room_id]) lastByRoom[m.room_id] = m;
@@ -508,6 +553,19 @@ export default function ChatsScreen({ route, navigation }) {
     if (!s) return rows;
     return rows.filter((r) => (r.contactName || '').toLowerCase().includes(s));
   }, [q, rows]);
+
+  const listData = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    const ariaNeedle = `${ARIA_CONTACT.display_name} ${ARIA_CONTACT.handle}`.toLowerCase();
+    const includeAria =
+      !s ||
+      ariaNeedle.includes(s) ||
+      s.includes('aria') ||
+      s.includes('ария') ||
+      s === 'ai';
+    if (!includeAria) return filtered;
+    return [ARIA_CHAT_LIST_ITEM, ...filtered];
+  }, [q, filtered]);
 
   const openTempRoom = useCallback(async () => {
     if (!nickname || startingTemp) return;
@@ -577,6 +635,17 @@ export default function ChatsScreen({ route, navigation }) {
         nickname={nickname}
         isFirst={index === 0}
         onPress={() => {
+          if (item.isAria) {
+            navigation.navigate('ChatRoom', {
+              roomId: ARIA_ROOM_ID,
+              isAriaChat: true,
+              contact: ARIA_CONTACT,
+              nickname,
+              title: ARIA_CONTACT.display_name,
+              peerName: ARIA_CONTACT.display_name,
+            });
+            return;
+          }
           navigation.navigate('Room', {
             nickname,
             roomId: item.roomId,
@@ -670,7 +739,7 @@ export default function ChatsScreen({ route, navigation }) {
                 <TextInput
                   ref={searchInputRef}
                   style={[
-                    tw`flex-1 text-[13px]`,
+                    tw`flex-1 text-[16px]`,
                     {
                       color: V.textPrimary,
                       paddingVertical: 0,
@@ -713,8 +782,8 @@ export default function ChatsScreen({ route, navigation }) {
             onLayout={(e) => setListViewportH(e.nativeEvent.layout.height)}
           >
             <FlatList
-              data={filtered}
-              keyExtractor={(i) => i.roomId}
+              data={listData}
+              keyExtractor={(i) => (i.isAria ? ARIA_ROOM_ID : i.roomId)}
               renderItem={renderItem}
               onScroll={onListScroll}
               scrollEventThrottle={16}

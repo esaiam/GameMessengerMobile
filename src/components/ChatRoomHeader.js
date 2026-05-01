@@ -14,6 +14,7 @@ import SafeBlurView from './SafeBlurView';
 import { UserAvatar } from './UserAvatar';
 import { ArrowLeft, X, Copy, Forward, Trash2 } from '../icons/lucideIcons';
 import { V } from '../theme';
+import { AriaPresenceSubtitle } from './chat/AriaChatUi';
 
 const HEADER_BLUR_INTENSITY_IOS = 100;
 const HEADER_BLUR_INTENSITY_ANDROID = 72;
@@ -29,6 +30,21 @@ const SELECTION_ACTION_GAP = 12;
 const MODE_ANIM_MS = 320;
 /** Для rotateY у иконок действий и морфа трубка ↔ корзина */
 const HEADER_ICON_PERSPECTIVE = 480;
+
+/** Кнопка очистки истории чата Aria в слоте `headerRight` (#666 по ТЗ) */
+export function AriaClearHistoryHeaderButton({ onPress }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Очистить историю"
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+    >
+      <Trash2 size={ICON_SELECTION_ACTION} color="#666" strokeWidth={1.5} />
+    </TouchableOpacity>
+  );
+}
 
 /**
  * Frosted шапка экрана чата: обычный режим (назад + аватар + статус) и режим выделения
@@ -48,6 +64,8 @@ export default function ChatRoomHeader({
   headerRight,
   /** Если задан — заменяет insets.top + 8 (напр. шапка под уже учтённым safe area + полосой статуса на планшете) */
   topPaddingOverride,
+  /** Чат Aria: null | true | false — подпись под именем; если проп не передан — обычный presence по contactOnline */
+  ariaOnline,
 }) {
   const insets = useSafeAreaInsets();
   const modeAnim = useRef(new Animated.Value(selectionMode ? 1 : 0)).current;
@@ -124,8 +142,8 @@ export default function ChatRoomHeader({
           tw`flex-row px-4`,
           {
             paddingTop: typeof topPaddingOverride === 'number' ? topPaddingOverride : insets.top + 10,
-            /* +1 к прежним 2 — плотнее к полосе статуса / зоне ползунка под шапкой (GameScreen) */
-            paddingBottom: 3,
+            /* 8px от нижнего края аватарки до низа шапки (ряд по высоте AVATAR_SIZE) */
+            paddingBottom: 8,
             /* flex-start: слот справа и блок аватар+текст начинаются сверху — трубка в линию с аватаром */
             alignItems: 'flex-start',
             overflow: 'visible',
@@ -191,7 +209,7 @@ export default function ChatRoomHeader({
             <View
               style={{
                 flex: 1,
-                marginLeft: 12,
+                marginLeft: 8,
                 minWidth: 0,
                 justifyContent: 'flex-start',
               }}
@@ -212,37 +230,41 @@ export default function ChatRoomHeader({
                 {title || 'Чат'}
               </Text>
               {hasSecondary ? (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    /* было 2; на треть меньше → 2×⅔ */
-                    marginTop: (2 * 2) / 3,
-                  }}
-                >
+                typeof ariaOnline !== 'undefined' ? (
+                  <AriaPresenceSubtitle ariaOnline={ariaOnline} />
+                ) : (
                   <View
                     style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: contactOnline ? V.accentSage : V.textMuted,
-                      marginRight: 6,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      /* было 2; на треть меньше → 2×⅔ */
+                      marginTop: (2 * 2) / 3,
                     }}
-                  />
-                  <Text
-                    style={[
-                      {
-                        fontSize: 12,
-                        fontWeight: '400',
-                        lineHeight: 16,
-                        color: contactOnline ? V.accentSage : V.textMuted,
-                      },
-                      Platform.OS === 'android' ? { includeFontPadding: false } : null,
-                    ]}
                   >
-                    {contactOnline ? 'в сети' : 'не в сети'}
-                  </Text>
-                </View>
+                    <View
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: contactOnline ? V.accentSage : V.textMuted,
+                        marginRight: 6,
+                      }}
+                    />
+                    <Text
+                      style={[
+                        {
+                          fontSize: 12,
+                          fontWeight: '400',
+                          lineHeight: 16,
+                          color: contactOnline ? V.accentSage : V.textMuted,
+                        },
+                        Platform.OS === 'android' ? { includeFontPadding: false } : null,
+                      ]}
+                    >
+                      {contactOnline ? 'в сети' : 'не в сети'}
+                    </Text>
+                  </View>
+                )
               ) : null}
             </View>
           </Animated.View>

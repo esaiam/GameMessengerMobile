@@ -436,7 +436,14 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
                     resizeMode="cover"
                     accessibilityIgnoresInvertColors
                   />
-                  <SafeBlurView intensity={48} tint="dark" style={StyleSheet.absoluteFillObject} />
+                  <SafeBlurView
+                    intensity={48}
+                    tint="dark"
+                    style={StyleSheet.absoluteFillObject}
+                    blurReductionFactor={4.5}
+                  >
+                    {null}
+                  </SafeBlurView>
                 </View>
               ) : null}
               <View style={styles.circleOverlay} pointerEvents="none">

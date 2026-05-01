@@ -768,7 +768,7 @@ function VoiceRecorder({
     return {
       opacity: op,
       transform: [{ perspective: 480 }, { rotateY: `${rot}deg` }, { scale: sc }],
-    };
+    } as ViewStyle;
   });
 
   const micIconVideoAnimStyle = useAnimatedStyle(() => {
@@ -781,7 +781,7 @@ function VoiceRecorder({
     return {
       opacity: op,
       transform: [{ perspective: 480 }, { rotateY: `${rot}deg` }, { scale: sc }],
-    };
+    } as ViewStyle;
   });
 
   const onVoiceMountLayout = useCallback(

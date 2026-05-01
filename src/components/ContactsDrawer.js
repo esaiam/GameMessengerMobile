@@ -349,7 +349,7 @@ export default function ContactsDrawer({
             />
             <TextInput
               style={[
-                tw`flex-1 text-[13px]`,
+                tw`flex-1 text-[16px]`,
                 {
                   color: V.textPrimary,
                   paddingVertical: 0,

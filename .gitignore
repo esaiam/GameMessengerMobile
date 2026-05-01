@@ -21,6 +21,9 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
+# Local build logs (noise)
+prebuild-log.txt
+
 # debug
 npm-debug.*
 yarn-debug.*

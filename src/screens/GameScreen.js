@@ -73,6 +73,10 @@ export default function GameScreen({ route, navigation }) {
   const [useLegacyRoomState, setUseLegacyRoomState] = useState(false);
 
   const [diceAnimating, setDiceAnimating] = useState(false);
+  const diceAnimatingRef = useRef(false);
+  useEffect(() => {
+    diceAnimatingRef.current = diceAnimating;
+  }, [diceAnimating]);
   const [showAnimDice, setShowAnimDice] = useState(false);
   const showAnimDiceRef = useRef(false);
   useEffect(() => {
@@ -311,6 +315,8 @@ export default function GameScreen({ route, navigation }) {
   const boardRef = useRef(null);
   const boardMountedRef = useRef(false);
   const [boardMounted, setBoardMounted] = useState(false);
+  /** Пока false — Backgammon не в дереве (после сворачивания доски), игра в state родителя продолжается */
+  const [boardContentActive, setBoardContentActive] = useState(false);
   const maxSlideRef = useRef(600);
   const boardColTopYRef = useRef(null);
   const chatInputTopYRef = useRef(null);
@@ -367,6 +373,7 @@ export default function GameScreen({ route, navigation }) {
   const runOpenSequence = useCallback(() => {
     suppressAvailableHRef.current = true;
     boardOpenRef.current = true;
+    setBoardContentActive(true);
     middlePulseAnim.setValue(0);
 
     Animated.timing(handleStretchAnim, {
@@ -435,6 +442,9 @@ export default function GameScreen({ route, navigation }) {
   }, [handleStretchAnim, handleWidthAnim, boardDropAnim, middlePulseAnim, computeMaxSlide]);
 
   const runCloseSequence = useCallback(() => {
+    if (showAnimDiceRef.current || diceAnimatingRef.current) {
+      return;
+    }
     suppressAvailableHRef.current = true;
     boardOpenRef.current = false;
     handleStretchAnim.stopAnimation();
@@ -445,6 +455,7 @@ export default function GameScreen({ route, navigation }) {
     middlePulseAnim.setValue(0);
 
     const afterBoardCollapsed = () => {
+      setBoardContentActive(false);
       Animated.timing(handleWidthAnim, {
         toValue: 0,
         duration: 280,
@@ -502,6 +513,9 @@ export default function GameScreen({ route, navigation }) {
       },
       onPanResponderMove: (_, gs) => {
         if (boardOpenRef.current) {
+          if (showAnimDiceRef.current || diceAnimatingRef.current) {
+            return;
+          }
           const maxH = maxSlideRef.current;
           const next = Math.max(0, Math.min(maxH, boardDropStartRef.current + gs.dy));
           boardDropAnim.setValue(next);
@@ -517,7 +531,16 @@ export default function GameScreen({ route, navigation }) {
           const cur = Math.max(0, Math.min(maxH, boardDropStartRef.current + gs.dy));
           const vy = gs.vy;
           if (vy < -0.5 || cur < maxH * 0.4) {
-            closeRef.current();
+            if (showAnimDiceRef.current || diceAnimatingRef.current) {
+              Animated.timing(boardDropAnim, {
+                toValue: maxH,
+                duration: 220,
+                easing: Easing.out(Easing.cubic),
+                useNativeDriver: false,
+              }).start();
+            } else {
+              closeRef.current();
+            }
           } else {
             Animated.timing(boardDropAnim, {
               toValue: maxH,
@@ -1027,13 +1050,10 @@ export default function GameScreen({ route, navigation }) {
 
       if (!isRealRoll && !isAntiStress) return;
 
-      console.log('[DICE] swipe received', Date.now());
-
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       playDiceRollSound();
 
       const dice = gameState.turnPhase === 'preroll' ? [rollDice()[0], rollDice()[0]] : rollDice();
-      console.log('[DICE] before pause', Date.now());
       pauseJsForDiceThrow();
       setAnimDice(dice);
       if (isRealRoll) {
@@ -1041,7 +1061,6 @@ export default function GameScreen({ route, navigation }) {
       }
       setSwipeStart({ x: swipe.startX, y: swipe.startY });
       setSwipeEnd({ x: swipe.endX, y: swipe.endY });
-      console.log('[DICE] before showAnim', Date.now());
       setShowAnimDice(true);
       setDiceAnimating(true);
       setThrowKey((k) => k + 1);
@@ -1401,7 +1420,7 @@ export default function GameScreen({ route, navigation }) {
               style={{ height: boardDropAnim, overflow: 'hidden' }}
               pointerEvents="box-none"
             >
-              {boardMounted && (
+              {boardMounted && boardContentActive && (
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: BOARD_SIDE_GAP }}>
                   <BackgammonBoard
                     ref={boardRef}

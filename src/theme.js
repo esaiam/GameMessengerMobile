@@ -14,16 +14,14 @@ export const V = {
 
   /** Исходящий пузырь — тёмная бирюза (тон accentSage) */
   outBubbleBg: '#1E3F3D',
-  /** Входящий пузырь — бирюзово-сланцевый */
-  inBubbleBg: '#173836',
-  /** Вертикальный градиент входящего пузыря (LinearGradient), стопы сверху вниз */
-  inBubbleGradient: ['#0F181A', '#173836', '#1E4542'],
+  /** Входящий пузырь — нейтральный серый (как bgElevated), без градиента */
+  inBubbleBg: '#252A35',
   /** Вертикальный градиент исходящего пузыря (LinearGradient) */
   outBubbleGradient: ['#153532', '#1E3F3D', '#265A56'],
   /** Текст в исходящем пузыре (Design.mdc) */
   outBubbleText: '#E8E4DA',
-  /** Текст во входящем пузыре (Design.mdc) */
-  inBubbleText: '#B8B4AC',
+  /** Текст во входящем пузыре (тело сообщения — см. V.textPrimary в MessageRow) */
+  inBubbleText: '#E8E4DA',
   gameBubbleBg: '#2A2415',
   gameCardBg: '#0F2020',
 

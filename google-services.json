@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "65724335018",
+    "project_id": "vault-54acb",
+    "storage_bucket": "vault-54acb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:65724335018:android:7dca05e8f1c3187636e1d3",
+        "android_client_info": {
+          "package_name": "com.vault.messenger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHIynsjwqvxMPir7tbRGgL94m07yJ4vsk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
