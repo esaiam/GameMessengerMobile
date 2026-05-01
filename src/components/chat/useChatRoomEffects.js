@@ -34,6 +34,10 @@ export default function useChatRoomEffects({
 }) {
   const readSentRef = useRef(new Set());
 
+  /** Realtime INSERT: накапливаем расшифрованные сообщения и сливаем в один setMessages за microtask (меньше ререндеров при пачке событий). */
+  const realtimeInsertQueueRef = useRef([]);
+  const realtimeFlushScheduledRef = useRef(false);
+
   /** Иначе при смене комнаты без размонтирования Chat старые id остаются в Set и read_at не шлётся. */
   useEffect(() => {
     readSentRef.current.clear();
@@ -122,6 +126,153 @@ export default function useChatRoomEffects({
   useEffect(() => {
     if (!roomId || isAriaChat) return;
 
+    const sortRealtimeInsertBatch = (msgs) =>
+      [...msgs].sort((a, b) => {
+        const ta = new Date(a.created_at ?? 0).getTime();
+        const tb = new Date(b.created_at ?? 0).getTime();
+        if (ta !== tb) return ta - tb;
+        return String(a.id ?? '').localeCompare(String(b.id ?? ''));
+      });
+
+    const sendPushForIncomingMessage = (msg) => {
+      if (msg.player_name === nickname) return;
+      void (async () => {
+        const { data: authData } = await supabase.auth.getUser();
+        const myId = authData?.user?.id;
+        if (!myId) return;
+
+        const { data: room } = await supabase
+          .from('rooms')
+          .select('user1_id, user2_id, player1_name, player2_name')
+          .eq('id', roomId)
+          .maybeSingle();
+        if (!room) return;
+
+        const u1 = String(room.user1_id || room.player1_name || '').trim();
+        const u2 = String(room.user2_id || room.player2_name || '').trim();
+        const me = String(nickname ?? '').trim();
+        const peerHandle = u1 === me ? u2 || null : u2 === me ? u1 || null : null;
+        if (!peerHandle) return;
+
+        const { data: peerProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('handle', peerHandle)
+          .maybeSingle();
+        const peerId = peerProfile?.id;
+        if (!peerId || peerId === myId) return;
+
+        const { data: recipientProfile } = await supabase
+          .from('profiles')
+          .select('push_token')
+          .eq('id', peerId)
+          .maybeSingle();
+        const pushToken = recipientProfile?.push_token;
+        if (!pushToken) return;
+
+        const senderName = String(msg.player_name ?? '').trim();
+        const bodyText = String(msg.text ?? '').slice(0, 100);
+        await sendPushNotification({
+          to: pushToken,
+          title: senderName || peerHandle,
+          body: bodyText,
+          data: { roomId },
+        });
+      })();
+    };
+
+    /** Применить уже расшифрованные INSERT из одной микропачки (один setMessages). */
+    const applyRealtimeInsertBatch = (batch) => {
+      if (batch.length === 0) return;
+      const sorted = sortRealtimeInsertBatch(batch);
+      pendingVideoActiveIdMigrationRef.current = null;
+
+      for (const msg of sorted) {
+        const replaceVideoTempId =
+          msg.message_type === 'video' && msg.player_name === nickname
+            ? optimisticVideoTempIdRef.current
+            : null;
+        if (
+          replaceVideoTempId &&
+          fadeAnims[replaceVideoTempId] != null &&
+          scaleAnims[replaceVideoTempId] != null
+        ) {
+          fadeAnims[msg.id] = fadeAnims[replaceVideoTempId];
+          scaleAnims[msg.id] = scaleAnims[replaceVideoTempId];
+          delete fadeAnims[replaceVideoTempId];
+          delete scaleAnims[replaceVideoTempId];
+        } else {
+          fadeAnims[msg.id] = new Animated.Value(0);
+          scaleAnims[msg.id] = new Animated.Value(0.85);
+          Animated.parallel([
+            Animated.timing(fadeAnims[msg.id], { toValue: 1, duration: 200, useNativeDriver: true }),
+            Animated.spring(scaleAnims[msg.id], {
+              toValue: 1,
+              friction: 8,
+              tension: 120,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      }
+
+      const migrations = [];
+
+      setMessages((prev) => {
+        let next = prev;
+        for (const msg of sorted) {
+          if (next.some((m) => m.id === msg.id)) {
+            next = filterHiddenForMeKeepingDeleting(filterExpired(next));
+            continue;
+          }
+          if (msg.message_type === 'video' && msg.player_name === nickname) {
+            const tempId = optimisticVideoTempIdRef.current;
+            if (tempId) {
+              optimisticVideoTempIdRef.current = null;
+              migrations.push({ from: tempId, to: msg.id });
+              next = filterHiddenForMeKeepingDeleting(
+                filterExpired([
+                  ...next.filter((m) => m.id !== tempId),
+                  { ...msg, clientRowKey: tempId },
+                ])
+              );
+              continue;
+            }
+          }
+          next = filterHiddenForMeKeepingDeleting(filterExpired([...next, msg]));
+        }
+        return next;
+      });
+
+      const seenMigrationTo = new Set();
+      for (const videoIdMig of migrations) {
+        if (seenMigrationTo.has(videoIdMig.to)) continue;
+        seenMigrationTo.add(videoIdMig.to);
+        setActiveVideoId((cur) => (cur === videoIdMig.from ? videoIdMig.to : cur));
+        if (activatedVideoIds.current.has(videoIdMig.from)) {
+          activatedVideoIds.current.delete(videoIdMig.from);
+          activatedVideoIds.current.add(videoIdMig.to);
+        }
+      }
+
+      for (const msg of sorted) {
+        sendPushForIncomingMessage(msg);
+      }
+    };
+
+    const flushRealtimeInsertQueue = () => {
+      realtimeFlushScheduledRef.current = false;
+      const raw = realtimeInsertQueueRef.current;
+      realtimeInsertQueueRef.current = [];
+      applyRealtimeInsertBatch(raw);
+    };
+
+    const scheduleRealtimeInsertFlush = () => {
+      if (realtimeFlushScheduledRef.current) return;
+      realtimeFlushScheduledRef.current = true;
+      queueMicrotask(flushRealtimeInsertQueue);
+    };
+
     const channel = supabase
       .channel(`chat-${roomId}`)
       .on(
@@ -132,106 +283,8 @@ export default function useChatRoomEffects({
             const msg = await decryptMsg(payload.new);
             if (msg.expires_at && new Date(msg.expires_at).getTime() <= Date.now()) return;
             if ((msg.hidden_for || []).includes(nickname)) return;
-            const replaceVideoTempId =
-              msg.message_type === 'video' && msg.player_name === nickname
-                ? optimisticVideoTempIdRef.current
-                : null;
-            if (
-              replaceVideoTempId &&
-              fadeAnims[replaceVideoTempId] != null &&
-              scaleAnims[replaceVideoTempId] != null
-            ) {
-              fadeAnims[msg.id] = fadeAnims[replaceVideoTempId];
-              scaleAnims[msg.id] = scaleAnims[replaceVideoTempId];
-              delete fadeAnims[replaceVideoTempId];
-              delete scaleAnims[replaceVideoTempId];
-            } else {
-              fadeAnims[msg.id] = new Animated.Value(0);
-              scaleAnims[msg.id] = new Animated.Value(0.85);
-              Animated.parallel([
-                Animated.timing(fadeAnims[msg.id], { toValue: 1, duration: 200, useNativeDriver: true }),
-                Animated.spring(scaleAnims[msg.id], {
-                  toValue: 1,
-                  friction: 8,
-                  tension: 120,
-                  useNativeDriver: true,
-                }),
-              ]).start();
-            }
-            pendingVideoActiveIdMigrationRef.current = null;
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === msg.id)) {
-                return filterHiddenForMeKeepingDeleting(filterExpired(prev));
-              }
-              if (msg.message_type === 'video' && msg.player_name === nickname) {
-                const tempId = optimisticVideoTempIdRef.current;
-                if (tempId) {
-                  optimisticVideoTempIdRef.current = null;
-                  pendingVideoActiveIdMigrationRef.current = { from: tempId, to: msg.id };
-                  return filterHiddenForMeKeepingDeleting(filterExpired([
-                    ...prev.filter((m) => m.id !== tempId),
-                    { ...msg, clientRowKey: tempId },
-                  ]));
-                }
-              }
-              return filterHiddenForMeKeepingDeleting(filterExpired([...prev, msg]));
-            });
-            const videoIdMig = pendingVideoActiveIdMigrationRef.current;
-            if (videoIdMig) {
-              pendingVideoActiveIdMigrationRef.current = null;
-              setActiveVideoId((cur) => (cur === videoIdMig.from ? videoIdMig.to : cur));
-              if (activatedVideoIds.current.has(videoIdMig.from)) {
-                activatedVideoIds.current.delete(videoIdMig.from);
-                activatedVideoIds.current.add(videoIdMig.to);
-              }
-            }
-
-            if (msg.player_name !== nickname) {
-              void (async () => {
-                const { data: authData } = await supabase.auth.getUser();
-                const myId = authData?.user?.id;
-                if (!myId) return;
-
-                const { data: room } = await supabase
-                  .from('rooms')
-                  .select('user1_id, user2_id, player1_name, player2_name')
-                  .eq('id', roomId)
-                  .maybeSingle();
-                if (!room) return;
-
-                const u1 = String(room.user1_id || room.player1_name || '').trim();
-                const u2 = String(room.user2_id || room.player2_name || '').trim();
-                const me = String(nickname ?? '').trim();
-                const peerHandle =
-                  u1 === me ? u2 || null : u2 === me ? u1 || null : null;
-                if (!peerHandle) return;
-
-                const { data: peerProfile } = await supabase
-                  .from('profiles')
-                  .select('id')
-                  .eq('handle', peerHandle)
-                  .maybeSingle();
-                const peerId = peerProfile?.id;
-                if (!peerId || peerId === myId) return;
-
-                const { data: recipientProfile } = await supabase
-                  .from('profiles')
-                  .select('push_token')
-                  .eq('id', peerId)
-                  .maybeSingle();
-                const pushToken = recipientProfile?.push_token;
-                if (!pushToken) return;
-
-                const senderName = String(msg.player_name ?? '').trim();
-                const bodyText = String(msg.text ?? '').slice(0, 100);
-                await sendPushNotification({
-                  to: pushToken,
-                  title: senderName || peerHandle,
-                  body: bodyText,
-                  data: { roomId },
-                });
-              })();
-            }
+            realtimeInsertQueueRef.current.push(msg);
+            scheduleRealtimeInsertFlush();
           } else if (payload.eventType === 'UPDATE') {
             const updatedMsg = await decryptMsg(payload.new);
             setMessages((prev) => {
@@ -248,7 +301,13 @@ export default function useChatRoomEffects({
       .subscribe();
 
     return () => {
+      realtimeFlushScheduledRef.current = false;
+      const pending = realtimeInsertQueueRef.current;
+      realtimeInsertQueueRef.current = [];
       supabase.removeChannel(channel);
+      if (pending.length > 0) {
+        applyRealtimeInsertBatch(pending);
+      }
     };
   }, [roomId, isAriaChat, decryptMsg, nickname, filterHiddenForMeKeepingDeleting, filterExpired]);
 

@@ -11,4 +11,4 @@
 | `src/components/chat/useChatMessageMutations.js` | Удаление сообщений (обычное / для всех). |
 | `src/components/chat/useChatMediaActions.js` | Обновление локального списка после загрузки медиа. |
 
-**Основной кандидат на батчинг событий подряд:** обработчик realtime INSERT в `useChatRoomEffects.js` (каждое событие сейчас вызывает свой `setMessages`).
+**Realtime INSERT:** несколько подряд расшифрованных INSERT складываются в очередь и сливаются в **один** `setMessages` за `queueMicrotask` (`useChatRoomEffects.js`). UPDATE/DELETE без изменений.
