@@ -55,6 +55,7 @@ import {
 import { sendAriaChatTextMessage } from './chat/ariaTextComposerSend';
 import { startAriaVoiceComposerSend } from './chat/ariaVoiceComposerSend';
 import { useAriaChatListBootstrap } from './chat/useAriaChatListBootstrap';
+import { getAriaComposerSurfaceProps } from './chat/ariaComposerSurfaceProps';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -657,6 +658,11 @@ export default function Chat({
       ? listPaddingTop + CHAT_HEADER_TO_LIST_GAP_PX
       : listPaddingTop;
 
+  const ariaComposerSurfaceProps = useMemo(
+    () => getAriaComposerSurfaceProps(isAriaChat, chatRoomHeader?.ariaOnline),
+    [isAriaChat, chatRoomHeader?.ariaOnline]
+  );
+
   const listFooterComponent = useMemo(
     () => (
       <ChatListFooter
@@ -869,9 +875,7 @@ export default function Chat({
           onVoiceRecorderOpen={onVoiceRecorderOpen}
           handleVideoRecorded={handleVideoRecorded}
           handleVideoSendError={handleVideoSendError}
-          ariaTextOnly={!!isAriaChat}
-          ariaAllowVoice={!!isAriaChat}
-          ariaUnavailable={!!isAriaChat && chatRoomHeader?.ariaOnline === false}
+          {...ariaComposerSurfaceProps}
         />
       </Reanimated.View>
     </Reanimated.View>
