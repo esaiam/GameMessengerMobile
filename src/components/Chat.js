@@ -276,6 +276,8 @@ export default function Chat({
   const rowEnvRef = useRef({});
   /** Голос/видео плеер — обновляется каждый рендер; renderMessageContent читает .current, чтобы не пересоздавать замыкание на каждый тик статуса. */
   const playbackEnvRef = useRef({});
+  /** Пропсы строки с частым обновлением — через ref, чтобы renderItem FlatList оставался стабильным между тиками прогресса. */
+  const messageRowLiveRef = useRef({});
   const fmtLenRef = useRef(0);
   const inputRef = useRef(null);
   const sendInProgressRef = useRef(false);
@@ -652,6 +654,14 @@ export default function Chat({
     activePlayerStatus.duration,
   ]);
 
+  messageRowLiveRef.current = {
+    activeVoiceMessageId,
+    activeVoiceUri,
+    activeVideoId,
+    isRecordingVoice,
+    voiceProgressSig,
+  };
+
   const onMessagePress = useCallback((event, item) => {
     rowEnvRef.current.handleMessagePress(event, item);
   }, []);
@@ -661,39 +671,33 @@ export default function Chat({
   }, []);
 
   const renderItem = useCallback(
-    ({ item, index }) => (
-      <MessageRow
-        item={item}
-        index={index}
-        listExtra={listExtraDataStable}
-        activeVoiceMessageId={activeVoiceMessageId}
-        activeVoiceUri={activeVoiceUri}
-        activeVideoId={activeVideoId}
-        isRecordingVoice={isRecordingVoice}
-        voicePlaybackSig={
-          ((item.message_type === 'voice' ||
-            item.message_type === 'audio' ||
-            (item.aria_voice_message === true && item.audio_uri)) &&
-            item.id === activeVoiceMessageId)
-            ? voiceProgressSig
-            : ''
-        }
-        fmtLenRef={fmtLenRef}
-        rowEnvRef={rowEnvRef}
-        onMessagePress={onMessagePress}
-        onMessageLongPress={onMessageLongPress}
-      />
-    ),
-    [
-      listExtraDataStable,
-      activeVoiceMessageId,
-      activeVoiceUri,
-      activeVideoId,
-      isRecordingVoice,
-      voiceProgressSig,
-      onMessagePress,
-      onMessageLongPress,
-    ]
+    ({ item, index }) => {
+      const live = messageRowLiveRef.current;
+      const voicePlaybackSig =
+        ((item.message_type === 'voice' ||
+          item.message_type === 'audio' ||
+          (item.aria_voice_message === true && item.audio_uri)) &&
+          item.id === live.activeVoiceMessageId)
+          ? live.voiceProgressSig
+          : '';
+      return (
+        <MessageRow
+          item={item}
+          index={index}
+          listExtra={listExtraDataStable}
+          activeVoiceMessageId={live.activeVoiceMessageId}
+          activeVoiceUri={live.activeVoiceUri}
+          activeVideoId={live.activeVideoId}
+          isRecordingVoice={live.isRecordingVoice}
+          voicePlaybackSig={voicePlaybackSig}
+          fmtLenRef={fmtLenRef}
+          rowEnvRef={rowEnvRef}
+          onMessagePress={onMessagePress}
+          onMessageLongPress={onMessageLongPress}
+        />
+      );
+    },
+    [listExtraDataStable, onMessagePress, onMessageLongPress]
   );
 
   /** MessageRow держит стабильные onPress/onLongPress; актуальные хендлеры и данные — через ref без лишних перерисовок списка. */
