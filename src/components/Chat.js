@@ -52,6 +52,7 @@ import {
   buildFormattedMessagesCached,
   prependFormattedWhenTailAppended,
 } from './chat/chatMessageListFormat';
+import { sendAriaChatTextMessage } from './chat/ariaTextComposerSend';
 import { startAriaVoiceComposerSend } from './chat/ariaVoiceComposerSend';
 import Reanimated, {
   useSharedValue,
@@ -504,15 +505,13 @@ export default function Chat({
     if (!trimmed) return;
     if (isAriaChat && chatRoomHeader?.ariaOnline === false) return;
     if (isAriaChat && sendToAria) {
-      if (sendInProgressRef.current) return;
-      sendInProgressRef.current = true;
-      try {
-        await sendToAria(trimmed);
-        setText('');
-        setReplyTarget(null);
-      } finally {
-        sendInProgressRef.current = false;
-      }
+      await sendAriaChatTextMessage({
+        trimmed,
+        sendToAria,
+        sendInProgressRef,
+        setText,
+        setReplyTarget,
+      });
       return;
     }
     await sendVaultTextMessage();
