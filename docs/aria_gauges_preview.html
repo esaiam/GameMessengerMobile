@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AriaStateGauges — Preview</title>
+  <!--
+    PREVIEW (HTML) — чтобы посмотреть без запуска приложения.
+
+    Важно: в приложении ChatRoomHeader и AriaStateGauges теперь разделены,
+    но визуально расположение осталось тем же: шкалы сразу под шапкой.
+  -->
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0D0F14; display: flex; justify-content: center; padding: 20px; font-family: -apple-system, system-ui, Segoe UI, sans-serif; }
+    .phone { width: 320px; border-radius: 24px; overflow: hidden; background: #0D0F14; }
+    .top-bar { display:flex; align-items:center; gap:10px; padding:12px 14px 10px; background: rgba(13,15,20,0.97); position: relative; z-index: 3; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .back { color:#5A9E9A; font-size: 20px; line-height: 1; }
+    .ava { width:38px; height:38px; border-radius:50%; background: linear-gradient(135deg,#5A9E9A,#3d7a76); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:500; color:#fff; }
+    .aria-name { font-size:15px; font-weight:500; color:#E8E4DA; }
+    .aria-status { font-size:11px; color:#5A9E9A; }
+    .aria-info { flex:1; min-width: 0; }
+
+    /* "Отдельный блок под шапкой" как в коде */
+    .gauges-block { position: relative; z-index: 2; }
+    .gauge-zone { position: relative; height: 48px; display: flex; align-items: center; justify-content: center; overflow: visible; }
+    .gauge-bg { position:absolute; left:50%; top:50%; transform: translate(-50%,-50%) scale(0); width:100%; height:100%; background: rgba(0,0,0,0.38); border-radius: 999px; transform-origin: center; transition: transform 0.55s cubic-bezier(0.34,1.2,0.64,1), border-radius 0.55s cubic-bezier(0.34,1.2,0.64,1), opacity 0.4s ease; opacity: 0; pointer-events: none; }
+    .gauge-bg.open { transform: translate(-50%,-50%) scale(1); border-radius: 0; opacity: 1; }
+    .gauge-center { position: relative; z-index: 2; cursor: pointer; }
+    .gauges-row { position:absolute; display:flex; align-items:center; justify-content:center; width:100%; pointer-events:none; }
+    .gauge-side { opacity: 0; transform: scale(0.3); transition: opacity 0.25s ease, transform 0.55s cubic-bezier(0.34,1.4,0.64,1); position: absolute; width: 62px; left: 50%; margin-left: -31px; }
+    .gauge-side.visible { opacity: 1; transform: scale(1); }
+    .gauge-emoji { position:absolute; top:50%; left:50%; transform: translate(-50%,-54%); line-height: 1; pointer-events:none; }
+
+    .chat-bg { background:#0D1117; padding: 12px 10px; min-height: 260px; }
+    .msg-row { display:flex; margin-bottom:10px; }
+    .msg-row.out { justify-content: flex-end; }
+    .msg-row.in { gap: 6px; }
+    .msg-ava { width:26px; height:26px; border-radius:50%; background: linear-gradient(135deg,#5A9E9A,#3d7a76); flex-shrink:0; margin-top:2px; }
+    .bubble { max-width:65%; padding:8px 10px; border-radius: 14px; font-size: 12px; line-height: 1.45; }
+    .bubble.in { background: rgba(255,255,255,0.07); color:#E8E4DA; border-bottom-left-radius: 4px; }
+    .bubble.out { background:#1B4D4A; color:#d4f0ee; border-bottom-right-radius: 4px; }
+    .msg-time { font-size: 9px; color: rgba(255,255,255,0.3); margin-top: 3px; text-align: right; }
+    .hint { text-align:center; font-size:10px; color: rgba(255,255,255,0.2); padding: 6px 0 8px; background: rgba(13,15,20,0.97); }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="top-bar">
+      <div class="back">‹</div>
+      <div class="ava">A</div>
+      <div class="aria-info">
+        <div class="aria-name">Ария</div>
+        <div class="aria-status">● онлайн</div>
+      </div>
+    </div>
+
+    <div class="gauges-block">
+      <div class="gauge-zone" id="gaugeZone">
+        <div class="gauge-bg" id="gaugeBg"></div>
+        <div class="gauges-row" id="gaugesRow"></div>
+        <div class="gauge-center" id="gaugeCenter"></div>
+      </div>
+    </div>
+
+    <div class="chat-bg">
+      <div class="msg-row in"><div class="msg-ava"></div><div><div class="bubble in">Мне нужно покое.</div><div class="msg-time">23:42</div></div></div>
+      <div class="msg-row out"><div><div class="bubble out">Я тебя обидел?</div><div class="msg-time">23:42</div></div></div>
+      <div class="msg-row in"><div class="msg-ava"></div><div><div class="bubble in">Нет. Просто устала.</div><div class="msg-time">23:43</div></div></div>
+      <div class="msg-row out"><div><div class="bubble out">Может пообщаемся?</div><div class="msg-time">23:43</div></div></div>
+    </div>
+    <div class="hint">Нажми на шкалу настроения ↑</div>
+  </div>
+
+  <script>
+    const STATE = { mood:0.6, hurt:0.15, boredom:0.2, energy:0.75, trust:0.3 };
+    const GAUGES=[
+      {label:'Настроение',bipolar:true, val:STATE.mood, posEmoji:'😊',negEmoji:'😢',posC:['#40E0D0','#C8FFE8'],negC:['#5A9E9A','#1E5B9E'],isCenter:true},
+      {label:'Боль',      bipolar:false,val:STATE.hurt,posEmoji:'😤',posC:['#FF4444','#CC0000']},
+      {label:'Скука',     bipolar:false,val:STATE.boredom,posEmoji:'😑',posC:['#8BA8BE','#2C4A6E']},
+      {label:'Энергия',   bipolar:false,val:STATE.energy,posEmoji:'⚡',posC:['#FF5E5E','#FFE566']},
+      {label:'Доверие',   bipolar:true, val:STATE.trust,posEmoji:'🤝',negEmoji:'👁️',posC:['#F0B429','#FFE87A'],negC:['#C9A84C','#7A5200']},
+    ];
+    const SIDE_ORDER=[2,1,3,4];
+    const SIDE_POS=[-2,-1,1,2];
+    let expanded=false;
+    const SEGS=28, GAP=7, START=-225, TOTAL=270;
+    function hexToRgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+    function lerpC(c1,c2,t){const[r1,g1,b1]=hexToRgb(c1),[r2,g2,b2]=hexToRgb(c2);return`rgb(${Math.round(r1+(r2-r1)*t)},${Math.round(g1+(g2-g1)*t)},${Math.round(b1+(b2-b1)*t)})`;}
+    function segPath(a1,a2,rI,rO,cx,cy){const A1=a1*Math.PI/180,A2=a2*Math.PI/180;const x1=cx+rO*Math.cos(A1),y1=cy+rO*Math.sin(A1);const x2=cx+rO*Math.cos(A2),y2=cy+rO*Math.sin(A2);const x3=cx+rI*Math.cos(A2),y3=cy+rI*Math.sin(A2);const x4=cx+rI*Math.cos(A1),y4=cy+rI*Math.sin(A1);return`M${x1.toFixed(2)},${y1.toFixed(2)} A${rO},${rO} 0 0,1 ${x2.toFixed(2)},${y2.toFixed(2)} L${x3.toFixed(2)},${y3.toFixed(2)} A${rI},${rI} 0 0,0 ${x4.toFixed(2)},${y4.toFixed(2)} Z`;}
+    function buildSVG(g,size){const step=TOTAL/SEGS,hg=GAP/2,cx=size/2,cy=size/2;const rO=size*0.415,rI=size*0.295;let p='';if(!g.bipolar){const fill=Math.round(Math.max(0,Math.min(1,g.val))*SEGS);for(let i=0;i<SEGS;i++){const a1=START+i*step+hg,a2=START+i*step+step-hg;const active=i<fill,t=fill>1?i/(fill-1):0;p+=`<path d="${segPath(a1,a2,rI,rO,cx,cy)}" fill="${active?lerpC(g.posC[0],g.posC[1],t):'rgba(255,255,255,0.07)'}"/>`;}}else{const half=Math.floor(SEGS/2),mid=half;const pF=Math.round(Math.max(0,g.val)*half),nF=Math.round(Math.max(0,-g.val)*half);for(let i=0;i<SEGS;i++){const a1=START+i*step+hg,a2=START+i*step+step-hg;let col='rgba(255,255,255,0.07)';if(i>=mid&&i<mid+pF){col=lerpC(g.posC[0],g.posC[1],pF>1?(i-mid)/(pF-1):0);}else if(i<mid&&i>=mid-nF){col=lerpC(g.negC[0],g.negC[1],nF>1?(mid-1-i)/(nF-1):0);}p+=`<path d="${segPath(a1,a2,rI,rO,cx,cy)}" fill="${col}"/>`;}}const emoji=(!g.bipolar||g.val>=0)?g.posEmoji:(g.negEmoji||g.posEmoji);return{svg:`<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${p}</svg>`,emoji};}
+
+    function renderCenter(){const g=GAUGES[0];const size=expanded?56:34;const{svg,emoji}=buildSVG(g,56);const el=document.getElementById('gaugeCenter');el.innerHTML=`<div style="position:relative;width:${size}px;height:${size}px;transform:scale(${size/56});transform-origin:center;transition:transform 0.45s cubic-bezier(0.34,1.4,0.64,1)">${svg}<div class="gauge-emoji" style="font-size:${expanded?14:10}px">${emoji}</div></div>`;}
+    function renderSides(){const row=document.getElementById('gaugesRow');row.innerHTML=SIDE_ORDER.map((gi,idx)=>{const g=GAUGES[gi];const pos=SIDE_POS[idx];const{svg,emoji}=buildSVG(g,56);return`<div class="gauge-side" id="side_${gi}" style="transform:translateX(${pos*62}px) scale(0.3)"><div style="position:relative;width:56px;height:56px">${svg}<div class="gauge-emoji" style="font-size:14px">${emoji}</div></div></div>`;}).join('');}
+    function applySideVisibility(){SIDE_ORDER.forEach((gi,idx)=>{const el=document.getElementById('side_'+gi);if(!el)return;const pos=SIDE_POS[idx];const delay=(expanded?(Math.abs(pos)===1?60:120):(Math.abs(pos)===2?0:60));el.style.transitionDelay=delay+'ms';if(expanded){el.classList.add('visible');el.style.transform=`translateX(${pos*62}px) scale(1)`;}else{el.classList.remove('visible');el.style.transform=`translateX(${pos*62}px) scale(0.3)`;}});}
+    function updateZone(){const zone=document.getElementById('gaugeZone');const bg=document.getElementById('gaugeBg');zone.style.height=expanded?'72px':'48px';zone.style.transition='height 0.45s cubic-bezier(0.34,1.2,0.64,1)';expanded?bg.classList.add('open'):bg.classList.remove('open');}
+    function toggle(){expanded=!expanded;updateZone();renderCenter();applySideVisibility();}
+    renderSides();renderCenter();updateZone();applySideVisibility();
+    document.getElementById('gaugeCenter').addEventListener('click',toggle);
+  </script>
+</body>
+</html>
+

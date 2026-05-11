@@ -11,7 +11,9 @@ import {
 import { VideoView, useVideoPlayer } from 'expo-video';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import Svg, { Circle } from 'react-native-svg';
+import { File as ExpoFile } from 'expo-file-system';
 import { V } from '../../theme';
+import { recordFileAccess } from '../../storage/CacheManager';
 const IDLE_WARMUP_TEXTURE = require('../../../assets/chat-room-wallpaper.jpg');
 
 interface VideoMessageProps {
@@ -69,6 +71,13 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
         if (!cancelled) {
           setThumbUri(uri);
           setIdlePreviewReady(true);
+          try {
+            const f = new ExpoFile(uri);
+            const sz = typeof f.size === 'number' && Number.isFinite(f.size) ? f.size : 0;
+            recordFileAccess(uri, sz).catch(() => {});
+          } catch {
+            recordFileAccess(uri, 0).catch(() => {});
+          }
         }
       })
       .catch(() => {

@@ -4,7 +4,7 @@ import {
   Easing,
   PanResponder,
 } from 'react-native';
-import { TAB_BAR_INNER_ROW_H } from '../theme';
+import { SEARCH_FIELD_LAYOUT } from '../theme';
 
 const SEARCH_HIDE_THRESHOLD_PX = 12;
 const SEARCH_HIDE_GAP_PX = 8;
@@ -13,7 +13,7 @@ const SEARCH_HIDE_GAP_PX = 8;
 export const CHATS_SEARCH_BOTTOM_SPACING_PX = 16;
 
 export function useChatsSearchReveal(q, searchFocused) {
-  const SEARCH_FIELD_H = TAB_BAR_INNER_ROW_H - 2;
+  const SEARCH_FIELD_H = SEARCH_FIELD_LAYOUT.chatsHeight;
 
   const [searchPointerEvents, setSearchPointerEvents] = useState('auto');
   const searchReveal = useRef(new Animated.Value(1)).current;

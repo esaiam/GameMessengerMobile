@@ -1,21 +1,9 @@
-# Tab swipe — актуально
+# Tab swipe — стабильная схема
 
-Документ для разработчика.
+- **`createBottomTabNavigator`** — `MainTabsNavigator.js`.
+- **Межтабовый свайп** — `Gesture.Pan` + `runOnJS` в **`MainTabSwipeOverlay`** (`useMainTabSwipeGesture.js`), политика в том же файле.
+- **`App.js`** оборачивает дерево навигации в **`MainTabSwipeOverlay`**.
 
-## Текущая реализация (стабильная)
+**Material Top Tabs + pager-view** на этом устройстве/стеке давали падения — не используем, зависимости убраны из `package.json`.
 
-- **`createBottomTabNavigator`** — главные вкладки (`MainTabsNavigator.js`).
-- **Межтабовый свайп** — `Gesture.Pan` в **`MainTabSwipeOverlay`** (`useMainTabSwipeGesture.js`), обёртка в **`App.js`** вокруг дерева навигации.
-- Политика «не свайпать на чате/нардах» задана **в том же файле**, что и жест (`TAB_ORDER`, `SWIPE_DISABLED_DEEPEST`) — без отдельного модуля.
-
-## Отключено (нестабильно на устройстве)
-
-- **Material Top Tabs + `react-native-pager-view`** и **`setOptions({ swipeEnabled })`** на вложенных экранах — отказались из‑за падений/гонок.
-
-## Зависимости
-
-Пакеты `@react-navigation/material-top-tabs` и `react-native-pager-view` из проекта убраны. Если когда‑нибудь вернёшь pager — снова `expo install` и **новая сборка APK**.
-
-## Ручной регресс
-
-Корни табов → свайп; `ChatRoom` / `Room` / `Game` → межтабовый свайп не переключает вкладки; чат и шифрование не связаны с навигатором табов.
+После следующего `eas build` нативная часть перестанет тащить лишний pager (до тех пор в установленном APK модуль может остаться «мертвым грузом» — не страшно).

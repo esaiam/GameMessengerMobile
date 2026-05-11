@@ -1,8 +1,5 @@
 /**
- * Межтабовый горизонтальный свайп (Pan на корне навигации).
- * Политика ниже — без отдельного модуля, чтобы не ломать сборку при удалении файлов.
- *
- * Material Top Tabs + setOptions(swipeEnabled) отключены — давали нестабильность/краши.
+ * Межтабовый горизонтальный свайп (Pan на корне). Политика — в этом файле (без отдельного модуля).
  */
 import React, { useCallback, useMemo } from 'react';
 import { View } from 'react-native';
@@ -10,7 +7,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
 const TAB_ORDER = ['Chats', 'Contacts', 'Poker', 'Profile'];
-const SWIPE_DISABLED_DEEPEST = new Set(['Room', 'Game', 'ChatRoom']);
+const SWIPE_DISABLED_DEEPEST = new Set(['Room', 'ChatRoom']);
 
 function getDeepestRouteName(state) {
   let s = state;

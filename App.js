@@ -1,7 +1,7 @@
 import 'react-native-get-random-values';
 import { ready as libsodiumReady } from 'react-native-libsodium';
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Linking } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, Linking, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,10 +19,12 @@ import {
   serializePendingInvite,
 } from './src/utils/inviteRedeem';
 import { registerPushToken } from './src/lib/notifications';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { RootNavigationTree } from './src/navigation/RootNavigationTree';
 import { MainTabSwipeOverlay } from './src/navigation/useMainTabSwipeGesture';
 import { parseInviteQrPayload } from './src/utils/inviteDeepLink';
 import { parseAuthRecoveryFromUrl } from './src/utils/authRecoveryDeepLink';
+import { cleanupCache } from './src/storage/CacheManager';
 
 /** RFC2606 .invalid — плейсхолдер до signUp (AuthScreen перезапишет serializePendingInvite с реальным email). */
 const VAULT_DEEPLINK_PENDING_EMAIL = 'pending-invite@invalid';
@@ -181,15 +183,26 @@ export default function App() {
       .catch((e) => console.error('[Vault] libsodium init failed:', e));
   }, []);
 
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'background') {
+        cleanupCache().catch((e) => console.warn('[Vault] cleanupCache:', e?.message || e));
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <LocalAvatarProvider>
-          <AuthGateProvider>
-            <AppNavigationRoot />
-          </AuthGateProvider>
-        </LocalAvatarProvider>
-      </SafeAreaProvider>
+      <KeyboardProvider>
+        <SafeAreaProvider>
+          <LocalAvatarProvider>
+            <AuthGateProvider>
+              <AppNavigationRoot />
+            </AuthGateProvider>
+          </LocalAvatarProvider>
+        </SafeAreaProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 import { withTiming } from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
-import { sendPushNotification } from '../../lib/sendPushNotification';
 import { fetchPublicKeys } from '../../utils/VaultKeyServer';
 import roomMessagesCache from '../../utils/roomMessagesCache';
 
@@ -134,53 +133,6 @@ export default function useChatRoomEffects({
         return String(a.id ?? '').localeCompare(String(b.id ?? ''));
       });
 
-    const sendPushForIncomingMessage = (msg) => {
-      if (msg.player_name === nickname) return;
-      void (async () => {
-        const { data: authData } = await supabase.auth.getUser();
-        const myId = authData?.user?.id;
-        if (!myId) return;
-
-        const { data: room } = await supabase
-          .from('rooms')
-          .select('user1_id, user2_id, player1_name, player2_name')
-          .eq('id', roomId)
-          .maybeSingle();
-        if (!room) return;
-
-        const u1 = String(room.user1_id || room.player1_name || '').trim();
-        const u2 = String(room.user2_id || room.player2_name || '').trim();
-        const me = String(nickname ?? '').trim();
-        const peerHandle = u1 === me ? u2 || null : u2 === me ? u1 || null : null;
-        if (!peerHandle) return;
-
-        const { data: peerProfile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('handle', peerHandle)
-          .maybeSingle();
-        const peerId = peerProfile?.id;
-        if (!peerId || peerId === myId) return;
-
-        const { data: recipientProfile } = await supabase
-          .from('profiles')
-          .select('push_token')
-          .eq('id', peerId)
-          .maybeSingle();
-        const pushToken = recipientProfile?.push_token;
-        if (!pushToken) return;
-
-        const senderName = String(msg.player_name ?? '').trim();
-        const bodyText = String(msg.text ?? '').slice(0, 100);
-        await sendPushNotification({
-          to: pushToken,
-          title: senderName || peerHandle,
-          body: bodyText,
-          data: { roomId },
-        });
-      })();
-    };
-
     /** Применить уже расшифрованные INSERT из одной микропачки (один setMessages). */
     const applyRealtimeInsertBatch = (batch) => {
       if (batch.length === 0) return;
@@ -255,9 +207,6 @@ export default function useChatRoomEffects({
         }
       }
 
-      for (const msg of sorted) {
-        sendPushForIncomingMessage(msg);
-      }
     };
 
     const flushRealtimeInsertQueue = () => {

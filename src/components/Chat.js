@@ -9,8 +9,10 @@ import {
   View,
   Text,
   Platform,
+  Keyboard,
   useWindowDimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ARIA_CONTACT } from '../lib/aria';
@@ -47,19 +49,23 @@ import useChatMessageMutations from './chat/useChatMessageMutations';
 import useChatReplyHelpers from './chat/useChatReplyHelpers';
 import useChatOptimisticVideo from './chat/useChatOptimisticVideo';
 import useChatComposerChrome from './chat/useChatComposerChrome';
-import { REPLY_TARGET_PREVIEW_H, EMOJI_PICKER_PANEL_H } from './chat/chatComposerConstants';
 import { sendAriaChatTextMessage } from './chat/ariaTextComposerSend';
 import { startAriaVoiceComposerSend } from './chat/ariaVoiceComposerSend';
 import { useAriaChatListBootstrap } from './chat/useAriaChatListBootstrap';
 import { getAriaComposerSurfaceProps } from './chat/ariaComposerSurfaceProps';
+import AriaStateGauges from './chat/AriaStateGauges';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
+  withTiming,
+  cancelAnimation,
+  Easing,
 } from 'react-native-reanimated';
-import { V } from '../theme';
+import { V, chatListBottomFadeBottom } from '../theme';
 import {
   MAX_RENDERED_VIDEOS,
   CHAT_HEADER_TO_LIST_GAP_PX,
+  CHAT_LIST_BOTTOM_FADE_GAP_ABOVE_CAPSULE_PX,
 } from './chat/chatViewConstants';
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
@@ -87,21 +93,59 @@ export default function Chat({
   /** GameScreen: true — не трогать JS-таймеры эфемерки (бросок кубиков) */
   renderPausedRef,
 }) {
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const inputBarRef = useRef(null);
-  const [inputBarH, setInputBarH] = useState(0);
-  const [bottomOverlayH, setBottomOverlayH] = useState(0);
+  const listAreaRef = useRef(null);
+  const capsuleWrapperRef = useRef(null);
+  const [listBottomFadeGeometry, setListBottomFadeGeometry] = useState(null);
+  /** Не дергать scrollToOffset (стык клавиатуры / смена высоты композера) — резкие рывки ленты */
+  const keyboardSettlingRef = useRef(false);
+  const keyboardSettleTimerRef = useRef(null);
+  const composerInsetSettlingRef = useRef(false);
+  const composerInsetSettleTimerRef = useRef(null);
+  const lastComposerLayoutHRef = useRef(0);
+
+  const updateChatListBottomFade = useCallback(() => {
+    const listEl = listAreaRef.current;
+    const capEl = capsuleWrapperRef.current;
+    if (!listEl || !capEl) return;
+    listEl.measureInWindow((lx, ly, lw, lh) => {
+      capEl.measureInWindow((cx, cy, cw, ch) => {
+        const boundaryY = cy - CHAT_LIST_BOTTOM_FADE_GAP_ABOVE_CAPSULE_PX;
+        const topInList = boundaryY - ly;
+        if (topInList >= lh) {
+          setListBottomFadeGeometry(null);
+          return;
+        }
+        const top = Math.max(0, topInList);
+        const h = lh - top;
+        if (h <= 0) {
+          setListBottomFadeGeometry(null);
+          return;
+        }
+        setListBottomFadeGeometry({ top, height: h });
+      });
+    });
+  }, []);
+
+  const scheduleChatListBottomFadeMeasure = useCallback(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        updateChatListBottomFade();
+      });
+    });
+  }, [updateChatListBottomFade]);
 
   const reportInputBar = useCallback((layoutH) => {
     if (typeof layoutH === 'number' && layoutH > 0) {
-      setInputBarH(layoutH);
       onInputBarHeight?.(layoutH);
     }
     inputBarRef.current?.measureInWindow((x, y) => {
       if (typeof y === 'number') onInputBarTopY?.(y);
     });
-  }, [onInputBarHeight, onInputBarTopY]);
+    scheduleChatListBottomFadeMeasure();
+  }, [onInputBarHeight, onInputBarTopY, scheduleChatListBottomFadeMeasure]);
   const [internalMessages, setInternalMessages] = useState([]);
   const ariaControlled =
     isAriaChat === true && typeof setAriaMessages === 'function' && Array.isArray(ariaMessages);
@@ -126,11 +170,58 @@ export default function Chat({
   const [uploading, setUploading] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null);
   const [uiReady, setUiReady] = useState(false);
+  const [headerOverlayH, setHeaderOverlayH] = useState(0);
+  const [ariaGaugesH, setAriaGaugesH] = useState(48);
+  /** Зеркалит `ariaState` из `ChatRoomHeader` (тот же fetch, что был у колец) для `AriaStateGauges`. */
+  const [ariaState, setAriaState] = useState(null);
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       setUiReady(true);
     });
     return () => cancelAnimationFrame(id);
+  }, []);
+
+  useEffect(() => {
+    scheduleChatListBottomFadeMeasure();
+  }, [windowWidth, windowHeight, uiReady, scheduleChatListBottomFadeMeasure]);
+
+  useEffect(() => {
+    if (chatRoomHeader == null) return;
+    if (headerOverlayH <= 0) return;
+    const gaugesH = isAriaChat ? ariaGaugesH : 0;
+    onTopOverlayHeight?.(headerOverlayH + gaugesH);
+  }, [chatRoomHeader, headerOverlayH, isAriaChat, ariaGaugesH, onTopOverlayHeight]);
+
+  useEffect(() => {
+    const settlingPadMs = Platform.OS === 'ios' ? 130 : 150;
+    const armSettling = (ms) => {
+      keyboardSettlingRef.current = true;
+      if (keyboardSettleTimerRef.current) clearTimeout(keyboardSettleTimerRef.current);
+      keyboardSettleTimerRef.current = setTimeout(() => {
+        keyboardSettlingRef.current = false;
+        keyboardSettleTimerRef.current = null;
+      }, ms);
+    };
+    const keyboardAnimMs = (e) =>
+      typeof e.duration === 'number' && e.duration > 0 ? e.duration : 250;
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const subShow = Keyboard.addListener(showEvt, (e) => {
+      armSettling(keyboardAnimMs(e) + settlingPadMs);
+    });
+    const subHide = Keyboard.addListener(hideEvt, (e) => {
+      const base =
+        Platform.OS === 'ios' && typeof e?.duration === 'number' && e.duration > 0
+          ? e.duration
+          : 250;
+      armSettling(base + settlingPadMs);
+    });
+    return () => {
+      subShow.remove();
+      subHide.remove();
+      if (keyboardSettleTimerRef.current) clearTimeout(keyboardSettleTimerRef.current);
+      if (composerInsetSettleTimerRef.current) clearTimeout(composerInsetSettleTimerRef.current);
+    };
   }, []);
 
   const {
@@ -155,13 +246,18 @@ export default function Chat({
   const listOpacity = useSharedValue(0);
   const headerMeasured = useSharedValue(0);
 
+  const listScrollSuppressRefs = useMemo(
+    () => [keyboardSettlingRef, composerInsetSettlingRef],
+    [],
+  );
+
   const {
     flatListRef,
     stickToBottomRef,
     layoutReadyRef,
     initialScrollDoneRef,
     onScrollReanimated,
-  } = useChatInvertedListScroll(roomId, messages, headerMeasured);
+  } = useChatInvertedListScroll(roomId, messages, headerMeasured, listScrollSuppressRefs);
 
   const ephemeralClockTick = useChatEphemeralClockTick(messages, renderPausedRef);
 
@@ -218,11 +314,14 @@ export default function Chat({
 
   const legacyCryptoKey = useMemo(() => (roomCode ? deriveKey(roomCode) : null), [roomCode]);
 
+  const composerStackHeightShared = useSharedValue(0);
+
   const {
     rootAnimatedStyle,
-    inputBarAnimatedStyle,
     replyTargetAnimatedStyle,
+    emojiPanelAnimatedStyle,
     emojiWobbleRotate,
+    collapseEmojiForKeyboard,
     toggleEmojiPicker,
     insertEmoji,
   } = useChatComposerChrome({
@@ -237,6 +336,16 @@ export default function Chat({
   const listAnimatedStyle = useAnimatedStyle(() => ({
     opacity: listOpacity.value,
   }));
+
+  /** Inverted: header у новых сообщений; высота = нижний chrome целиком (тот же замер, что обёртка композера). */
+  const listBottomSpacerStyle = useAnimatedStyle(() => ({
+    height: composerStackHeightShared.value,
+  }));
+
+  const ListBottomInsetHeader = useCallback(
+    () => <Reanimated.View collapsable={false} style={listBottomSpacerStyle} />,
+    [listBottomSpacerStyle],
+  );
 
   useEffect(() => {
     if (!isRecordingVoice) return;
@@ -593,13 +702,6 @@ export default function Chat({
     ],
   );
 
-  const listBottomInsetH =
-    inputBarH > 0
-      ? inputBarH +
-        (showEmojiPicker ? EMOJI_PICKER_PANEL_H : 0) +
-        (replyTo ? REPLY_TARGET_PREVIEW_H : 0)
-      : bottomOverlayH;
-
   return (
     <EphemeralClockContext.Provider value={ephemeralClockTick}>
     <Reanimated.View
@@ -652,141 +754,191 @@ export default function Chat({
         setEphemeralSec={setEphemeralSec}
       />
 
-      <View style={{ flex: 1 }}>
-        <ChatMessagesLoadingOverlay visible={messagesLoading} />
-        <Reanimated.FlatList
-          ref={flatListRef}
-          data={formattedMessages}
-          inverted
-          keyExtractor={(item) =>
-            item.clientRowKey != null && item.clientRowKey !== ''
-              ? String(item.clientRowKey)
-              : String(item.id)
-          }
-          renderItem={renderItem}
-          extraData={listExtraDataStable}
-          initialNumToRender={20}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          onScroll={onScrollReanimated}
-          scrollEventThrottle={32}
-          decelerationRate={Platform.OS === 'ios' ? 0.992 : 'fast'}
-          style={[
-            tw`flex-1`,
-            chatRoomHeader ? { backgroundColor: 'transparent' } : null,
-            { zIndex: 1 },
-            listAnimatedStyle,
-          ]}
-          removeClippedSubviews={Platform.OS === 'android'}
-          ListFooterComponent={listFooterComponent}
-          contentContainerStyle={[
-            tw`pt-1`,
-            chatRoomHeader && typeof listPaddingTop === 'number' && listPaddingTop > 0 ? null : tw`pb-2`,
-            listBottomInsetH > 0 ? { paddingTop: listBottomInsetH } : null,
-          ]}
-          onContentSizeChange={() => {
-            if (!layoutReadyRef.current) {
-              layoutReadyRef.current = true;
-              initialScrollDoneRef.current = true;
+      <View ref={listAreaRef} style={{ flex: 1, position: 'relative' }}>
+        <View style={{ flex: 1 }}>
+          <ChatMessagesLoadingOverlay visible={messagesLoading} />
+          <Reanimated.FlatList
+            ref={flatListRef}
+            data={formattedMessages}
+            inverted
+            keyExtractor={(item) =>
+              item.clientRowKey != null && item.clientRowKey !== ''
+                ? String(item.clientRowKey)
+                : String(item.id)
             }
-            if (stickToBottomRef.current) {
-              flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+            renderItem={renderItem}
+            extraData={listExtraDataStable}
+            initialNumToRender={20}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            onScroll={onScrollReanimated}
+            scrollEventThrottle={32}
+            decelerationRate={Platform.OS === 'ios' ? 0.992 : 'fast'}
+            style={[
+              tw`flex-1`,
+              chatRoomHeader ? { backgroundColor: 'transparent' } : null,
+              { zIndex: 1 },
+              listAnimatedStyle,
+            ]}
+            removeClippedSubviews={Platform.OS === 'android'}
+            ListHeaderComponent={ListBottomInsetHeader}
+            ListFooterComponent={listFooterComponent}
+            contentContainerStyle={[
+              tw`pt-1`,
+              chatRoomHeader && typeof listPaddingTop === 'number' && listPaddingTop > 0 ? null : tw`pb-2`,
+            ]}
+            onContentSizeChange={() => {
+              if (!layoutReadyRef.current) {
+                layoutReadyRef.current = true;
+                initialScrollDoneRef.current = true;
+              }
+            }}
+            ListEmptyComponent={
+              messagesLoading ? null : (
+                <Text style={[tw`text-center py-6 text-[13px]`, { color: V.textMuted }]}>
+                  Начни общение!
+                </Text>
+              )
             }
-          }}
-          ListEmptyComponent={
-            messagesLoading ? null : (
-              <Text style={[tw`text-center py-6 text-[13px]`, { color: V.textMuted }]}>
-                Начни общение!
-              </Text>
-            )
-          }
-        />
-      </View>
-
-      {chatRoomHeader != null ? (
-        <View
-          pointerEvents="box-none"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 50,
-            elevation: 50,
-          }}
-          onLayout={(e) => {
-            const h = e.nativeEvent.layout.height;
-            if (h > 0) {
-              onTopOverlayHeight?.(h);
-              headerMeasured.value = 1;
-            }
-          }}
-        >
-          <ChatRoomHeader
-            title={chatRoomHeader.title}
-            contactOnline={chatRoomHeader.contactOnline}
-            navigation={chatRoomHeader.navigation}
-            ariaOnline={chatRoomHeader.ariaOnline}
-            headerRight={chatRoomHeader.headerRight}
-            topPaddingOverride={chatRoomHeader.topPaddingOverride}
-            selectionMode={selectionMode}
-            selectedCount={selectedIds.size}
-            onExitSelection={exitSelectionMode}
-            onCopy={batchCopySelected}
-            onForward={batchForwardSelected}
-            onDelete={batchDeleteForMe}
           />
         </View>
-      ) : null}
 
-      <Reanimated.View
-        pointerEvents="box-none"
-        onLayout={(e) => {
-          const h = e.nativeEvent.layout.height;
-          if (typeof h === 'number' && h > 0) setBottomOverlayH(h);
-        }}
-        style={[
-          {
+        {listBottomFadeGeometry ? (
+          <LinearGradient
+            pointerEvents="none"
+            colors={['transparent', chatListBottomFadeBottom]}
+            locations={[0, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: listBottomFadeGeometry.top,
+              height: listBottomFadeGeometry.height,
+              zIndex: 1,
+              elevation: 1,
+            }}
+          />
+        ) : null}
+
+        <View
+          pointerEvents="box-none"
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            scheduleChatListBottomFadeMeasure();
+            if (typeof h !== 'number' || h <= 0) return;
+            if (Math.abs(h - lastComposerLayoutHRef.current) < 0.5) return;
+            lastComposerLayoutHRef.current = h;
+            cancelAnimation(composerStackHeightShared);
+            composerStackHeightShared.value = withTiming(h, {
+              duration: 165,
+              easing: Easing.out(Easing.cubic),
+            });
+            composerInsetSettlingRef.current = true;
+            if (composerInsetSettleTimerRef.current) clearTimeout(composerInsetSettleTimerRef.current);
+            composerInsetSettleTimerRef.current = setTimeout(() => {
+              composerInsetSettlingRef.current = false;
+              composerInsetSettleTimerRef.current = null;
+            }, 320);
+          }}
+          style={{
             position: 'absolute',
             left: 0,
             right: 0,
             bottom: 0,
             zIndex: 2,
             elevation: 2,
-          },
-          inputBarAnimatedStyle,
-        ]}
-      >
-        <ChatComposer
-          inputBarRef={inputBarRef}
-          reportInputBar={reportInputBar}
-          insets={insets}
-          visibleReplyTo={visibleReplyTo}
-          replyTargetAnimatedStyle={replyTargetAnimatedStyle}
-          onDismissReply={() => setReplyTarget(null)}
-          uiReady={uiReady}
-          showEmojiPicker={showEmojiPicker}
-          toggleEmojiPicker={toggleEmojiPicker}
-          insertEmoji={insertEmoji}
-          emojiWobbleRotate={emojiWobbleRotate}
-          inputRef={inputRef}
-          ephemeralSec={ephemeralSec}
-          text={text}
-          setText={setText}
-          sendMessage={sendMessage}
-          isRecordingVoice={isRecordingVoice}
-          setShowEmojiPicker={setShowEmojiPicker}
-          setShowAttachMenu={setShowAttachMenu}
-          handleSendVoice={handleSendVoiceForComposer}
-          setIsRecordingVoice={setIsRecordingVoice}
-          uploadMedia={uploadMedia}
-          sendMediaMessage={sendMediaMessage}
-          onVoiceRecorderOpen={onVoiceRecorderOpen}
-          handleVideoRecorded={handleVideoRecorded}
-          handleVideoSendError={handleVideoSendError}
-          {...ariaComposerSurfaceProps}
-        />
-      </Reanimated.View>
+          }}
+        >
+          <ChatComposer
+            inputBarRef={inputBarRef}
+            capsuleWrapperRef={capsuleWrapperRef}
+            reportInputBar={reportInputBar}
+            insets={insets}
+            visibleReplyTo={visibleReplyTo}
+            replyTargetAnimatedStyle={replyTargetAnimatedStyle}
+            emojiPanelAnimatedStyle={emojiPanelAnimatedStyle}
+            onDismissReply={() => setReplyTarget(null)}
+            uiReady={uiReady}
+            showEmojiPicker={showEmojiPicker}
+            toggleEmojiPicker={toggleEmojiPicker}
+            insertEmoji={insertEmoji}
+            emojiWobbleRotate={emojiWobbleRotate}
+            inputRef={inputRef}
+            ephemeralSec={ephemeralSec}
+            text={text}
+            setText={setText}
+            sendMessage={sendMessage}
+            isRecordingVoice={isRecordingVoice}
+            setShowAttachMenu={setShowAttachMenu}
+            handleSendVoice={handleSendVoiceForComposer}
+            setIsRecordingVoice={setIsRecordingVoice}
+            uploadMedia={uploadMedia}
+            sendMediaMessage={sendMediaMessage}
+            onVoiceRecorderOpen={onVoiceRecorderOpen}
+            handleVideoRecorded={handleVideoRecorded}
+            handleVideoSendError={handleVideoSendError}
+            collapseEmojiForKeyboard={collapseEmojiForKeyboard}
+            {...ariaComposerSurfaceProps}
+          />
+        </View>
+      </View>
+
+      {chatRoomHeader != null ? (
+        <>
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 50,
+              elevation: 50,
+            }}
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              if (h > 0) {
+                setHeaderOverlayH(h);
+                headerMeasured.value = 1;
+              }
+            }}
+          >
+            <ChatRoomHeader
+              title={chatRoomHeader.title}
+              contactOnline={chatRoomHeader.contactOnline}
+              navigation={chatRoomHeader.navigation}
+              ariaOnline={chatRoomHeader.ariaOnline}
+              headerRight={chatRoomHeader.headerRight}
+              topPaddingOverride={chatRoomHeader.topPaddingOverride}
+              onAriaStateChange={isAriaChat ? setAriaState : undefined}
+              selectionMode={selectionMode}
+              selectedCount={selectedIds.size}
+              onExitSelection={exitSelectionMode}
+              onCopy={batchCopySelected}
+              onForward={batchForwardSelected}
+              onDelete={batchDeleteForMe}
+            />
+          </View>
+
+          {isAriaChat ? (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: 'absolute',
+                top: headerOverlayH,
+                left: 0,
+                right: 0,
+                zIndex: 49,
+                elevation: 49,
+              }}
+            >
+              <AriaStateGauges state={ariaState} onHeightChange={setAriaGaugesH} />
+            </View>
+          ) : null}
+        </>
+      ) : null}
     </Reanimated.View>
     </EphemeralClockContext.Provider>
   );

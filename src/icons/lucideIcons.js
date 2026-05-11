@@ -45,6 +45,7 @@ import {
   Pin,
   Reply,
   Video,
+  Sparkles,
 } from 'lucide-react-native/icons';
 
 /** В lucide-react-native нет `Unlock` — это `LockOpen` */
@@ -102,4 +103,5 @@ export {
   Pin,
   Reply,
   Video,
+  Sparkles,
 };

@@ -32,7 +32,7 @@ import {
   setIsAudioActiveAsync,
 } from 'expo-audio';
 import { Mic, Lock, Unlock, SendHorizontal, Trash2, Pause, Play, Video as VideoIcon } from '../../icons/lucideIcons';
-import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H } from '../../theme';
+import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import { setAudioModeAsync } from '../../utils/audioMode';
 import { pauseDiceSound } from '../../utils/diceSound';
 import VideoRecorder, { type VideoRecorderHandle } from './VideoRecorder';
@@ -1114,12 +1114,12 @@ const styles = StyleSheet.create({
     left: DEPTH,
     right: DEPTH,
     bottom: DEPTH,
-    borderRadius: TAB_BAR_INNER_ROW_H / 2,
+    borderRadius: COMPOSER_CAPSULE_RADIUS,
     backgroundColor: V.bgSurface,
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: TAB_BAR_LAYOUT.rowPaddingH,
-    minHeight: TAB_BAR_INNER_ROW_H,
+    minHeight: COMPOSER_LAYOUT.innerHeight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: V.border,
     overflow: 'hidden',
@@ -1129,7 +1129,7 @@ const styles = StyleSheet.create({
   lockAbove: {
     position: 'absolute',
     right: Math.round((MIC_OUTER - FLOAT_ICON_CIRCLE) / 2),
-    bottom: TAB_BAR_INNER_ROW_H + DEPTH * 2 + 8,
+    bottom: COMPOSER_LAYOUT.innerHeight + DEPTH * 2 + 8,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
@@ -1200,8 +1200,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   lockedCancelBtn: {
-    width: TAB_BAR_INNER_ROW_H,
-    height: TAB_BAR_INNER_ROW_H,
+    width: COMPOSER_LAYOUT.innerHeight,
+    height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1211,13 +1211,13 @@ const styles = StyleSheet.create({
   /** Reserves space in the overlay row for the absolutely-positioned mic button */
   micSpacer: {
     width: MIC_OUTER,
-    height: TAB_BAR_INNER_ROW_H,
+    height: COMPOSER_LAYOUT.innerHeight,
   },
 
   // PAUSED state
   iconSlot: {
     width: 40,
-    height: TAB_BAR_INNER_ROW_H,
+    height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1293,7 +1293,7 @@ const styles = StyleSheet.create({
   },
   sendSlot: {
     width: MIC_OUTER,
-    height: TAB_BAR_INNER_ROW_H,
+    height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
     justifyContent: 'center',
   },

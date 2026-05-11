@@ -1,18 +1,27 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, View, Text, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Animated, View, Text, Image, Platform } from 'react-native';
 import { V } from '../../theme';
 
+const ARIA_AVATAR_SOURCE = require('../../../assets/images/aria_avatar.png');
+
 /** Подзаголовок статуса Aria в шапке чата (точка + текст). null → не рендерим. */
-export function AriaPresenceSubtitle({ ariaOnline }) {
+export function AriaPresenceSubtitle({ ariaOnline, isSick }) {
   if (ariaOnline === null) return null;
   const online = ariaOnline === true;
+  const sickOnline = online && isSick === true;
+  const statusText = sickOnline
+    ? 'не очень хорошо себя чувствую...'
+    : online
+      ? 'онлайн'
+      : 'недоступна';
   return (
     <View
       style={{
         flexDirection: 'row',
         alignItems: 'center',
         marginTop: (2 * 2) / 3,
+        minWidth: 0,
+        alignSelf: 'stretch',
       }}
     >
       <View
@@ -27,6 +36,7 @@ export function AriaPresenceSubtitle({ ariaOnline }) {
       <Text
         style={[
           {
+            flex: 1,
             fontSize: 12,
             fontWeight: '400',
             lineHeight: 16,
@@ -34,33 +44,24 @@ export function AriaPresenceSubtitle({ ariaOnline }) {
           },
           Platform.OS === 'android' ? { includeFontPadding: false } : null,
         ]}
+        numberOfLines={sickOnline ? 2 : 1}
       >
-        {online ? 'онлайн' : 'недоступна'}
+        {statusText}
       </Text>
     </View>
   );
 }
 
-/** Градиентный аватар Aria (как в списке чатов). */
-export function AriaGradientAvatar({ size = 48, label = 'A' }) {
+/** Аватар Арии (список чатов, пузыри, индикатор печати). */
+export function AriaGradientAvatar({ size = 48, label = 'Ария' }) {
   const r = size / 2;
   return (
-    <LinearGradient
-      colors={[V.accentSage, '#3d7a76']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: r,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ fontSize: Math.round(size * 0.29), fontWeight: '500', color: V.textPrimary }}>
-        {label}
-      </Text>
-    </LinearGradient>
+    <Image
+      source={ARIA_AVATAR_SOURCE}
+      style={{ width: size, height: size, borderRadius: r }}
+      resizeMode="cover"
+      accessibilityLabel={label}
+    />
   );
 }
 

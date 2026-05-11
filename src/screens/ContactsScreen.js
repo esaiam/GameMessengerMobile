@@ -8,7 +8,7 @@ export default function ContactsScreen({ route, navigation }) {
 
   return (
     <TabBackground>
-      <ContactsDrawer variant="screen" visible nickname={nickname} navigation={navigation} />
+      <ContactsDrawer nickname={nickname} navigation={navigation} />
     </TabBackground>
   );
 }

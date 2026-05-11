@@ -11,7 +11,7 @@ import {
 import SafeBlurView from './SafeBlurView';
 import { BottomTabBarHeightCallbackContext } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { V, TAB_BAR_LAYOUT } from '../theme';
+import { V, TAB_BAR_LAYOUT, TAB_BAR_CAPSULE_RADIUS } from '../theme';
 
 const DEFAULT_ACTIVE = V.accentSage;
 const DEFAULT_INACTIVE = V.textMuted;
@@ -257,7 +257,7 @@ export default function GlassTabBar({ state, descriptors, navigation, insets: in
 
 const styles = StyleSheet.create({
   blurShell: {
-    borderRadius: TAB_BAR_LAYOUT.borderRadius,
+    borderRadius: TAB_BAR_CAPSULE_RADIUS,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: V.border,

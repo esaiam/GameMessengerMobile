@@ -34,26 +34,58 @@ export const V = {
   hoverBg: 'rgba(255,255,255,0.02)',
   sectionBorder: 'rgba(255,255,255,0.04)',
 
+  /** Стеклянная капсула (поиск): градиент обводки, свет сверху-слева */
+  glassCapsuleEdgeTL: 'rgba(255,255,255,0.22)',
+  glassCapsuleEdgeBR: 'rgba(255,255,255,0.07)',
+  /** Лёгкая внутренняя подсветка верхнего края */
+  glassCapsuleInnerSheen: 'rgba(255,255,255,0.10)',
+  /** Нейтральный фон стеклянного элемента (без sage-тинта) */
+  glassNeutralBg: 'rgba(255,255,255,0.055)',
+
   dangerMuted: '#B56B6B',
 };
 
+/** Низ градиента затемнения ленты над композером (95%, rgb совпадает с `V.bgApp`). */
+export const chatListBottomFadeBottom = 'rgba(13, 15, 20, 0.95)';
+
 /**
  * Геометрия «парящего» таб-бара (`GlassTabBar`).
- * Плашка ввода в чате использует те же отступы от краёв экрана и размеры ряда иконок.
+ * Плашка ввода в чате (`ChatComposer`) по горизонтали и размеру иконок согласована с `TAB_BAR_LAYOUT`, не с полями поиска.
  */
 export const TAB_BAR_LAYOUT = {
   horizontalPad: 14,
-  floatBottom: 10,
+  floatBottom: 4,
   topPad: 8,
   rowPaddingH: 8,
-  rowPaddingV: 12,
+  rowPaddingV: 17,
   iconSize: 22,
-  borderRadius: 22,
 };
 
 /** Высота внутреннего ряда таб-бара: вертикальные отступы + размер иконки */
 export const TAB_BAR_INNER_ROW_H =
   TAB_BAR_LAYOUT.rowPaddingV * 2 + TAB_BAR_LAYOUT.iconSize;
+
+/** Pill: скругление капсулы таббара и элементов той же высоты */
+export const TAB_BAR_CAPSULE_RADIUS = TAB_BAR_INNER_ROW_H / 2;
+
+/**
+ * Капсулы поиска (список чатов, контакты) — отдельные размеры, не от `TAB_BAR_INNER_ROW_H`.
+ */
+export const SEARCH_FIELD_LAYOUT = {
+  chatsHeight: 44,
+  contactsRowHeight: 44,
+  rowPaddingH: 8,
+};
+
+export const SEARCH_CHATS_CAPSULE_RADIUS = SEARCH_FIELD_LAYOUT.chatsHeight / 2;
+export const SEARCH_CONTACTS_CAPSULE_RADIUS = SEARCH_FIELD_LAYOUT.contactsRowHeight / 2;
+
+/** Капсула ввода сообщений (`ChatComposer`) — высота не совпадает с таббаром */
+export const COMPOSER_LAYOUT = {
+  innerHeight: 44,
+};
+
+export const COMPOSER_CAPSULE_RADIUS = COMPOSER_LAYOUT.innerHeight / 2;
 
 /** Поле нард: графит / серый в духе основного UI (Vault) */
 export const boardPalette = {

@@ -146,6 +146,19 @@ export default function ChatRoomScreen({ route, navigation }) {
   const ariaMessagesRef = useRef(ariaMessages);
   ariaMessagesRef.current = ariaMessages;
 
+  const ariaTypingSeqRef = useRef(0);
+
+  /** Перед любым функциональным обновлением ленты убирает предыдущий typing-row (один индикатор). */
+  const setAriaMessagesForChat = useCallback((update) => {
+    setAriaMessages((prev) => {
+      if (typeof update !== 'function') return update;
+      const prevSansTyping = prev.filter(
+        (m) => !(m.message_type === ARIA_MESSAGE_TYPING || m.isTyping)
+      );
+      return update(prevSansTyping);
+    });
+  }, []);
+
   /** null = ещё резолвим; string (в т.ч. '') = можно грузить историю и матчить «мои» сообщения */
   const [ariaResolvedNickname, setAriaResolvedNickname] = useState(null);
 
@@ -233,7 +246,7 @@ export default function ChatRoomScreen({ route, navigation }) {
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      const typingId = `aria-typing-${Date.now()}`;
+      const typingId = `aria-typing-${Date.now()}-${ariaTypingSeqRef.current++}`;
       const displayNickname =
         ariaResolvedNickname !== null ? ariaResolvedNickname : typeof nickname === 'string' ? nickname : '';
 
@@ -267,7 +280,7 @@ export default function ChatRoomScreen({ route, navigation }) {
           message_type: ARIA_MESSAGE_TYPING,
           isTyping: true,
         };
-        setAriaMessages((prev) => [...prev, userRow, typingRow]);
+        setAriaMessagesForChat((prev) => [...prev, userRow, typingRow]);
       }
 
       const stripTyping = (prev) => prev.filter((m) => m.id !== typingId);
@@ -330,7 +343,7 @@ export default function ChatRoomScreen({ route, navigation }) {
             console.warn('[Aria] insert aria catch:', e);
           }
 
-          setAriaMessages((prev) => [
+          setAriaMessagesForChat((prev) => [
             ...stripTyping(prev),
             {
               ...baseRow,
@@ -345,7 +358,7 @@ export default function ChatRoomScreen({ route, navigation }) {
           void playAriaReplySound();
         } catch {
           const errNow = new Date().toISOString();
-          setAriaMessages((prev) => [
+          setAriaMessagesForChat((prev) => [
             ...stripTyping(prev),
             {
               ...baseRow,
@@ -516,7 +529,7 @@ export default function ChatRoomScreen({ route, navigation }) {
         peerName={isAriaChat ? contact?.display_name || ARIA_CONTACT.display_name : peerName || title}
         isAriaChat={!!isAriaChat}
         ariaMessages={isAriaChat ? ariaMessages : undefined}
-        setAriaMessages={isAriaChat ? setAriaMessages : undefined}
+        setAriaMessages={isAriaChat ? setAriaMessagesForChat : undefined}
         sendToAria={isAriaChat ? sendToAria : undefined}
         listPaddingTop={listPaddingTop}
         chatRoomHeader={chatRoomHeader}

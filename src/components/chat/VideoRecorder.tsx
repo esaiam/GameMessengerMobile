@@ -19,7 +19,7 @@ import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo
 import type { VideoCodec } from 'expo-camera';
 import { setIsAudioActiveAsync } from 'expo-audio';
 import { Trash2, SendHorizontal } from '../../icons/lucideIcons';
-import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H } from '../../theme';
+import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import { setAudioModeAsync } from '../../utils/audioMode';
 import SafeBlurView from '../SafeBlurView';
 
@@ -391,7 +391,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
     const bottomOffset =
       insets.bottom +
       TAB_BAR_LAYOUT.floatBottom +
-      TAB_BAR_INNER_ROW_H +
+      COMPOSER_LAYOUT.innerHeight +
       TAB_BAR_LAYOUT.topPad +
       MIC_OUTER;
 
@@ -536,12 +536,12 @@ const styles = StyleSheet.create({
     left: 2,
     right: 2,
     bottom: 2,
-    borderRadius: TAB_BAR_LAYOUT.borderRadius,
+    borderRadius: COMPOSER_CAPSULE_RADIUS,
     backgroundColor: V.bgSurface,
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: TAB_BAR_LAYOUT.rowPaddingH,
-    minHeight: TAB_BAR_INNER_ROW_H,
+    minHeight: COMPOSER_LAYOUT.innerHeight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: V.border,
     overflow: 'hidden',
@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
   },
   micSpacer: {
     width: MIC_OUTER,
-    height: TAB_BAR_INNER_ROW_H,
+    height: COMPOSER_LAYOUT.innerHeight,
   },
   lockedRow: {
     flex: 1,
@@ -586,8 +586,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   lockedCancelBtn: {
-    width: TAB_BAR_INNER_ROW_H,
-    height: TAB_BAR_INNER_ROW_H,
+    width: COMPOSER_LAYOUT.innerHeight,
+    height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
   },
   sendSlot: {
     width: MIC_OUTER,
-    height: TAB_BAR_INNER_ROW_H,
+    height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
     justifyContent: 'center',
   },

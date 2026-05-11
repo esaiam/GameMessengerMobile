@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   FlatList,
   Animated,
-  Dimensions,
   Pressable,
   Alert,
   TextInput,
@@ -15,7 +14,7 @@ import {
 import tw from 'twrnc';
 import SafeBlurView from './SafeBlurView';
 import { supabase } from '../lib/supabase';
-import { TAB_BAR_INNER_ROW_H, TAB_BAR_LAYOUT, V } from '../theme';
+import { SEARCH_FIELD_LAYOUT, SEARCH_CONTACTS_CAPSULE_RADIUS, V } from '../theme';
 import { UserPlus } from '../icons/lucideIcons';
 import { normalizeUserPair } from '../utils/roomIds';
 import { generateRoomCode } from '../utils/roomCode';
@@ -33,9 +32,6 @@ function sanitizeHandleSlug(raw) {
     .slice(0, HANDLE_SLUG_MAX);
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
-
 function AvatarCircle({ name }) {
   const letter = (name || '?')[0].toUpperCase();
   return (
@@ -50,14 +46,8 @@ function AvatarCircle({ name }) {
   );
 }
 
-export default function ContactsDrawer({
-  visible,
-  onClose,
-  nickname,
-  navigation,
-  variant = 'drawer',
-}) {
-  const isScreen = variant === 'screen';
+/** Список контактов и поиск (@handle) для вкладки «Контакты». */
+export default function ContactsDrawer({ nickname, navigation }) {
   const headerLayout = useMessengerHeaderLayout();
   const [contacts, setContacts] = useState([]);
   const [searchQ, setSearchQ] = useState('');
@@ -81,51 +71,13 @@ export default function ContactsDrawer({
     return sanitizeHandleSlug(raw.slice(1));
   }, [searchQ]);
 
-  const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
-  const overlayAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (isScreen) return;
-    if (visible) {
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayAnim, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: -DRAWER_WIDTH,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [visible, isScreen]);
-
   useEffect(() => {
     if (!nickname) return;
-    if (isScreen) {
-      fetchContacts();
-      return;
-    }
-    if (visible) fetchContacts();
-  }, [nickname, visible, isScreen]);
+    fetchContacts();
+  }, [nickname]);
 
   useEffect(() => {
-    if (!isScreen || !nickname) {
+    if (!nickname) {
       handleSearchSeqRef.current += 1;
       setHandleResults([]);
       setHandleSearchLoading(false);
@@ -172,7 +124,7 @@ export default function ContactsDrawer({
       clearTimeout(timer);
       setHandleSearchLoading(false);
     };
-  }, [searchQ, nickname, isScreen]);
+  }, [searchQ, nickname]);
 
   const fetchContacts = async () => {
     const { data: rooms } = await supabase
@@ -191,14 +143,13 @@ export default function ContactsDrawer({
   };
 
   const openInviteFriends = useCallback(() => {
-    onClose?.();
     const tabNav = navigation?.getParent?.();
     if (tabNav?.navigate) {
       tabNav.navigate('Profile', { screen: 'InviteFriends' });
       return;
     }
     Alert.alert('Приглашения', 'Откройте вкладку «Профиль» → приглашения.');
-  }, [navigation, onClose]);
+  }, [navigation]);
 
   const openOrCreateRoom = async (contactName) => {
     try {
@@ -233,7 +184,6 @@ export default function ContactsDrawer({
         room = created;
       }
 
-      onClose?.();
       navigation?.navigate('Room', {
         roomId: room.id,
         nickname,
@@ -281,7 +231,7 @@ export default function ContactsDrawer({
       </View>
     );
 
-  const screenHeader = (
+  const listHeader = (
     <View style={{ backgroundColor: 'transparent' }}>
       <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
         <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
@@ -295,7 +245,7 @@ export default function ContactsDrawer({
             style={[
               StyleSheet.absoluteFillObject,
               {
-                borderRadius: TAB_BAR_LAYOUT.borderRadius,
+                borderRadius: SEARCH_CONTACTS_CAPSULE_RADIUS,
                 borderWidth: 2,
                 borderColor: V.sageBorder,
               },
@@ -306,7 +256,7 @@ export default function ContactsDrawer({
             style={[
               StyleSheet.absoluteFillObject,
               {
-                borderRadius: TAB_BAR_LAYOUT.borderRadius,
+                borderRadius: SEARCH_CONTACTS_CAPSULE_RADIUS,
                 borderWidth: 1,
                 borderColor: V.sageFocus,
               },
@@ -319,12 +269,12 @@ export default function ContactsDrawer({
             style={[
               tw`flex-row items-center`,
               {
-                height: TAB_BAR_INNER_ROW_H,
-                borderRadius: TAB_BAR_LAYOUT.borderRadius,
+                height: SEARCH_FIELD_LAYOUT.contactsRowHeight,
+                borderRadius: SEARCH_CONTACTS_CAPSULE_RADIUS,
                 overflow: 'hidden',
                 borderWidth: StyleSheet.hairlineWidth,
                 borderColor: V.border,
-                paddingLeft: TAB_BAR_LAYOUT.rowPaddingH,
+                paddingLeft: SEARCH_FIELD_LAYOUT.rowPaddingH,
                 paddingRight: 0,
               },
             ]}
@@ -345,7 +295,7 @@ export default function ContactsDrawer({
                 {
                   color: V.textPrimary,
                   paddingVertical: 0,
-                  height: TAB_BAR_INNER_ROW_H,
+                  height: SEARCH_FIELD_LAYOUT.contactsRowHeight,
                 },
               ]}
               placeholder="Поиск по имени или @handle"
@@ -418,9 +368,9 @@ export default function ContactsDrawer({
             >
               <Animated.View
                 style={{
-                  width: TAB_BAR_INNER_ROW_H,
-                  height: TAB_BAR_INNER_ROW_H,
-                  borderRadius: TAB_BAR_INNER_ROW_H / 2,
+                  width: SEARCH_FIELD_LAYOUT.contactsRowHeight,
+                  height: SEARCH_FIELD_LAYOUT.contactsRowHeight,
+                  borderRadius: SEARCH_FIELD_LAYOUT.contactsRowHeight / 2,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: V.sageSubtle,
@@ -434,7 +384,7 @@ export default function ContactsDrawer({
                   style={{
                     position: 'absolute',
                     inset: 0,
-                    borderRadius: TAB_BAR_INNER_ROW_H / 2,
+                    borderRadius: SEARCH_FIELD_LAYOUT.contactsRowHeight / 2,
                     borderWidth: 2,
                     borderColor: V.sageFocus,
                     opacity: 1,
@@ -446,104 +396,52 @@ export default function ContactsDrawer({
           </SafeBlurView>
         </View>
 
-        {isScreen ? (
-          <View style={tw`mb-4`}>
-            {handleSearchLoading ? (
-              <Text style={[tw`text-[12px] ml-1 mb-1`, { color: V.textMuted }]}>Поиск…</Text>
-            ) : null}
-            {!handleSearchLoading &&
-            searchQ.trimStart().startsWith('@') &&
-            handlePrefixForUi.length >= 2 &&
-            HANDLE_RPC_PREFIX_RE.test(handlePrefixForUi) &&
-            handleResults.length === 0 ? (
-              <Text style={[tw`text-[12px] ml-1`, { color: V.textMuted }]}>Пользователи не найдены</Text>
-            ) : null}
-            {handleResults.map((row) => (
-              <TouchableOpacity
-                key={row.id}
-                onPress={() => openOrCreateRoom(row.handle)}
-                style={[
-                  tw`flex-row items-center py-3 px-3 rounded-[10px] mb-1`,
-                  { backgroundColor: V.bgElevated, borderWidth: 0.5, borderColor: V.border },
-                ]}
-              >
-                <AvatarCircle name={row.handle} />
-                <View style={tw`flex-1`}>
-                  <Text style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]}>
-                    @{row.handle}
-                  </Text>
-                </View>
-                <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]}>Открыть</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : null}
+        <View style={tw`mb-4`}>
+          {handleSearchLoading ? (
+            <Text style={[tw`text-[12px] ml-1 mb-1`, { color: V.textMuted }]}>Поиск…</Text>
+          ) : null}
+          {!handleSearchLoading &&
+          searchQ.trimStart().startsWith('@') &&
+          handlePrefixForUi.length >= 2 &&
+          HANDLE_RPC_PREFIX_RE.test(handlePrefixForUi) &&
+          handleResults.length === 0 ? (
+            <Text style={[tw`text-[12px] ml-1`, { color: V.textMuted }]}>Пользователи не найдены</Text>
+          ) : null}
+          {handleResults.map((row) => (
+            <TouchableOpacity
+              key={row.id}
+              onPress={() => openOrCreateRoom(row.handle)}
+              style={[
+                tw`flex-row items-center py-3 px-3 rounded-[10px] mb-1`,
+                { backgroundColor: V.bgElevated, borderWidth: 0.5, borderColor: V.border },
+              ]}
+            >
+              <AvatarCircle name={row.handle} />
+              <View style={tw`flex-1`}>
+                <Text style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]}>
+                  @{row.handle}
+                </Text>
+              </View>
+              <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]}>Открыть</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </View>
   );
 
-  if (isScreen) {
-    return (
-      <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
-        <FlatList
-          style={tw`flex-1`}
-          data={filteredContacts}
-          keyExtractor={(item) => item}
-          renderItem={renderContact}
-          keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={screenHeader}
-          ListEmptyComponent={screenListEmpty}
-          showsVerticalScrollIndicator={false}
-        />
-      </View>
-    );
-  }
-
-  if (!visible) return null;
-
   return (
-    <View style={[tw`absolute inset-0`, { zIndex: 100 }]}>
-      <Pressable onPress={onClose} style={tw`absolute inset-0`}>
-        <Animated.View
-          style={[
-            tw`absolute inset-0`,
-            {
-              backgroundColor: '#000',
-              opacity: overlayAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }),
-            },
-          ]}
-        />
-      </Pressable>
-
-      <Animated.View
-        style={[
-          tw`absolute top-0 bottom-0 left-0`,
-          {
-            width: DRAWER_WIDTH,
-            backgroundColor: V.bgApp,
-            borderRightWidth: 0.5,
-            borderRightColor: V.border,
-            transform: [{ translateX: slideAnim }],
-          },
-        ]}
-      >
-        <View style={[headerLayout.containerStyle, { backgroundColor: V.bgElevated }]}>
-          <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
-            Контакты
-          </Text>
-        </View>
-
-        <FlatList
-          data={contacts}
-          keyExtractor={(item) => item}
-          renderItem={renderContact}
-          ListEmptyComponent={
-            <Text style={[tw`text-center py-8 text-[13px]`, { color: V.textMuted }]}>
-              Пока нет контактов. Сыграй с кем-нибудь!
-            </Text>
-          }
-        />
-      </Animated.View>
+    <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
+      <FlatList
+        style={tw`flex-1`}
+        data={filteredContacts}
+        keyExtractor={(item) => item}
+        renderItem={renderContact}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={screenListEmpty}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 import { View, Text, Animated, Pressable } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import tw from 'twrnc';
 import { V } from '../../theme';
 import { Mic } from '../../icons/lucideIcons';
@@ -14,7 +15,7 @@ import ChatReactionsBar from './ChatReactionsBar';
 import ChatDateSeparator from './ChatDateSeparator';
 import MessageBubbleSwipeWrap from './MessageBubbleSwipeWrap';
 import { ARIA_MESSAGE_TYPING } from '../../lib/aria';
-import { AriaGradientAvatar, AriaTypingDots } from './AriaChatUi';
+import { AriaTypingDots } from './AriaChatUi';
 import {
   MESSAGE_ROW_SELECTION_BG,
   BUBBLE_RADIUS,
@@ -26,6 +27,52 @@ import {
   META_RESERVE_PX_OUTGOING,
   META_RESERVE_PX_EPHEMERAL_EXTRA,
 } from './messageBubbleLayoutConstants';
+
+/** Markdown для текстовых ответов Aria (не голосовых пузырей). Токены Vault. */
+const ARIA_BUBBLE_MARKDOWN_STYLES = {
+  body: {
+    color: V.textPrimary,
+    fontSize: MSG_TEXT_SIZE,
+    fontWeight: '400',
+    lineHeight: MSG_LINE_HEIGHT,
+    backgroundColor: 'transparent',
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 4,
+  },
+  strong: {
+    color: V.accentSage,
+    fontWeight: '500',
+  },
+  heading1: {
+    flexDirection: 'row',
+    fontSize: 18,
+    color: V.accentSage,
+    fontWeight: '500',
+  },
+  heading2: {
+    flexDirection: 'row',
+    fontSize: 17,
+    color: V.accentSage,
+    fontWeight: '500',
+  },
+  heading3: {
+    flexDirection: 'row',
+    fontSize: MSG_TEXT_SIZE,
+    color: V.accentSage,
+    fontWeight: '500',
+  },
+  bullet_list: {
+    paddingLeft: 8,
+  },
+  ordered_list: {
+    paddingLeft: 8,
+  },
+  list_item: {
+    marginBottom: 2,
+  },
+};
 
 const MessageRow = React.memo(
   function MessageRow({
@@ -58,12 +105,6 @@ const MessageRow = React.memo(
     const isVideoMessage = item.message_type === 'video';
     const isAriaTyping =
       item.message_type === ARIA_MESSAGE_TYPING || item.isTyping === true;
-    const showAriaAvatarInBubbleRow =
-      !!env.isAriaChat &&
-      !isMine &&
-      !isVideoMessage &&
-      !isAriaTyping &&
-      item.player_name === env.ariaPeerName;
     const isVideoRenderable = isVideoMessage
       ? listExtra.renderableVideoIds?.has(item.id)
       : false;
@@ -126,6 +167,8 @@ const MessageRow = React.memo(
       ? 'rgba(186, 222, 218, 0.52)'
       : 'rgba(168, 162, 152, 0.58)';
     const bodyColor = V.textPrimary;
+    const useAriaMarkdown =
+      item.player_name === env.ariaPeerName && item.aria_voice_message !== true;
 
     const timeMeta = (
       <>
@@ -180,6 +223,8 @@ const MessageRow = React.memo(
                 {item.text}
               </Text>
             </View>
+          ) : useAriaMarkdown ? (
+            <Markdown style={ARIA_BUBBLE_MARKDOWN_STYLES}>{item.text || ''}</Markdown>
           ) : (
             <Text
               style={{
@@ -317,15 +362,13 @@ const MessageRow = React.memo(
                 isSelected && { backgroundColor: MESSAGE_ROW_SELECTION_BG },
               ]}
             >
-              <View style={{ marginRight: 8, marginBottom: 2 }}>
-                <AriaGradientAvatar size={34} />
-              </View>
               <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
                 <Text
                   style={{
                     fontSize: 12,
                     fontWeight: '500',
                     marginBottom: 3,
+                    marginLeft: 4,
                     color: V.accentSage,
                   }}
                   numberOfLines={1}
@@ -437,19 +480,11 @@ const MessageRow = React.memo(
               <View
                 style={[
                   tw`${isMine ? 'items-end' : 'items-start'} px-4`,
-                  !isMine && showAriaAvatarInBubbleRow && { flexDirection: 'row', alignItems: 'flex-end' },
                   isSelected && { backgroundColor: MESSAGE_ROW_SELECTION_BG },
                 ]}
               >
-                {showAriaAvatarInBubbleRow ? (
-                  <View style={{ marginRight: 8, marginBottom: 2 }}>
-                    <AriaGradientAvatar size={34} />
-                  </View>
-                ) : null}
                 <View
                   style={{
-                    flex: showAriaAvatarInBubbleRow ? 1 : undefined,
-                    minWidth: showAriaAvatarInBubbleRow ? 0 : undefined,
                     alignSelf: isMine ? 'stretch' : 'flex-start',
                     width: isMine ? '100%' : undefined,
                   }}
@@ -460,7 +495,7 @@ const MessageRow = React.memo(
                         fontSize: 12,
                         fontWeight: '500',
                         marginBottom: 3,
-                        marginLeft: showAriaAvatarInBubbleRow ? 0 : 4,
+                        marginLeft: 4,
                         color: V.accentSage,
                       }}
                       numberOfLines={1}

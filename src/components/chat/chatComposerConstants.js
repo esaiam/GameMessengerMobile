@@ -13,7 +13,7 @@ export const INPUT_BAR_CLIP_MIC_SHIFT = 6;
 /** Визуально совпадает с frosted-шапкой (ChatRoomHeader.js) */
 export const INPUT_BAR_BLUR_INTENSITY_IOS = 78;
 export const INPUT_BAR_BLUR_INTENSITY_ANDROID = 56;
-export const INPUT_BAR_FROST_TINT_OPACITY = 0.28;
+export const INPUT_BAR_FROST_TINT_OPACITY = 0.18;
 
 /** Ширина слота под VoiceRecorder (внешнее кольцо микрофона, см. VoiceRecorder MIC_OUTER) */
 export const MIC_BUTTON_SIZE = 47;

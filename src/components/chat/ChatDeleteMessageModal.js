@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, View, Text, StyleSheet } from 'react-native';
 import tw from 'twrnc';
-import { Check, Users } from '../../icons/lucideIcons';
+import { Check, Users } from 'lucide-react-native';
 import { V } from '../../theme';
 
 /** Подтверждение удаления: для себя / для всех */

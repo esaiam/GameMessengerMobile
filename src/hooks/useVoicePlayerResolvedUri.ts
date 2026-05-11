@@ -9,6 +9,7 @@ import {
   normalizeDownloadedFileUri,
   voiceDownloadedFileSizeBytes,
 } from '../components/chat/voiceCacheUtils';
+import { recordFileAccess } from '../storage/CacheManager';
 
 /**
  * Любой HTTPS: качаем в cache `file://` (iOS + Android) — стабильный источник для expo-audio / декодера.
@@ -50,6 +51,7 @@ export function useVoicePlayerResolvedUri(
           u = normalizeDownloadedFileUri(u);
           if (sz >= VOICE_CACHE_MIN_BYTES && u) {
             fileUri = u;
+            recordFileAccess(u, sz).catch(() => {});
             break;
           } else if (sz < VOICE_CACHE_MIN_BYTES) {
             try {

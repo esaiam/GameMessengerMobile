@@ -8,7 +8,7 @@ import { supabase } from './supabase';
  * @returns {Promise<string|null>}
  */
 export async function registerPushToken(userId) {
-  console.warn('PUSH USER ID:', userId);
+  if (__DEV__) console.log('PUSH USER ID:', userId);
   if (!userId) return null;
 
   try {
@@ -23,16 +23,16 @@ export async function registerPushToken(userId) {
       projectId ? { projectId } : undefined
     );
     const token = tokenResult?.data;
-    console.warn('PUSH TOKEN:', token);
+    if (__DEV__) console.log('PUSH TOKEN:', token);
     if (!token) {
       return null;
     }
 
     const { data, error } = await supabase.from('profiles').update({ push_token: token }).eq('id', userId);
-    console.warn('PUSH SUPABASE:', data, error);
+    if (__DEV__) console.log('PUSH SUPABASE:', error?.message);
 
     if (error) {
-      console.warn('[notifications] profiles push_token update:', error.message);
+      if (__DEV__) console.log('[notifications] push_token update error');
       return null;
     }
 

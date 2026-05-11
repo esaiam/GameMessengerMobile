@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, Image, Text, Linking } from 'react-native';
 import tw from 'twrnc';
-import { MapPin } from '../../icons/lucideIcons';
 import { V } from '../../theme';
 import ChatVoicePlayer from './ChatVoicePlayer';
 import VideoMessage from './VideoMessage';

@@ -8,9 +8,10 @@ import ChatsScreen from '../screens/ChatsScreen';
 import ChatRoomScreen from '../screens/ChatRoomScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import InviteFriendsScreen from '../screens/InviteFriendsScreen';
+import StorageScreen from '../screens/StorageScreen';
 import PokerHubScreen from '../screens/PokerHubScreen';
 import ContactsScreen from '../screens/ContactsScreen';
-import { MessageCircle, Layers, User, Users } from '../icons/lucideIcons';
+import { Search, Layers, User, Users } from '../icons/lucideIcons';
 import { V } from '../theme';
 
 const TAB_ACTIVE = V.accentSage;
@@ -35,7 +36,6 @@ function ChatsStackNavigator() {
       <ChatsStack.Screen name="ChatsList" component={ChatsScreen} />
       <ChatsStack.Screen name="ChatRoom" component={ChatRoomScreen} />
       <ChatsStack.Screen name="Room" component={GameScreen} />
-      <ChatsStack.Screen name="Game" component={GameScreen} />
     </ChatsStack.Navigator>
   );
 }
@@ -51,7 +51,6 @@ function ContactsStackNavigator() {
     >
       <ContactsStack.Screen name="ContactsHome" component={ContactsScreen} />
       <ContactsStack.Screen name="Room" component={GameScreen} />
-      <ContactsStack.Screen name="Game" component={GameScreen} />
     </ContactsStack.Navigator>
   );
 }
@@ -69,6 +68,7 @@ function ProfileStackNavigator() {
     <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
       <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} />
       <ProfileStack.Screen name="InviteFriends" component={InviteFriendsScreen} />
+      {__DEV__ && <ProfileStack.Screen name="Storage" component={StorageScreen} />}
     </ProfileStack.Navigator>
   );
 }
@@ -97,7 +97,9 @@ export function MainTabs({ route }) {
         component={ChatsStackNavigator}
         initialParams={{ nickname }}
         options={{
-          tabBarIcon: ({ color }) => <MessageCircle color={color} size={22} strokeWidth={1.8} />,
+          tabBarIcon: ({ color, size }) => (
+            <Search color={color} size={size ?? 22} strokeWidth={1.5} />
+          ),
         }}
       />
       <Tabs.Screen

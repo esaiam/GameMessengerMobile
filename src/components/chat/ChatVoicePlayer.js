@@ -1,10 +1,15 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { useVoicePlayerResolvedUri } from '../../hooks/useVoicePlayerResolvedUri';
 import VoiceMessagePlayer from './VoiceMessagePlayer';
 import VoiceWaveformBars from './VoiceWaveformBars';
 import { DEFAULT_VOICE_WAVEFORM, parseStoredVoiceWaveform } from './voiceWaveformSamples';
-import { V, TAB_BAR_INNER_ROW_H } from '../../theme';
+import { V, COMPOSER_LAYOUT } from '../../theme';
+import {
+  registerActivePlaybackUri,
+  unregisterActivePlaybackUri,
+  updateFileAccess,
+} from '../../storage/CacheManager';
 
 export default function ChatVoicePlayer({
   url,
@@ -17,6 +22,35 @@ export default function ChatVoicePlayer({
   idleDurationSec,
 }) {
   const resolvedUri = useVoicePlayerResolvedUri(url);
+
+  const preparingRemote =
+    typeof url === 'string' && /^https?:\/\//i.test(url) && resolvedUri == null;
+
+  const isActiveRow =
+    !!url &&
+    !!resolvedUri &&
+    !preparingRemote &&
+    !isRecordingVoice &&
+    activeVoiceMessageId != null &&
+    activeVoiceMessageId === messageId;
+
+  const isPlaying = !!(isActiveRow && activePlayerStatus?.playing);
+
+  const isLocalFile =
+    typeof resolvedUri === 'string' &&
+    resolvedUri.length > 0 &&
+    !/^https?:\/\//i.test(resolvedUri);
+
+  useEffect(() => {
+    if (!isLocalFile || !resolvedUri) return;
+    if (isPlaying) {
+      updateFileAccess(resolvedUri).catch(() => {});
+      registerActivePlaybackUri(resolvedUri);
+      return () => unregisterActivePlaybackUri(resolvedUri);
+    }
+    return undefined;
+  }, [isPlaying, resolvedUri, isLocalFile]);
+
   const parsedHeights = useMemo(
     () => parseStoredVoiceWaveform(waveformRaw),
     [typeof waveformRaw === 'string' ? waveformRaw : JSON.stringify(waveformRaw ?? null)]
@@ -28,9 +62,6 @@ export default function ChatVoicePlayer({
 
   if (!url) return null;
 
-  const preparingRemote =
-    typeof url === 'string' && /^https?:\/\//i.test(url) && resolvedUri == null;
-
   if (preparingRemote) {
     return (
       <View
@@ -38,7 +69,7 @@ export default function ChatVoicePlayer({
           flexDirection: 'row',
           alignItems: 'center',
           width: 200,
-          minHeight: TAB_BAR_INNER_ROW_H - 4,
+          minHeight: COMPOSER_LAYOUT.innerHeight - 4,
           minWidth: 0,
         }}
       >
@@ -52,13 +83,10 @@ export default function ChatVoicePlayer({
 
   if (!resolvedUri) return null;
 
-  const isActiveRow =
-    !isRecordingVoice && activeVoiceMessageId != null && activeVoiceMessageId === messageId;
-  const isPlaying = isActiveRow && activePlayerStatus.playing;
-  const duration = isActiveRow ? activePlayerStatus.duration : 0;
+  const duration = isActiveRow ? activePlayerStatus?.duration ?? 0 : 0;
   const progress =
-    isActiveRow && activePlayerStatus.duration > 0
-      ? activePlayerStatus.currentTime / activePlayerStatus.duration
+    isActiveRow && (activePlayerStatus?.duration ?? 0) > 0
+      ? (activePlayerStatus?.currentTime ?? 0) / (activePlayerStatus?.duration ?? 1)
       : 0;
 
   return (

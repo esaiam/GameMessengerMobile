@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -20,10 +20,13 @@ import {
   Paperclip,
   Smile,
   KeyboardIcon,
+  Sparkles,
 } from '../../icons/lucideIcons';
-import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H } from '../../theme';
+import AiRewritePanel from './AiRewritePanel';
+import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import {
   REPLY_TARGET_PREVIEW_H,
+  EMOJI_PICKER_PANEL_H,
   INPUT_BAR_ICON,
   INPUT_BAR_EMOJI_ICON,
   INPUT_BAR_CLIP_MIC_SHIFT,
@@ -46,6 +49,7 @@ export default function ChatComposer({
   insets,
   visibleReplyTo,
   replyTargetAnimatedStyle,
+  emojiPanelAnimatedStyle,
   onDismissReply,
   uiReady,
   showEmojiPicker,
@@ -58,7 +62,7 @@ export default function ChatComposer({
   setText,
   sendMessage,
   isRecordingVoice,
-  setShowEmojiPicker,
+  collapseEmojiForKeyboard,
   setShowAttachMenu,
   handleSendVoice,
   setIsRecordingVoice,
@@ -73,7 +77,11 @@ export default function ChatComposer({
   ariaAllowVoice = false,
   /** Сервер Aria недоступен — блок ввода и подсказка. */
   ariaUnavailable = false,
+  /** Ref обёртки капсулы ввода — для геометрии скрим-градиента ленты в `Chat`. */
+  capsuleWrapperRef,
 }) {
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+
   return (
     <>
       {visibleReplyTo && (
@@ -104,26 +112,6 @@ export default function ChatComposer({
         </Reanimated.View>
       )}
 
-      {uiReady && showEmojiPicker && (
-        <View style={{ borderTopWidth: 0.5, borderTopColor: V.border, backgroundColor: V.bgSurface }}>
-          <ScrollView
-            style={{ height: 220 }}
-            contentContainerStyle={tw`flex-row flex-wrap p-2`}
-            keyboardShouldPersistTaps="always"
-          >
-            {EMOJI_SET.map((emoji, i) => (
-              <TouchableOpacity
-                key={i}
-                onPress={() => insertEmoji(emoji)}
-                style={{ width: '12.5%', alignItems: 'center', justifyContent: 'center', paddingVertical: 6 }}
-              >
-                <Text style={tw`text-2xl`}>{emoji}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
       <View
         ref={inputBarRef}
         onLayout={(e) => reportInputBar(e.nativeEvent.layout.height)}
@@ -137,13 +125,16 @@ export default function ChatComposer({
         }}
       >
         <View
+          ref={capsuleWrapperRef}
           style={{
-            borderRadius: TAB_BAR_INNER_ROW_H / 2,
+            borderRadius: COMPOSER_CAPSULE_RADIUS,
             padding: 0,
             backgroundColor: 'transparent',
             borderWidth: 0,
             borderColor: 'transparent',
             overflow: 'visible',
+            zIndex: 2,
+            elevation: 4,
           }}
         >
           <SafeBlurView
@@ -153,8 +144,8 @@ export default function ChatComposer({
             style={[
               tw`flex-row items-end`,
               {
-                minHeight: TAB_BAR_INNER_ROW_H,
-                borderRadius: TAB_BAR_INNER_ROW_H / 2,
+                minHeight: COMPOSER_LAYOUT.innerHeight,
+                borderRadius: COMPOSER_CAPSULE_RADIUS,
                 borderWidth: StyleSheet.hairlineWidth,
                 borderColor: V.border,
                 overflow: 'hidden',
@@ -213,7 +204,7 @@ export default function ChatComposer({
                   left: -3,
                   right: -3,
                   bottom: -3,
-                  borderRadius: TAB_BAR_INNER_ROW_H / 2,
+                  borderRadius: COMPOSER_CAPSULE_RADIUS,
                   opacity: 0.32,
                 },
               ]}
@@ -223,7 +214,7 @@ export default function ChatComposer({
               style={[
                 StyleSheet.absoluteFillObject,
                 {
-                  borderRadius: TAB_BAR_INNER_ROW_H / 2,
+                  borderRadius: COMPOSER_CAPSULE_RADIUS,
                   borderWidth: StyleSheet.hairlineWidth,
                   borderColor: V.textPrimary,
                   opacity: 0.1,
@@ -234,7 +225,7 @@ export default function ChatComposer({
               <View
                 style={{
                   flex: 1,
-                  minHeight: TAB_BAR_INNER_ROW_H,
+                  minHeight: COMPOSER_LAYOUT.innerHeight,
                   justifyContent: 'center',
                   paddingVertical: Platform.OS === 'ios' ? 10 : 8,
                   paddingHorizontal: 8,
@@ -255,8 +246,8 @@ export default function ChatComposer({
                 <TouchableOpacity
                   onPress={toggleEmojiPicker}
                   style={{
-                    width: TAB_BAR_INNER_ROW_H,
-                    height: TAB_BAR_INNER_ROW_H,
+                    width: COMPOSER_LAYOUT.innerHeight,
+                    height: COMPOSER_LAYOUT.innerHeight,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
@@ -282,6 +273,25 @@ export default function ChatComposer({
                   </Animated.View>
                 </TouchableOpacity>
 
+                {text.length > 0 ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      collapseEmojiForKeyboard();
+                      setAiPanelOpen(true);
+                    }}
+                    style={{
+                      width: COMPOSER_LAYOUT.innerHeight,
+                      height: COMPOSER_LAYOUT.innerHeight,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
+                    accessibilityLabel="ИИ-редактор"
+                  >
+                    <Sparkles size={20} color={V.accentSage} strokeWidth={1.5} />
+                  </TouchableOpacity>
+                ) : null}
+
                 <TextInput
                   ref={inputRef}
                   style={[
@@ -291,7 +301,7 @@ export default function ChatComposer({
                       backgroundColor: 'transparent',
                       paddingVertical: Platform.OS === 'ios' ? 10 : 8,
                       paddingHorizontal: 6,
-                      minHeight: TAB_BAR_INNER_ROW_H,
+                      minHeight: COMPOSER_LAYOUT.innerHeight,
                     },
                   ]}
                   placeholder={
@@ -303,7 +313,7 @@ export default function ChatComposer({
                   value={text}
                   onChangeText={setText}
                   onSubmitEditing={sendMessage}
-                  onFocus={() => setShowEmojiPicker(false)}
+                  onFocus={() => collapseEmojiForKeyboard()}
                   returnKeyType="send"
                   multiline
                   editable={!ariaUnavailable}
@@ -312,13 +322,13 @@ export default function ChatComposer({
                 {!ariaTextOnly ? (
                   <TouchableOpacity
                     onPress={() => {
-                      setShowEmojiPicker(false);
+                      collapseEmojiForKeyboard();
                       setShowAttachMenu(true);
                     }}
                     style={{
                       marginLeft: INPUT_BAR_CLIP_MIC_SHIFT + 16,
-                      width: TAB_BAR_INNER_ROW_H - 2,
-                      height: TAB_BAR_INNER_ROW_H,
+                      width: COMPOSER_LAYOUT.innerHeight - 2,
+                      height: COMPOSER_LAYOUT.innerHeight,
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
@@ -407,7 +417,51 @@ export default function ChatComposer({
             />
           )}
         </View>
+
+        {uiReady ? (
+          <Reanimated.View
+            style={[
+              emojiPanelAnimatedStyle,
+              {
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderTopColor: V.border,
+                backgroundColor: V.bgSurface,
+                zIndex: 0,
+                elevation: 0,
+              },
+            ]}
+          >
+            <ScrollView
+              style={{ height: EMOJI_PICKER_PANEL_H }}
+              contentContainerStyle={tw`flex-row flex-wrap p-2`}
+              keyboardShouldPersistTaps="always"
+              showsVerticalScrollIndicator={false}
+            >
+              {EMOJI_SET.map((emoji, i) => (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => insertEmoji(emoji)}
+                  style={{
+                    width: '12.5%',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 6,
+                  }}
+                >
+                  <Text style={tw`text-2xl`}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Reanimated.View>
+        ) : null}
       </View>
+
+      <AiRewritePanel
+        visible={aiPanelOpen}
+        onRequestClose={() => setAiPanelOpen(false)}
+        sourceText={text}
+        onApply={(next) => setText(next)}
+      />
     </>
   );
 }

@@ -136,6 +136,14 @@ export default function ProfileScreen({ route, navigation }) {
         </Section>
 
         <Section title="ПРИЛОЖЕНИЕ">
+          {__DEV__ && (
+            <RowButton
+              title="Хранилище"
+              subtitle="Кэш голоса и превью видео"
+              onPress={() => navigation.navigate('Storage')}
+              variant="primary"
+            />
+          )}
           <RowButton title="Уведомления" onPress={() => Alert.alert('Скоро')} />
           <RowButton title="Внешний вид" onPress={() => Alert.alert('Скоро')} />
         </Section>

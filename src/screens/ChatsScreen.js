@@ -12,9 +12,8 @@ import {
 import SafeBlurView from '../components/SafeBlurView';
 import tw from 'twrnc';
 import { ARIA_CONTACT, ARIA_ROOM_ID } from '../lib/aria';
-import { TAB_BAR_LAYOUT, V } from '../theme';
-import { Search, User } from '../icons/lucideIcons';
-import { generateRoomCode } from '../utils/roomCode';
+import { SEARCH_CHATS_CAPSULE_RADIUS, SEARCH_FIELD_LAYOUT, V } from '../theme';
+import { Search } from '../icons/lucideIcons';
 import { useNicknameFromRoute } from '../hooks/useNicknameFromRoute';
 import TabBackground from '../components/TabBackground';
 import { useChatsRoomsLoader } from '../hooks/useChatsRoomsLoader';
@@ -22,7 +21,6 @@ import { useChatsSearchReveal, CHATS_SEARCH_BOTTOM_SPACING_PX } from '../hooks/u
 import ChatsListRow from '../components/chats/ChatsListRow';
 import { clearPreviewCache } from './chats/chatsPreviewCache';
 import { filterChatsRows, buildChatsListData } from './chats/chatsListData';
-import { openTempDemoRoom } from './chats/openTempDemoRoom';
 import {
   MESSENGER_HEADER_PADDING_HORIZONTAL,
   useMessengerHeaderLayout,
@@ -39,7 +37,6 @@ export default function ChatsScreen({ route, navigation }) {
   const [searchFocused, setSearchFocused] = useState(false);
   const searchInputRef = useRef(null);
   const headerLayout = useMessengerHeaderLayout();
-  const [startingTemp, setStartingTemp] = useState(false);
 
   const { rows } = useChatsRoomsLoader(nickname);
 
@@ -60,16 +57,6 @@ export default function ChatsScreen({ route, navigation }) {
   const filtered = useMemo(() => filterChatsRows(rows, q), [q, rows]);
 
   const listData = useMemo(() => buildChatsListData(q, filtered), [q, filtered]);
-
-  const openTempRoom = useCallback(async () => {
-    if (!nickname || startingTemp) return;
-    setStartingTemp(true);
-    try {
-      await openTempDemoRoom({ nickname, navigation, generateRoomCode });
-    } finally {
-      setStartingTemp(false);
-    }
-  }, [nickname, navigation, startingTemp]);
 
   const renderItem = useCallback(
     ({ item, index }) => (
@@ -152,51 +139,48 @@ export default function ChatsScreen({ route, navigation }) {
             ]}
           >
             <View style={{ marginBottom: CHATS_SEARCH_BOTTOM_SPACING_PX }}>
-              <SafeBlurView
-                intensity={20}
-                tint="dark"
-                blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
-                style={[
-                  tw`flex-row items-center`,
-                  {
-                    minHeight: SEARCH_FIELD_H,
-                    borderRadius: SEARCH_FIELD_H / 2,
-                    overflow: 'hidden',
-                    borderWidth: StyleSheet.hairlineWidth,
-                    borderColor: V.border,
-                    paddingHorizontal: TAB_BAR_LAYOUT.rowPaddingH,
-                  },
-                ]}
-              >
-                <View
-                  pointerEvents="none"
+                <SafeBlurView
+                  intensity={28}
+                  tint="dark"
+                  blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
                   style={[
-                    StyleSheet.absoluteFillObject,
+                    tw`flex-row items-center`,
                     {
-                      backgroundColor: V.sageSubtle,
-                      opacity: 1,
+                      minHeight: SEARCH_FIELD_H,
+                      borderRadius: SEARCH_CHATS_CAPSULE_RADIUS,
+                      overflow: 'hidden',
+                      paddingHorizontal: SEARCH_FIELD_LAYOUT.rowPaddingH,
+                      borderWidth: StyleSheet.hairlineWidth,
+                      borderColor: 'rgba(255,255,255,0.13)',
+                      backgroundColor: 'rgba(255,255,255,0.06)',
                     },
                   ]}
-                />
-                <TextInput
-                  ref={searchInputRef}
-                  style={[
-                    tw`flex-1 text-[16px]`,
-                    {
-                      color: V.textPrimary,
-                      paddingVertical: 0,
-                      height: SEARCH_FIELD_H,
-                    },
-                  ]}
-                  placeholder="Поиск..."
-                  placeholderTextColor={V.textGhost}
-                  value={q}
-                  onChangeText={setQ}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                />
+                >
+                  <Search
+                    size={14}
+                    strokeWidth={1.5}
+                    color={V.textMuted}
+                    style={{ marginRight: 8, flexShrink: 0 }}
+                  />
+                  <TextInput
+                    ref={searchInputRef}
+                    style={[
+                      tw`flex-1 text-[15px]`,
+                      {
+                        color: V.textPrimary,
+                        paddingVertical: 0,
+                        height: SEARCH_FIELD_H,
+                      },
+                    ]}
+                    placeholder="Поиск..."
+                    placeholderTextColor={V.textMuted}
+                    value={q}
+                    onChangeText={setQ}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setSearchFocused(false)}
+                  />
                 {!!q && (
                   <TouchableOpacity
                     onPress={() => setQ('')}
@@ -240,24 +224,9 @@ export default function ChatsScreen({ route, navigation }) {
                       Контакты не найдены
                     </Text>
                   ) : (
-                    <>
-                      <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>
-                        Пока нет чатов.
-                      </Text>
-                      <TouchableOpacity
-                        onPress={openTempRoom}
-                        style={[
-                          tw`self-center mt-4 rounded-[10px] px-4 py-3 flex-row items-center`,
-                          { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.accentSage },
-                        ]}
-                        disabled={!nickname || startingTemp}
-                      >
-                        <User size={16} color={V.accentSage} strokeWidth={1.6} style={tw`mr-2`} />
-                        <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>
-                          {startingTemp ? 'Открываю...' : 'Начать чат'}
-                        </Text>
-                      </TouchableOpacity>
-                    </>
+                    <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>
+                      Пока нет чатов.
+                    </Text>
                   )}
                 </View>
               }

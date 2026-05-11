@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   Animated,
   Platform,
@@ -14,7 +15,8 @@ import SafeBlurView from './SafeBlurView';
 import { UserAvatar } from './UserAvatar';
 import { ArrowLeft, X, Copy, Forward, Trash2 } from '../icons/lucideIcons';
 import { V } from '../theme';
-import { AriaPresenceSubtitle } from './chat/AriaChatUi';
+import { ARIA_API_URL } from '../lib/aria';
+import { supabase } from '../lib/supabase';
 
 const HEADER_BLUR_INTENSITY_IOS = 100;
 const HEADER_BLUR_INTENSITY_ANDROID = 72;
@@ -30,6 +32,58 @@ const SELECTION_ACTION_GAP = 12;
 const MODE_ANIM_MS = 320;
 /** Для rotateY у иконок действий и морфа трубка ↔ корзина */
 const HEADER_ICON_PERSPECTIVE = 480;
+
+/**
+ * @param {string} userId
+ * @returns {Promise<{ mood: number; hurt: number; boredom: number; energy: number; trust: number } | null>}
+ */
+async function fetchAriaState(userId) {
+  if (!userId || typeof userId !== 'string') return null;
+  try {
+    const res = await fetch(`${ARIA_API_URL}/state?user_id=${encodeURIComponent(userId)}`);
+    if (!res.ok) return null;
+    let json = {};
+    try {
+      json = await res.json();
+    } catch {
+      return null;
+    }
+    const to01 = (v) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return 0;
+      const x = n > 1 ? n / 100 : n;
+      return Math.max(0, Math.min(1, x));
+    };
+    const clampBipolar = (v) => Math.max(-1, Math.min(1, Number.isFinite(v) ? v : 0));
+    return {
+      mood: clampBipolar(json?.mood),
+      hurt: to01(json?.hurt),
+      boredom: to01(json?.boredom),
+      energy: to01(json?.energy),
+      trust: clampBipolar(json?.trust),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Текст статуса Aria под именем (по mood из ariaState; ariaState === null → «онлайн» при доступности).
+ * @param {boolean | null | undefined} ariaOnline
+ * @param {{ mood?: number } | null} ariaState
+ */
+function getAriaHeaderStatusText(ariaOnline, ariaState) {
+  if (ariaOnline === null) return null;
+  if (ariaOnline !== true) return 'недоступна';
+  if (ariaState == null) return 'онлайн';
+  const m = ariaState.mood;
+  if (typeof m !== 'number' || !Number.isFinite(m)) return 'онлайн';
+  if (m > 0.3) return 'рада тебя видеть 🙂';
+  if (m >= -0.3 && m <= 0.3) return 'онлайн';
+  if (m >= -0.7 && m < -0.3) return 'не в настроении';
+  if (m < -0.7) return 'злится';
+  return 'онлайн';
+}
 
 /** Кнопка очистки истории чата Aria в слоте `headerRight` (#666 по ТЗ) */
 export function AriaClearHistoryHeaderButton({ onPress }) {
@@ -66,9 +120,36 @@ export default function ChatRoomHeader({
   topPaddingOverride,
   /** Чат Aria: null | true | false — подпись под именем; если проп не передан — обычный presence по contactOnline */
   ariaOnline,
+  /** Вызывается при обновлении состояния Aria из fetch (для `AriaStateGauges` снаружи) */
+  onAriaStateChange,
 }) {
   const insets = useSafeAreaInsets();
+  const [ariaState, setAriaState] = useState(null);
   const modeAnim = useRef(new Animated.Value(selectionMode ? 1 : 0)).current;
+
+  const isAriaHeader = typeof ariaOnline !== 'undefined';
+
+  useEffect(() => {
+    if (!isAriaHeader) return;
+    let cancelled = false;
+    const tick = async () => {
+      const { data } = await supabase.auth.getSession();
+      const uid = data?.session?.user?.id;
+      if (!uid || cancelled) return;
+      const next = await fetchAriaState(uid);
+      if (!cancelled) setAriaState(next);
+    };
+    tick();
+    const id = setInterval(tick, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [isAriaHeader]);
+
+  useEffect(() => {
+    onAriaStateChange?.(ariaState);
+  }, [ariaState, onAriaStateChange]);
 
   useEffect(() => {
     Animated.timing(modeAnim, {
@@ -108,48 +189,53 @@ export default function ChatRoomHeader({
   const actionsDisabled = selectedCount === 0;
   const morphTrashWithHeaderRight = !!headerRight;
 
+  const ariaHeaderStatusText =
+    hasSecondary && typeof ariaOnline !== 'undefined'
+      ? getAriaHeaderStatusText(ariaOnline, ariaState)
+      : null;
+
   const iconFlipStyle = {
     transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: actionFlipY }],
   };
 
   return (
-    <View
-      collapsable={false}
-      style={{
-        overflow: 'visible',
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: V.border,
-      }}
-    >
-      <SafeBlurView
-        intensity={Platform.OS === 'ios' ? HEADER_BLUR_INTENSITY_IOS : HEADER_BLUR_INTENSITY_ANDROID}
-        tint="dark"
-        blurReductionFactor={Platform.OS === 'android' ? 4.5 : 3.5}
-        style={StyleSheet.absoluteFillObject}
-      />
+    <View collapsable={false} style={{ overflow: 'visible' }}>
       <View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFillObject,
-          {
-            backgroundColor: V.bgElevated,
-            opacity: HEADER_FROST_TINT_OPACITY,
-          },
-        ]}
-      />
-      <View
-        style={[
-          tw`flex-row px-4`,
-          {
-            paddingTop: typeof topPaddingOverride === 'number' ? topPaddingOverride : insets.top + 10,
-            /* 8px от нижнего края аватарки до низа шапки (ряд по высоте AVATAR_SIZE) */
-            paddingBottom: 8,
-            /* flex-start: слот справа и блок аватар+текст начинаются сверху — трубка в линию с аватаром */
-            alignItems: 'flex-start',
-            overflow: 'visible',
-          },
-        ]}
+        style={{
+          overflow: 'visible',
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: V.border,
+        }}
       >
+        <SafeBlurView
+          intensity={Platform.OS === 'ios' ? HEADER_BLUR_INTENSITY_IOS : HEADER_BLUR_INTENSITY_ANDROID}
+          tint="dark"
+          blurReductionFactor={Platform.OS === 'android' ? 4.5 : 3.5}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              backgroundColor: V.bgElevated,
+              opacity: HEADER_FROST_TINT_OPACITY,
+            },
+          ]}
+        />
+        <View
+          style={[
+            tw`flex-row px-4`,
+            {
+              paddingTop: typeof topPaddingOverride === 'number' ? topPaddingOverride : insets.top + 10,
+              /* 8px от нижнего края аватарки до низа шапки (ряд по высоте AVATAR_SIZE) */
+              paddingBottom: 8,
+              /* flex-start: слот справа и блок аватар+текст начинаются сверху — трубка в линию с аватаром */
+              alignItems: 'flex-start',
+              overflow: 'visible',
+            },
+          ]}
+        >
         <TouchableOpacity
           onPress={onLeftPress}
           accessibilityRole="button"
@@ -203,7 +289,16 @@ export default function ChatRoomHeader({
             }}
           >
             <View style={{ marginLeft: 8 }}>
-              <UserAvatar name={title || 'Чат'} uri={null} size={AVATAR_SIZE} />
+              {isAriaHeader ? (
+                <Image
+                  source={require('../../assets/images/aria_avatar.png')}
+                  style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }}
+                  resizeMode="cover"
+                  accessibilityLabel="Ария"
+                />
+              ) : (
+                <UserAvatar name={title || 'Чат'} uri={null} size={AVATAR_SIZE} />
+              )}
             </View>
             {/* Сетка: колонка справа от аватара — строка 1: имя, строка 2: статус (выровнены по левому краю колонки) */}
             <View
@@ -231,7 +326,42 @@ export default function ChatRoomHeader({
               </Text>
               {hasSecondary ? (
                 typeof ariaOnline !== 'undefined' ? (
-                  <AriaPresenceSubtitle ariaOnline={ariaOnline} />
+                  ariaHeaderStatusText === null ? null : (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginTop: (2 * 2) / 3,
+                        minWidth: 0,
+                        alignSelf: 'stretch',
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: ariaOnline === true ? V.accentSage : V.textMuted,
+                          marginRight: 6,
+                        }}
+                      />
+                      <Text
+                        style={[
+                          {
+                            flex: 1,
+                            fontSize: 12,
+                            fontWeight: '400',
+                            lineHeight: 16,
+                            color: ariaOnline === true ? V.accentSage : V.textMuted,
+                          },
+                          Platform.OS === 'android' ? { includeFontPadding: false } : null,
+                        ]}
+                        numberOfLines={ariaHeaderStatusText.length > 14 ? 2 : 1}
+                      >
+                        {ariaHeaderStatusText}
+                      </Text>
+                    </View>
+                  )
                 ) : (
                   <View
                     style={{
@@ -398,6 +528,7 @@ export default function ChatRoomHeader({
             </Animated.View>
           </View>
         ) : null}
+        </View>
       </View>
     </View>
   );
