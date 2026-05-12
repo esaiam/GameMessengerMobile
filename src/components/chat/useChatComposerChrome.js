@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { Keyboard, Platform, Animated } from 'react-native';
+import { Keyboard, Animated } from 'react-native';
 import {
   useSharedValue,
   useAnimatedStyle,
@@ -14,9 +14,7 @@ import { REPLY_TARGET_PREVIEW_H, EMOJI_PICKER_PANEL_H } from './chatComposerCons
 import { REPLY_TARGET_ANIM_MS } from './replyTargetLayoutAnimation';
 
 /**
- * Клавиатура: `keyboardHeightLib` (UI thread) отдаётся наружу.
- * Chat применяет его к `bottom` абсолютной обёртки капсулы и к высоте спейсера ленты —
- * FlatList не меняет размер, нет layout-recalc на каждый кадр.
+ * Клавиатура: `keyboardHeightLib` (UI thread) — сдвиг overlay-композера и нижний inset ленты.
  * Анимация превью ответа, wobble эмодзи-кнопки, пикер текста.
  * Панель эмодзи: при уходе на клавиатуру — мгновенное закрытие без конкурирующего withTiming(280).
  */
@@ -27,12 +25,13 @@ export default function useChatComposerChrome({
   showEmojiPicker,
   setShowEmojiPicker,
   setText,
-  composerStackHeightShared,
 }) {
   // 0 → -keyboardHeight (отрицательное когда открыта)
   const { height: keyboardHeightLib } = useReanimatedKeyboardAnimation();
   const replyTargetProgress = useSharedValue(0);
   const emojiPanelHeightShared = useSharedValue(0);
+  /** Непрозрачность контента эмодзи: 1 — виден, 0 — мгновенно прячется при старте анимации клавиатуры */
+  const emojiContentOpacityShared = useSharedValue(1);
   /** Последняя реальная высота системной клавиатуры; fallback = EMOJI_PICKER_PANEL_H */
   const storedKeyboardHeightShared = useSharedValue(EMOJI_PICKER_PANEL_H);
 
@@ -52,6 +51,11 @@ export default function useChatComposerChrome({
     overflow: 'hidden',
   }));
 
+  // Контент (сетка эмодзи) — исчезает как только клавиатура начинает выезжать поверх; слот остаётся
+  const emojiContentAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: emojiContentOpacityShared.value,
+  }));
+
   const replyTargetAnimatedStyle = useAnimatedStyle(() => {
     const p = replyTargetProgress.value;
     return {
@@ -64,6 +68,8 @@ export default function useChatComposerChrome({
   const emojiWobbleRotate = useRef(new Animated.Value(0)).current;
   /** true → следующее закрытие панели без 280ms (клавиатура / фокус инпута) */
   const skipEmojiPanelCloseAnimationRef = useRef(false);
+  /** true → панель уже выставлена в полный рост в toggleEmojiPicker (handoff с клавиатуры) */
+  const openedFromKeyboardRef = useRef(false);
 
   /** Сразу убирает панель эмодзи (место под системную клавиатуру), затем выключает флаг */
   const collapseEmojiForKeyboard = useCallback(() => {
@@ -111,25 +117,35 @@ export default function useChatComposerChrome({
     );
   }, [replyTo, replyTargetProgress, setVisibleReplyTo]);
 
-  // Когда клавиатура полностью открылась и эмодзи-панель была видна —
-  // тихо обнуляем state (визуально панель уже 0 по формуле) и корректируем composerStackH
+  // Как в Telegram: контент эмодзи исчезает мгновенно при старте анимации клавиатуры;
+  // слот (оболочка) остаётся и клавиатура едет поверх него.
+  // После полного открытия клавиатуры тихо схлопываем панель.
   useKeyboardHandler({
+    onStart: (e) => {
+      'worklet';
+      if (e.height > 0 && emojiPanelHeightShared.value > 0) {
+        emojiContentOpacityShared.value = 0;
+      }
+    },
     onEnd: (e) => {
       'worklet';
       if (e.height > 0 && emojiPanelHeightShared.value > 0) {
-        if (composerStackHeightShared) {
-          composerStackHeightShared.value =
-            composerStackHeightShared.value - emojiPanelHeightShared.value;
-        }
         emojiPanelHeightShared.value = 0;
         runOnJS(setShowEmojiPicker)(false);
       }
     },
-  }, [composerStackHeightShared]);
+  }, []);
 
   useEffect(() => {
     if (showEmojiPicker) {
       skipEmojiPanelCloseAnimationRef.current = false;
+      emojiContentOpacityShared.value = 1;
+      if (openedFromKeyboardRef.current) {
+        // Высота уже выставлена в toggleEmojiPicker — без withTiming,
+        // чтобы visualEmojiH + kbH оставалось константой на handoff.
+        openedFromKeyboardRef.current = false;
+        return;
+      }
       emojiPanelHeightShared.value = withTiming(storedKeyboardHeightShared.value, {
         duration: 280,
         easing: Easing.out(Easing.cubic),
@@ -148,6 +164,13 @@ export default function useChatComposerChrome({
     if (showEmojiPicker) {
       inputRef.current?.focus();
     } else {
+      // Handoff клавиатура → эмодзи: ставим панель в полный рост ДО dismiss,
+      // нативная анимация клавиатуры сама её «вскроет» через max(0, emojiPanelH + keyboardHeightLib).
+      if (keyboardHeightLib.value < -50) {
+        cancelAnimation(emojiPanelHeightShared);
+        emojiPanelHeightShared.value = storedKeyboardHeightShared.value;
+        openedFromKeyboardRef.current = true;
+      }
       Keyboard.dismiss();
       setShowEmojiPicker(true);
     }
@@ -162,6 +185,7 @@ export default function useChatComposerChrome({
     emojiPanelHeightShared,
     replyTargetAnimatedStyle,
     emojiPanelAnimatedStyle,
+    emojiContentAnimatedStyle,
     emojiWobbleRotate,
     collapseEmojiForKeyboard,
     toggleEmojiPicker,

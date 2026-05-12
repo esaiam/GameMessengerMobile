@@ -26,7 +26,6 @@ import AiRewritePanel from './AiRewritePanel';
 import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import {
   REPLY_TARGET_PREVIEW_H,
-  EMOJI_PICKER_PANEL_H,
   INPUT_BAR_ICON,
   INPUT_BAR_EMOJI_ICON,
   INPUT_BAR_CLIP_MIC_SHIFT,
@@ -46,10 +45,12 @@ import {
 export default function ChatComposer({
   inputBarRef,
   reportInputBar,
+  reportComposerBaseHeight,
   insets,
   visibleReplyTo,
   replyTargetAnimatedStyle,
   emojiPanelAnimatedStyle,
+  emojiContentAnimatedStyle,
   onDismissReply,
   uiReady,
   showEmojiPicker,
@@ -84,46 +85,50 @@ export default function ChatComposer({
 
   return (
     <>
-      {visibleReplyTo && (
-        <Reanimated.View style={[{ overflow: 'hidden' }, replyTargetAnimatedStyle]}>
-          <View
-            style={[
-              tw`flex-row items-center px-3 py-2`,
-              {
-                height: REPLY_TARGET_PREVIEW_H,
-                backgroundColor: V.bgSurface,
-                borderTopWidth: 0.5,
-                borderTopColor: V.border,
-              },
-            ]}
-          >
-            <View style={[tw`flex-1 pl-2`, { borderLeftWidth: 2, borderLeftColor: V.accentSage }]}>
-              <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]} numberOfLines={1}>
-                {visibleReplyTo.player_name}
-              </Text>
-              <Text style={[tw`text-[10px]`, { color: V.textSecondary }]} numberOfLines={1}>
-                {visibleReplyTo.text}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={onDismissReply} style={tw`ml-2 p-1`}>
-              <X size={16} color={V.textMuted} strokeWidth={1.5} />
-            </TouchableOpacity>
-          </View>
-        </Reanimated.View>
-      )}
-
       <View
-        ref={inputBarRef}
-        onLayout={(e) => reportInputBar(e.nativeEvent.layout.height)}
-        style={{
-          paddingHorizontal: TAB_BAR_LAYOUT.horizontalPad,
-          paddingTop: TAB_BAR_LAYOUT.topPad,
-          paddingBottom: Math.max(
-            insets.bottom,
-            Math.max(insets.bottom, 10) + TAB_BAR_LAYOUT.floatBottom - 8
-          ),
-        }}
+        collapsable={false}
+        onLayout={(e) => reportComposerBaseHeight?.(e.nativeEvent.layout.height)}
       >
+        {visibleReplyTo && (
+          <Reanimated.View style={[{ overflow: 'hidden' }, replyTargetAnimatedStyle]}>
+            <View
+              style={[
+                tw`flex-row items-center px-3 py-2`,
+                {
+                  height: REPLY_TARGET_PREVIEW_H,
+                  backgroundColor: V.bgSurface,
+                  borderTopWidth: 0.5,
+                  borderTopColor: V.border,
+                },
+              ]}
+            >
+              <View style={[tw`flex-1 pl-2`, { borderLeftWidth: 2, borderLeftColor: V.accentSage }]}>
+                <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]} numberOfLines={1}>
+                  {visibleReplyTo.player_name}
+                </Text>
+                <Text style={[tw`text-[10px]`, { color: V.textSecondary }]} numberOfLines={1}>
+                  {visibleReplyTo.text}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={onDismissReply} style={tw`ml-2 p-1`}>
+                <X size={16} color={V.textMuted} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+          </Reanimated.View>
+        )}
+
+        <View
+          ref={inputBarRef}
+          onLayout={(e) => reportInputBar(e.nativeEvent.layout.height)}
+          style={{
+            paddingHorizontal: TAB_BAR_LAYOUT.horizontalPad,
+            paddingTop: TAB_BAR_LAYOUT.topPad,
+            paddingBottom: Math.max(
+              insets.bottom,
+              Math.max(insets.bottom, 10) + TAB_BAR_LAYOUT.floatBottom - 8
+            ),
+          }}
+        >
         <View
           ref={capsuleWrapperRef}
           style={{
@@ -417,44 +422,49 @@ export default function ChatComposer({
             />
           )}
         </View>
-
-        {uiReady ? (
-          <Reanimated.View
-            style={[
-              emojiPanelAnimatedStyle,
-              {
-                borderTopWidth: StyleSheet.hairlineWidth,
-                borderTopColor: V.border,
-                backgroundColor: V.bgSurface,
-                zIndex: 0,
-                elevation: 0,
-              },
-            ]}
-          >
-            <ScrollView
-              style={{ height: EMOJI_PICKER_PANEL_H }}
-              contentContainerStyle={tw`flex-row flex-wrap p-2`}
-              keyboardShouldPersistTaps="always"
-              showsVerticalScrollIndicator={false}
-            >
-              {EMOJI_SET.map((emoji, i) => (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => insertEmoji(emoji)}
-                  style={{
-                    width: '12.5%',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 6,
-                  }}
-                >
-                  <Text style={tw`text-2xl`}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </Reanimated.View>
-        ) : null}
       </View>
+      </View>
+
+      {uiReady ? (
+        <Reanimated.View
+          style={[
+            emojiPanelAnimatedStyle,
+            {
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: V.border,
+              backgroundColor: V.bgSurface,
+              borderTopLeftRadius: COMPOSER_CAPSULE_RADIUS,
+              borderTopRightRadius: COMPOSER_CAPSULE_RADIUS,
+              zIndex: 0,
+              elevation: 0,
+            },
+          ]}
+        >
+            <Reanimated.View style={[emojiContentAnimatedStyle, { flex: 1 }]}>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={tw`flex-row flex-wrap p-2`}
+                keyboardShouldPersistTaps="always"
+                showsVerticalScrollIndicator={false}
+              >
+                {EMOJI_SET.map((emoji, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => insertEmoji(emoji)}
+                    style={{
+                      width: '12.5%',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 6,
+                    }}
+                  >
+                    <Text style={tw`text-2xl`}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </Reanimated.View>
+        </Reanimated.View>
+      ) : null}
 
       <AiRewritePanel
         visible={aiPanelOpen}

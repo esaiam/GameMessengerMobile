@@ -10,6 +10,7 @@ import {
   Text,
   Platform,
   Keyboard,
+  FlatList,
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -57,9 +58,6 @@ import AriaStateGauges from './chat/AriaStateGauges';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withTiming,
-  cancelAnimation,
-  Easing,
 } from 'react-native-reanimated';
 import { V, chatListBottomFadeBottom } from '../theme';
 import {
@@ -104,6 +102,15 @@ export default function Chat({
   const composerInsetSettleTimerRef = useRef(null);
   const lastComposerLayoutHRef = useRef(0);
 
+  const armComposerInsetSettling = useCallback(() => {
+    composerInsetSettlingRef.current = true;
+    if (composerInsetSettleTimerRef.current) clearTimeout(composerInsetSettleTimerRef.current);
+    composerInsetSettleTimerRef.current = setTimeout(() => {
+      composerInsetSettlingRef.current = false;
+      composerInsetSettleTimerRef.current = null;
+    }, 320);
+  }, []);
+
   const reportInputBar = useCallback((layoutH) => {
     if (typeof layoutH === 'number' && layoutH > 0) {
       onInputBarHeight?.(layoutH);
@@ -133,6 +140,12 @@ export default function Chat({
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   useEffect(() => { onEmojiPickerChange?.(showEmojiPicker); }, [showEmojiPicker, onEmojiPickerChange]);
+  useEffect(() => {
+    armComposerInsetSettling();
+    return () => {
+      if (composerInsetSettleTimerRef.current) clearTimeout(composerInsetSettleTimerRef.current);
+    };
+  }, [showEmojiPicker, armComposerInsetSettling]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null);
@@ -219,7 +232,7 @@ export default function Chat({
     stickToBottomRef,
     layoutReadyRef,
     initialScrollDoneRef,
-    onScrollReanimated,
+    onScroll: onListScroll,
   } = useChatInvertedListScroll(roomId, messages, headerMeasured, listScrollSuppressRefs);
 
   const ephemeralClockTick = useChatEphemeralClockTick(messages, renderPausedRef);
@@ -284,6 +297,7 @@ export default function Chat({
     emojiPanelHeightShared,
     replyTargetAnimatedStyle,
     emojiPanelAnimatedStyle,
+    emojiContentAnimatedStyle,
     emojiWobbleRotate,
     collapseEmojiForKeyboard,
     toggleEmojiPicker,
@@ -295,24 +309,31 @@ export default function Chat({
     showEmojiPicker,
     setShowEmojiPicker,
     setText,
-    composerStackHeightShared,
   });
+
+  const reportComposerBaseHeight = useCallback((layoutH) => {
+    if (typeof layoutH !== 'number' || layoutH <= 0) return;
+    if (Math.abs(layoutH - lastComposerLayoutHRef.current) < 0.5) return;
+    lastComposerLayoutHRef.current = layoutH;
+    composerStackHeightShared.value = layoutH;
+    armComposerInsetSettling();
+  }, [armComposerInsetSettling, composerStackHeightShared]);
 
   const listAnimatedStyle = useAnimatedStyle(() => ({
     opacity: listOpacity.value,
   }));
 
   /**
-   * Inverted spacer: composerBaseH + visualEmojiH + kbH = константа при переходе emoji→keyboard.
-   * composerBaseH = composerStackH - emojiPanelH (вычитаем emoji, т.к. он учитывается отдельно).
-   * visualEmojiH  = max(0, emojiPanelH + keyboardHeightLib) — убывает синхронно с ростом клавиатуры.
-   * kbH           = -keyboardHeightLib.
+   * Inverted spacer: baseComposerH + visualEmojiH + kbH = константа при переходе emoji→keyboard.
+   * baseComposerH — reply + капсула + safe area (без emoji).
+   * visualEmojiH = max(0, emojiPanelH + keyboardHeightLib) — убывает синхронно с ростом клавиатуры.
+   * kbH = -keyboardHeightLib.
    */
   const listBottomSpacerStyle = useAnimatedStyle(() => {
-    const composerBaseH = composerStackHeightShared.value - emojiPanelHeightShared.value;
+    const baseComposerH = composerStackHeightShared.value;
     const visualEmojiH = Math.max(0, emojiPanelHeightShared.value + keyboardHeightLib.value);
     const kbH = -keyboardHeightLib.value;
-    return { height: composerBaseH + visualEmojiH + kbH };
+    return { height: baseComposerH + visualEmojiH + kbH };
   });
 
   const composerWrapperAnimatedStyle = useAnimatedStyle(() => ({
@@ -733,71 +754,55 @@ export default function Chat({
       <View style={{ flex: 1, position: 'relative' }}>
         <View style={{ flex: 1 }}>
           <ChatMessagesLoadingOverlay visible={messagesLoading} />
-          <Reanimated.FlatList
-            ref={flatListRef}
-            data={formattedMessages}
-            inverted
-            keyExtractor={(item) =>
-              item.clientRowKey != null && item.clientRowKey !== ''
-                ? String(item.clientRowKey)
-                : String(item.id)
-            }
-            renderItem={renderItem}
-            extraData={listExtraDataStable}
-            initialNumToRender={20}
-            maxToRenderPerBatch={10}
-            windowSize={10}
-            onScroll={onScrollReanimated}
-            scrollEventThrottle={32}
-            decelerationRate={Platform.OS === 'ios' ? 0.992 : 'fast'}
-            style={[
-              tw`flex-1`,
-              chatRoomHeader ? { backgroundColor: 'transparent' } : null,
-              { zIndex: 1 },
-              listAnimatedStyle,
-            ]}
-            removeClippedSubviews={Platform.OS === 'android'}
-            ListHeaderComponent={ListBottomInsetHeader}
-            ListFooterComponent={listFooterComponent}
-            contentContainerStyle={[
-              tw`pt-1`,
-              chatRoomHeader && typeof listPaddingTop === 'number' && listPaddingTop > 0 ? null : tw`pb-2`,
-            ]}
-            onContentSizeChange={() => {
-              if (!layoutReadyRef.current) {
-                layoutReadyRef.current = true;
-                initialScrollDoneRef.current = true;
+          <Reanimated.View style={[tw`flex-1`, listAnimatedStyle]}>
+            <FlatList
+              ref={flatListRef}
+              data={formattedMessages}
+              inverted
+              keyExtractor={(item) =>
+                item.clientRowKey != null && item.clientRowKey !== ''
+                  ? String(item.clientRowKey)
+                  : String(item.id)
               }
-            }}
-            ListEmptyComponent={
-              messagesLoading ? null : (
-                <Text style={[tw`text-center py-6 text-[13px]`, { color: V.textMuted }]}>
-                  Начни общение!
-                </Text>
-              )
-            }
-          />
+              renderItem={renderItem}
+              extraData={listExtraDataStable}
+              initialNumToRender={20}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              onScroll={onListScroll}
+              scrollEventThrottle={32}
+              decelerationRate={Platform.OS === 'ios' ? 0.992 : 'fast'}
+              style={[
+                tw`flex-1`,
+                chatRoomHeader ? { backgroundColor: 'transparent' } : null,
+                { zIndex: 1 },
+              ]}
+              removeClippedSubviews={Platform.OS === 'android'}
+              ListHeaderComponent={ListBottomInsetHeader}
+              ListFooterComponent={listFooterComponent}
+              contentContainerStyle={[
+                tw`pt-1`,
+                chatRoomHeader && typeof listPaddingTop === 'number' && listPaddingTop > 0 ? null : tw`pb-2`,
+              ]}
+              onContentSizeChange={() => {
+                if (!layoutReadyRef.current) {
+                  layoutReadyRef.current = true;
+                  initialScrollDoneRef.current = true;
+                }
+              }}
+              ListEmptyComponent={
+                messagesLoading ? null : (
+                  <Text style={[tw`text-center py-6 text-[13px]`, { color: V.textMuted }]}>
+                    Начни общение!
+                  </Text>
+                )
+              }
+            />
+          </Reanimated.View>
         </View>
 
         <Reanimated.View
           pointerEvents="box-none"
-          onLayout={(e) => {
-            const h = e.nativeEvent.layout.height;
-            if (typeof h !== 'number' || h <= 0) return;
-            if (Math.abs(h - lastComposerLayoutHRef.current) < 0.5) return;
-            lastComposerLayoutHRef.current = h;
-            cancelAnimation(composerStackHeightShared);
-            composerStackHeightShared.value = withTiming(h, {
-              duration: 165,
-              easing: Easing.out(Easing.cubic),
-            });
-            composerInsetSettlingRef.current = true;
-            if (composerInsetSettleTimerRef.current) clearTimeout(composerInsetSettleTimerRef.current);
-            composerInsetSettleTimerRef.current = setTimeout(() => {
-              composerInsetSettlingRef.current = false;
-              composerInsetSettleTimerRef.current = null;
-            }, 320);
-          }}
           style={[
             {
               position: 'absolute',
@@ -826,10 +831,12 @@ export default function Chat({
           <ChatComposer
             inputBarRef={inputBarRef}
             reportInputBar={reportInputBar}
+            reportComposerBaseHeight={reportComposerBaseHeight}
             insets={insets}
             visibleReplyTo={visibleReplyTo}
             replyTargetAnimatedStyle={replyTargetAnimatedStyle}
             emojiPanelAnimatedStyle={emojiPanelAnimatedStyle}
+            emojiContentAnimatedStyle={emojiContentAnimatedStyle}
             onDismissReply={() => setReplyTarget(null)}
             uiReady={uiReady}
             showEmojiPicker={showEmojiPicker}
