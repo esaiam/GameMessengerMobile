@@ -3,20 +3,20 @@ import { Keyboard, Platform, Animated } from 'react-native';
 import {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
   withTiming,
   Easing,
   runOnJS,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import { useReanimatedKeyboardAnimation, useKeyboardHandler } from 'react-native-keyboard-controller';
 import { REPLY_TARGET_PREVIEW_H, EMOJI_PICKER_PANEL_H } from './chatComposerConstants';
 import { REPLY_TARGET_ANIM_MS } from './replyTargetLayoutAnimation';
 
 /**
- * Клавиатура: только `paddingBottom` корня (`keyboardHeightShared`) — одна роль для K.
- * В `Chat` лента на весь `flex:1`, композер `absolute` внизу того же контейнера — лента рисуется под blur; низ
- * ленты — `ListHeaderComponent` + `composerStackHeightShared` (тот же UI-поток Reanimated, что и `keyboardHeightShared`).
- * Клавиатурный отступ на корне (`keyboardHeightShared`) поднимает и ленту, и якорь композера.
+ * Клавиатура: `keyboardHeightLib` (UI thread) отдаётся наружу.
+ * Chat применяет его к `bottom` абсолютной обёртки капсулы и к высоте спейсера ленты —
+ * FlatList не меняет размер, нет layout-recalc на каждый кадр.
  * Анимация превью ответа, wobble эмодзи-кнопки, пикер текста.
  * Панель эмодзи: при уходе на клавиатуру — мгновенное закрытие без конкурирующего withTiming(280).
  */
@@ -27,18 +27,28 @@ export default function useChatComposerChrome({
   showEmojiPicker,
   setShowEmojiPicker,
   setText,
+  composerStackHeightShared,
 }) {
+  // 0 → -keyboardHeight (отрицательное когда открыта)
   const { height: keyboardHeightLib } = useReanimatedKeyboardAnimation();
   const replyTargetProgress = useSharedValue(0);
   const emojiPanelHeightShared = useSharedValue(0);
+  /** Последняя реальная высота системной клавиатуры; fallback = EMOJI_PICKER_PANEL_H */
+  const storedKeyboardHeightShared = useSharedValue(EMOJI_PICKER_PANEL_H);
 
-  // keyboardHeightLib: 0 → -keyboardHeight (отрицательное когда открыта)
-  const rootAnimatedStyle = useAnimatedStyle(() => ({
-    paddingBottom: -keyboardHeightLib.value,
-  }));
+  useAnimatedReaction(
+    () => keyboardHeightLib.value,
+    (current) => {
+      const h = -current;
+      if (h > 100) {
+        storedKeyboardHeightShared.value = h;
+      }
+    },
+  );
 
+  // Высота панели убывает синхронно с ростом клавиатуры → капсула не двигается
   const emojiPanelAnimatedStyle = useAnimatedStyle(() => ({
-    height: emojiPanelHeightShared.value,
+    height: Math.max(0, emojiPanelHeightShared.value + keyboardHeightLib.value),
     overflow: 'hidden',
   }));
 
@@ -101,17 +111,26 @@ export default function useChatComposerChrome({
     );
   }, [replyTo, replyTargetProgress, setVisibleReplyTo]);
 
-  // Схлопываем emoji-панель при появлении системной клавиатуры
-  useEffect(() => {
-    const evt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(evt, () => collapseEmojiForKeyboard());
-    return () => sub.remove();
-  }, [collapseEmojiForKeyboard]);
+  // Когда клавиатура полностью открылась и эмодзи-панель была видна —
+  // тихо обнуляем state (визуально панель уже 0 по формуле) и корректируем composerStackH
+  useKeyboardHandler({
+    onEnd: (e) => {
+      'worklet';
+      if (e.height > 0 && emojiPanelHeightShared.value > 0) {
+        if (composerStackHeightShared) {
+          composerStackHeightShared.value =
+            composerStackHeightShared.value - emojiPanelHeightShared.value;
+        }
+        emojiPanelHeightShared.value = 0;
+        runOnJS(setShowEmojiPicker)(false);
+      }
+    },
+  }, [composerStackHeightShared]);
 
   useEffect(() => {
     if (showEmojiPicker) {
       skipEmojiPanelCloseAnimationRef.current = false;
-      emojiPanelHeightShared.value = withTiming(EMOJI_PICKER_PANEL_H, {
+      emojiPanelHeightShared.value = withTiming(storedKeyboardHeightShared.value, {
         duration: 280,
         easing: Easing.out(Easing.cubic),
       });
@@ -140,7 +159,8 @@ export default function useChatComposerChrome({
   }, [setText]);
 
   return {
-    rootAnimatedStyle,
+    keyboardHeightLib,
+    emojiPanelHeightShared,
     replyTargetAnimatedStyle,
     emojiPanelAnimatedStyle,
     emojiWobbleRotate,

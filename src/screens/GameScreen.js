@@ -365,9 +365,8 @@ export default function GameScreen({ route, navigation }) {
       const avail = Math.max(200, iY - bY - HANDLE_H - BOTTOM_GAP);
       maxSlideRef.current = avail;
       if (!suppressAvailableHRef.current) setAvailableH(avail);
-    } else {
-      maxSlideRef.current = 600;
     }
+    // Если нет обоих значений — не перетираем maxSlideRef, оставляем последнее известное
   }, []);
 
   const runOpenSequence = useCallback(() => {
@@ -376,67 +375,81 @@ export default function GameScreen({ route, navigation }) {
     setBoardContentActive(true);
     middlePulseAnim.setValue(0);
 
-    Animated.timing(handleStretchAnim, {
-      toValue: 0,
-      duration: 140,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
+    const doOpen = (freshMaxH) => {
+      maxSlideRef.current = freshMaxH;
+      setAvailableH(freshMaxH);
 
-    Animated.timing(handleWidthAnim, {
-      toValue: 1,
-      duration: 240,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start(() => {
-      const maxH = maxSlideRef.current;
-      const firstMount = !boardMountedRef.current;
-      if (firstMount) {
-        boardMountedRef.current = true;
-        setBoardMounted(true);
-      }
-      const startBoardDrop = () => {
-        Animated.timing(boardDropAnim, {
-          toValue: maxH,
-          duration: 380,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: false,
-        }).start(() => {
-          Animated.sequence([
-            Animated.timing(boardDropAnim, {
-              toValue: maxH - 18,
-              duration: 100,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: false,
-            }),
-            Animated.timing(boardDropAnim, {
-              toValue: maxH,
-              duration: 100,
-              easing: Easing.in(Easing.quad),
-              useNativeDriver: false,
-            }),
-            Animated.timing(boardDropAnim, {
-              toValue: maxH - 5,
-              duration: 60,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: false,
-            }),
-            Animated.timing(boardDropAnim, {
-              toValue: maxH,
-              duration: 60,
-              easing: Easing.in(Easing.quad),
-              useNativeDriver: false,
-            }),
-          ]).start(() => {
-            suppressAvailableHRef.current = false;
-            computeMaxSlide();
+      Animated.timing(handleStretchAnim, {
+        toValue: 0,
+        duration: 140,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+
+      Animated.timing(handleWidthAnim, {
+        toValue: 1,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        const firstMount = !boardMountedRef.current;
+        if (firstMount) {
+          boardMountedRef.current = true;
+          setBoardMounted(true);
+        }
+        const startBoardDrop = () => {
+          Animated.timing(boardDropAnim, {
+            toValue: freshMaxH,
+            duration: 380,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: false,
+          }).start(() => {
+            Animated.sequence([
+              Animated.timing(boardDropAnim, {
+                toValue: freshMaxH - 18,
+                duration: 100,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: false,
+              }),
+              Animated.timing(boardDropAnim, {
+                toValue: freshMaxH,
+                duration: 100,
+                easing: Easing.in(Easing.quad),
+                useNativeDriver: false,
+              }),
+              Animated.timing(boardDropAnim, {
+                toValue: freshMaxH - 5,
+                duration: 60,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: false,
+              }),
+              Animated.timing(boardDropAnim, {
+                toValue: freshMaxH,
+                duration: 60,
+                easing: Easing.in(Easing.quad),
+                useNativeDriver: false,
+              }),
+            ]).start(() => {
+              suppressAvailableHRef.current = false;
+              computeMaxSlide();
+            });
           });
-        });
-      };
-      if (firstMount) {
-        requestAnimationFrame(() => requestAnimationFrame(startBoardDrop));
+        };
+        if (firstMount) {
+          requestAnimationFrame(() => requestAnimationFrame(startBoardDrop));
+        } else {
+          startBoardDrop();
+        }
+      });
+    };
+
+    boardColRef.current?.measureInWindow((_x, bY) => {
+      const iY = chatInputTopYRef.current;
+      if (typeof bY === 'number' && typeof iY === 'number' && iY > bY) {
+        const fresh = Math.max(200, iY - bY - HANDLE_H - BOTTOM_GAP);
+        doOpen(fresh);
       } else {
-        startBoardDrop();
+        doOpen(maxSlideRef.current);
       }
     });
   }, [handleStretchAnim, handleWidthAnim, boardDropAnim, middlePulseAnim, computeMaxSlide]);
@@ -579,6 +592,7 @@ export default function GameScreen({ route, navigation }) {
   const [kbVisible, setKbVisible] = useState(false);
   const [kbTransitioning, setKbTransitioning] = useState(false);
   const kbTransitionTimerRef = useRef(null);
+  const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
 
   useEffect(() => {
     if (route.params?.nickname && route.params.nickname !== nickname) {
@@ -620,7 +634,7 @@ export default function GameScreen({ route, navigation }) {
   useEffect(() => {
     if (kbVisible) return;
     chatInputTopYRef.current = null;
-    setTimeout(() => computeMaxSlide(), 0);
+    setTimeout(() => computeMaxSlide(), 300);
   }, [kbVisible, computeMaxSlide]);
 
   /** После измерения шапки чата пересчитать зону свайпа доски */
@@ -1380,7 +1394,7 @@ export default function GameScreen({ route, navigation }) {
         ]}
       >
         {/* Board column */}
-        {!kbVisible && (
+        {!kbVisible && !emojiPickerVisible && (
           <View
             ref={boardColRef}
             onLayout={(e) => {
@@ -1639,6 +1653,15 @@ export default function GameScreen({ route, navigation }) {
               title: opponentName || 'Чат',
               contactOnline: selfPlay ? true : opponentOnline,
               navigation,
+              onHeaderPress: opponentName
+                ? () =>
+                    navigation.navigate('ContactProfile', {
+                      peerName: opponentName,
+                      contactOnline: selfPlay ? true : opponentOnline,
+                      roomId,
+                      nickname,
+                    })
+                : undefined,
               headerRight: (
                 <TouchableOpacity
                   onPress={() => Alert.alert('Звонок', 'Голосовые звонки скоро!')}
@@ -1654,15 +1677,14 @@ export default function GameScreen({ route, navigation }) {
                 </TouchableOpacity>
               ),
             }}
+            onEmojiPickerChange={(visible) => setEmojiPickerVisible(visible)}
             onInputBarTopY={(y) => {
               if (isWideTablet) return;
               if (kbVisible) return;
+              if (kbTransitioning) return;
+              if (emojiPickerVisible) return;
               if (typeof y !== 'number') return;
-              if (typeof chatInputTopYRef.current === 'number') {
-                chatInputTopYRef.current = Math.min(chatInputTopYRef.current, y);
-              } else {
-                chatInputTopYRef.current = y;
-              }
+              chatInputTopYRef.current = y;
               computeMaxSlide();
             }}
           />

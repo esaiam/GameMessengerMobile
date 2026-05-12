@@ -65,7 +65,6 @@ import { V, chatListBottomFadeBottom } from '../theme';
 import {
   MAX_RENDERED_VIDEOS,
   CHAT_HEADER_TO_LIST_GAP_PX,
-  CHAT_LIST_BOTTOM_FADE_GAP_ABOVE_CAPSULE_PX,
 } from './chat/chatViewConstants';
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
@@ -85,6 +84,8 @@ export default function Chat({
   sendToAria,
   onInputBarHeight,
   onInputBarTopY,
+  /** GameScreen: сообщает когда emoji picker открыт/закрыт (чтобы скрыть доску). */
+  onEmojiPickerChange,
   /** Отступ сверху у ленты (под «парящую» шапку с blur), px */
   listPaddingTop,
   /** Данные для frosted-шапки (рендер внутри Chat); если null — шапки нет. */
@@ -96,46 +97,12 @@ export default function Chat({
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const inputBarRef = useRef(null);
-  const listAreaRef = useRef(null);
-  const capsuleWrapperRef = useRef(null);
-  const [listBottomFadeGeometry, setListBottomFadeGeometry] = useState(null);
   /** Не дергать scrollToOffset (стык клавиатуры / смена высоты композера) — резкие рывки ленты */
   const keyboardSettlingRef = useRef(false);
   const keyboardSettleTimerRef = useRef(null);
   const composerInsetSettlingRef = useRef(false);
   const composerInsetSettleTimerRef = useRef(null);
   const lastComposerLayoutHRef = useRef(0);
-
-  const updateChatListBottomFade = useCallback(() => {
-    const listEl = listAreaRef.current;
-    const capEl = capsuleWrapperRef.current;
-    if (!listEl || !capEl) return;
-    listEl.measureInWindow((lx, ly, lw, lh) => {
-      capEl.measureInWindow((cx, cy, cw, ch) => {
-        const boundaryY = cy - CHAT_LIST_BOTTOM_FADE_GAP_ABOVE_CAPSULE_PX;
-        const topInList = boundaryY - ly;
-        if (topInList >= lh) {
-          setListBottomFadeGeometry(null);
-          return;
-        }
-        const top = Math.max(0, topInList);
-        const h = lh - top;
-        if (h <= 0) {
-          setListBottomFadeGeometry(null);
-          return;
-        }
-        setListBottomFadeGeometry({ top, height: h });
-      });
-    });
-  }, []);
-
-  const scheduleChatListBottomFadeMeasure = useCallback(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        updateChatListBottomFade();
-      });
-    });
-  }, [updateChatListBottomFade]);
 
   const reportInputBar = useCallback((layoutH) => {
     if (typeof layoutH === 'number' && layoutH > 0) {
@@ -144,8 +111,7 @@ export default function Chat({
     inputBarRef.current?.measureInWindow((x, y) => {
       if (typeof y === 'number') onInputBarTopY?.(y);
     });
-    scheduleChatListBottomFadeMeasure();
-  }, [onInputBarHeight, onInputBarTopY, scheduleChatListBottomFadeMeasure]);
+  }, [onInputBarHeight, onInputBarTopY]);
   const [internalMessages, setInternalMessages] = useState([]);
   const ariaControlled =
     isAriaChat === true && typeof setAriaMessages === 'function' && Array.isArray(ariaMessages);
@@ -166,6 +132,7 @@ export default function Chat({
 
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  useEffect(() => { onEmojiPickerChange?.(showEmojiPicker); }, [showEmojiPicker, onEmojiPickerChange]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null);
@@ -180,10 +147,6 @@ export default function Chat({
     });
     return () => cancelAnimationFrame(id);
   }, []);
-
-  useEffect(() => {
-    scheduleChatListBottomFadeMeasure();
-  }, [windowWidth, windowHeight, uiReady, scheduleChatListBottomFadeMeasure]);
 
   useEffect(() => {
     if (chatRoomHeader == null) return;
@@ -317,7 +280,8 @@ export default function Chat({
   const composerStackHeightShared = useSharedValue(0);
 
   const {
-    rootAnimatedStyle,
+    keyboardHeightLib,
+    emojiPanelHeightShared,
     replyTargetAnimatedStyle,
     emojiPanelAnimatedStyle,
     emojiWobbleRotate,
@@ -331,15 +295,28 @@ export default function Chat({
     showEmojiPicker,
     setShowEmojiPicker,
     setText,
+    composerStackHeightShared,
   });
 
   const listAnimatedStyle = useAnimatedStyle(() => ({
     opacity: listOpacity.value,
   }));
 
-  /** Inverted: header у новых сообщений; высота = нижний chrome целиком (тот же замер, что обёртка композера). */
-  const listBottomSpacerStyle = useAnimatedStyle(() => ({
-    height: composerStackHeightShared.value,
+  /**
+   * Inverted spacer: composerBaseH + visualEmojiH + kbH = константа при переходе emoji→keyboard.
+   * composerBaseH = composerStackH - emojiPanelH (вычитаем emoji, т.к. он учитывается отдельно).
+   * visualEmojiH  = max(0, emojiPanelH + keyboardHeightLib) — убывает синхронно с ростом клавиатуры.
+   * kbH           = -keyboardHeightLib.
+   */
+  const listBottomSpacerStyle = useAnimatedStyle(() => {
+    const composerBaseH = composerStackHeightShared.value - emojiPanelHeightShared.value;
+    const visualEmojiH = Math.max(0, emojiPanelHeightShared.value + keyboardHeightLib.value);
+    const kbH = -keyboardHeightLib.value;
+    return { height: composerBaseH + visualEmojiH + kbH };
+  });
+
+  const composerWrapperAnimatedStyle = useAnimatedStyle(() => ({
+    bottom: -keyboardHeightLib.value,
   }));
 
   const ListBottomInsetHeader = useCallback(
@@ -711,7 +688,6 @@ export default function Chat({
           backgroundColor: V.bgApp,
           overflow: chatRoomHeader ? 'visible' : 'hidden',
         },
-        rootAnimatedStyle,
       ]}
     >
       <ChatRoomWallpaper />
@@ -754,7 +730,7 @@ export default function Chat({
         setEphemeralSec={setEphemeralSec}
       />
 
-      <View ref={listAreaRef} style={{ flex: 1, position: 'relative' }}>
+      <View style={{ flex: 1, position: 'relative' }}>
         <View style={{ flex: 1 }}>
           <ChatMessagesLoadingOverlay visible={messagesLoading} />
           <Reanimated.FlatList
@@ -803,30 +779,10 @@ export default function Chat({
           />
         </View>
 
-        {listBottomFadeGeometry ? (
-          <LinearGradient
-            pointerEvents="none"
-            colors={['transparent', chatListBottomFadeBottom]}
-            locations={[0, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              top: listBottomFadeGeometry.top,
-              height: listBottomFadeGeometry.height,
-              zIndex: 1,
-              elevation: 1,
-            }}
-          />
-        ) : null}
-
-        <View
+        <Reanimated.View
           pointerEvents="box-none"
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height;
-            scheduleChatListBottomFadeMeasure();
             if (typeof h !== 'number' || h <= 0) return;
             if (Math.abs(h - lastComposerLayoutHRef.current) < 0.5) return;
             lastComposerLayoutHRef.current = h;
@@ -842,18 +798,33 @@ export default function Chat({
               composerInsetSettleTimerRef.current = null;
             }, 320);
           }}
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 2,
-            elevation: 2,
-          }}
+          style={[
+            {
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              zIndex: 2,
+              elevation: 2,
+            },
+            composerWrapperAnimatedStyle,
+          ]}
         >
+          <LinearGradient
+            pointerEvents="none"
+            colors={['transparent', chatListBottomFadeBottom]}
+            locations={[0, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 80,
+            }}
+          />
           <ChatComposer
             inputBarRef={inputBarRef}
-            capsuleWrapperRef={capsuleWrapperRef}
             reportInputBar={reportInputBar}
             insets={insets}
             visibleReplyTo={visibleReplyTo}
@@ -882,7 +853,7 @@ export default function Chat({
             collapseEmojiForKeyboard={collapseEmojiForKeyboard}
             {...ariaComposerSurfaceProps}
           />
-        </View>
+        </Reanimated.View>
       </View>
 
       {chatRoomHeader != null ? (
@@ -913,6 +884,7 @@ export default function Chat({
               headerRight={chatRoomHeader.headerRight}
               topPaddingOverride={chatRoomHeader.topPaddingOverride}
               onAriaStateChange={isAriaChat ? setAriaState : undefined}
+              onHeaderPress={chatRoomHeader.onHeaderPress}
               selectionMode={selectionMode}
               selectedCount={selectedIds.size}
               onExitSelection={exitSelectionMode}

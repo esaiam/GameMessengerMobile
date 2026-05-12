@@ -122,6 +122,8 @@ export default function ChatRoomHeader({
   ariaOnline,
   /** Вызывается при обновлении состояния Aria из fetch (для `AriaStateGauges` снаружи) */
   onAriaStateChange,
+  /** Тап по аватару/имени в обычном режиме (не Aria, не выделение) */
+  onHeaderPress,
 }) {
   const insets = useSafeAreaInsets();
   const [ariaState, setAriaState] = useState(null);
@@ -288,6 +290,14 @@ export default function ChatRoomHeader({
               pointerEvents: selectionMode ? 'none' : 'auto',
             }}
           >
+            <TouchableOpacity
+              onPress={!isAriaHeader && !selectionMode && onHeaderPress ? onHeaderPress : undefined}
+              activeOpacity={!isAriaHeader && onHeaderPress ? 0.7 : 1}
+              disabled={isAriaHeader || selectionMode || !onHeaderPress}
+              style={{ flexDirection: 'row', alignItems: 'flex-start', flex: 1 }}
+              accessibilityRole={!isAriaHeader && onHeaderPress ? 'button' : undefined}
+              accessibilityLabel={!isAriaHeader && onHeaderPress ? 'Открыть профиль' : undefined}
+            >
             <View style={{ marginLeft: 8 }}>
               {isAriaHeader ? (
                 <Image
@@ -397,6 +407,7 @@ export default function ChatRoomHeader({
                 )
               ) : null}
             </View>
+            </TouchableOpacity>
           </Animated.View>
 
           <Animated.View

@@ -313,7 +313,7 @@ export default function ChatComposer({
                   value={text}
                   onChangeText={setText}
                   onSubmitEditing={sendMessage}
-                  onFocus={() => collapseEmojiForKeyboard()}
+                  onFocus={() => { /* плавное закрытие через useKeyboardHandler.onEnd */ }}
                   returnKeyType="send"
                   multiline
                   editable={!ariaUnavailable}

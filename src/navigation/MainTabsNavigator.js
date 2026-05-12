@@ -11,6 +11,7 @@ import InviteFriendsScreen from '../screens/InviteFriendsScreen';
 import StorageScreen from '../screens/StorageScreen';
 import PokerHubScreen from '../screens/PokerHubScreen';
 import ContactsScreen from '../screens/ContactsScreen';
+import ContactProfileScreen from '../screens/ContactProfileScreen';
 import { Search, Layers, User, Users } from '../icons/lucideIcons';
 import { V } from '../theme';
 
@@ -36,6 +37,7 @@ function ChatsStackNavigator() {
       <ChatsStack.Screen name="ChatsList" component={ChatsScreen} />
       <ChatsStack.Screen name="ChatRoom" component={ChatRoomScreen} />
       <ChatsStack.Screen name="Room" component={GameScreen} />
+      <ChatsStack.Screen name="ContactProfile" component={ContactProfileScreen} />
     </ChatsStack.Navigator>
   );
 }
@@ -51,6 +53,7 @@ function ContactsStackNavigator() {
     >
       <ContactsStack.Screen name="ContactsHome" component={ContactsScreen} />
       <ContactsStack.Screen name="Room" component={GameScreen} />
+      <ContactsStack.Screen name="ContactProfile" component={ContactProfileScreen} />
     </ContactsStack.Navigator>
   );
 }
