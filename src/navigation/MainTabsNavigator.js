@@ -1,4 +1,5 @@
 import React from 'react';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -17,6 +18,17 @@ import { V } from '../theme';
 
 const TAB_ACTIVE = V.accentSage;
 const TAB_INACTIVE = V.textMuted;
+
+const TAB_BAR_STYLE = {
+  backgroundColor: 'transparent',
+  borderTopWidth: 0,
+  elevation: 0,
+};
+
+function hubTabBarStyle(route, hubRouteName) {
+  const focusedRoute = getFocusedRouteNameFromRoute(route) ?? hubRouteName;
+  return focusedRoute === hubRouteName ? TAB_BAR_STYLE : { display: 'none' };
+}
 
 const Tabs = createBottomTabNavigator();
 
@@ -88,48 +100,47 @@ export function MainTabs({ route }) {
         tabBarShowLabel: false,
         tabBarActiveTintColor: TAB_ACTIVE,
         tabBarInactiveTintColor: TAB_INACTIVE,
-        tabBarStyle: {
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-          elevation: 0,
-        },
       }}
     >
       <Tabs.Screen
         name="Chats"
         component={ChatsStackNavigator}
         initialParams={{ nickname }}
-        options={{
+        options={({ route }) => ({
           tabBarIcon: ({ color, size }) => (
             <Search color={color} size={size ?? 22} strokeWidth={1.5} />
           ),
-        }}
+          tabBarStyle: hubTabBarStyle(route, 'ChatsList'),
+        })}
       />
       <Tabs.Screen
         name="Contacts"
         component={ContactsStackNavigator}
         initialParams={{ nickname }}
-        options={{
+        options={({ route }) => ({
           tabBarIcon: ({ color }) => <Users color={color} size={22} strokeWidth={1.8} />,
-        }}
+          tabBarStyle: hubTabBarStyle(route, 'ContactsHome'),
+        })}
       />
       <Tabs.Screen
         name="Poker"
         component={PokerStackNavigator}
         initialParams={{ nickname }}
-        options={{
+        options={({ route }) => ({
           tabBarActiveTintColor: V.accentGold,
           tabBarInactiveTintColor: TAB_INACTIVE,
           tabBarIcon: ({ color }) => <Layers color={color} size={22} strokeWidth={1.8} />,
-        }}
+          tabBarStyle: hubTabBarStyle(route, 'PokerHub'),
+        })}
       />
       <Tabs.Screen
         name="Profile"
         component={ProfileStackNavigator}
         initialParams={{ nickname }}
-        options={{
+        options={({ route }) => ({
           tabBarIcon: ({ color }) => <User color={color} size={22} strokeWidth={1.8} />,
-        }}
+          tabBarStyle: hubTabBarStyle(route, 'ProfileHome'),
+        })}
       />
     </Tabs.Navigator>
   );

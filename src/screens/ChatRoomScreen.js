@@ -6,7 +6,6 @@ import { Audio } from 'expo-av';
 import tw from 'twrnc';
 import Chat from '../components/Chat';
 import { AriaClearHistoryHeaderButton } from '../components/ChatRoomHeader';
-import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import {
   ARIA_API_URL,
@@ -433,14 +432,6 @@ export default function ChatRoomScreen({ route, navigation }) {
       setListPaddingTop(frostedHeaderH);
     }
   }, [frostedHeaderH]);
-
-  useFocusEffect(
-    useCallback(() => {
-      const parent = navigation.getParent?.();
-      parent?.setOptions?.({ tabBarStyle: { display: 'none' } });
-      return () => parent?.setOptions?.({ tabBarStyle: undefined });
-    }, [navigation])
-  );
 
   useEffect(() => {
     if (!isAriaChat) return;

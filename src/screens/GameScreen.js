@@ -645,15 +645,12 @@ export default function GameScreen({ route, navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      const parent = navigation.getParent?.();
-      parent?.setOptions?.({ tabBarStyle: { display: 'none' } });
       return () => {
         suppressAvailableHRef.current = false;
         Keyboard.dismiss();
         setKbVisible(false);
-        parent?.setOptions?.({ tabBarStyle: undefined });
       };
-    }, [navigation])
+    }, [])
   );
 
   useEffect(() => {
