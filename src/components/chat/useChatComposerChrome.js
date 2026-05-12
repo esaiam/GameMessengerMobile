@@ -146,7 +146,6 @@ export default function useChatComposerChrome({
 
   const toggleEmojiPicker = useCallback(() => {
     if (showEmojiPicker) {
-      setShowEmojiPicker(false);
       inputRef.current?.focus();
     } else {
       Keyboard.dismiss();
