@@ -41,6 +41,7 @@ import {
   getMoveOptionsForSelection,
 } from '../utils/gameLogic';
 import { playDiceRollSound, preloadDiceSound, unloadDiceSound } from '../utils/diceSound';
+import { usePresence } from '../hooks/usePresence';
 const NICKNAME_KEY = '@backgammon_nickname';
 const SWIPE_HINT_KEY = '@backgammon_swipe_hint_seen';
 /** Как у ChatRoomHeader.js — frosted шапка чата */
@@ -67,7 +68,6 @@ export default function GameScreen({ route, navigation }) {
   const [highlightedMoves, setHighlightedMoves] = useState([]);
   const channelRef = useRef(null);
   const sessionChannelRef = useRef(null);
-  const presenceChannelRef = useRef(null);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const activeSessionIdRef = useRef(activeSessionId);
   const [useLegacyRoomState, setUseLegacyRoomState] = useState(false);
@@ -88,7 +88,6 @@ export default function GameScreen({ route, navigation }) {
   const [boardMode, setBoardMode] = useState('match'); // 'match' | 'sandbox' (auto-driven)
   const [sandboxState, setSandboxState] = useState(createInitialGameState());
   const [sandboxUiDice, setSandboxUiDice] = useState(null);
-  const [opponentOnline, setOpponentOnline] = useState(selfPlay ? true : false);
 
   const opponentName = useMemo(() => {
     if (selfPlay) return nickname;
@@ -101,6 +100,12 @@ export default function GameScreen({ route, navigation }) {
     // fallback: if nickname isn't on the room record yet, pick "other" heuristically
     return routePeerName || u2 || u1;
   }, [room, nickname, selfPlay, routePeerName]);
+  const opponentOnline = usePresence({
+    roomId,
+    nickname,
+    targetName: opponentName,
+    skip: selfPlay,
+  });
   const [swipeStart, setSwipeStart] = useState(null);
   const [swipeEnd, setSwipeEnd] = useState(null);
   const [throwKey, setThrowKey] = useState(0);
@@ -231,56 +236,6 @@ export default function GameScreen({ route, navigation }) {
     setDiceAnimating(true);
     setThrowKey((k) => k + 1);
   }, [boardMode, gameStarted, gameState.dice, diceAnimating, showAnimDice, diceEqual, pointH, windowW]);
-
-  // Presence: auto-enter sandbox when opponent is offline
-  useEffect(() => {
-    if (selfPlay) {
-      setOpponentOnline(true);
-      return;
-    }
-    if (!roomId || !nickname) return;
-
-    const ch = supabase.channel(`presence-room-${roomId}`, {
-      config: { presence: { key: nickname } },
-    });
-
-    const recompute = () => {
-      const st = ch.presenceState?.() || {};
-      const online = new Set();
-      Object.values(st).forEach((arr) => {
-        (arr || []).forEach((p) => {
-          if (p?.nickname) online.add(p.nickname);
-        });
-      });
-      if (!opponentName) {
-        setOpponentOnline(false);
-        return;
-      }
-      setOpponentOnline(online.has(opponentName));
-    };
-
-    ch.on('presence', { event: 'sync' }, recompute);
-    ch.on('presence', { event: 'join' }, recompute);
-    ch.on('presence', { event: 'leave' }, recompute);
-
-    ch.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        try {
-          await ch.track({ nickname, at: Date.now() });
-        } catch {}
-        recompute();
-      }
-    });
-
-    presenceChannelRef.current = ch;
-    return () => {
-      try {
-        if (presenceChannelRef.current) supabase.removeChannel(presenceChannelRef.current);
-      } finally {
-        presenceChannelRef.current = null;
-      }
-    };
-  }, [roomId, nickname, selfPlay, opponentName]);
 
   useEffect(() => {
     if (!selfPlay) return;

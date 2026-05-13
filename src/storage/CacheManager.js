@@ -174,7 +174,6 @@ async function pruneMetadataFiles(meta, mode, /** @type Set<string> */ removedAc
   const tryRemove = (uri, reason) => {
     if (isProtectedDocumentPath(uri)) return;
     if (isActivePlayback(uri)) {
-      console.log('[CacheManager] skip (playback active):', uri.slice(0, 80));
       return;
     }
     const { freed, ok } = deleteCacheFilePhysical(uri);
@@ -182,13 +181,11 @@ async function pruneMetadataFiles(meta, mode, /** @type Set<string> */ removedAc
       freedTotal += freed;
       removedAcc.add(uri);
       delete files[uri];
-      console.log('[CacheManager] removed', reason, uri.slice(0, 120), 'freed ~', (freed / (1024 * 1024)).toFixed(2), 'MB');
     } else {
       try {
         const f = new ExpoFile(normalizeCacheUri(uri));
         if (!f.exists) {
           delete files[uri];
-          console.log('[CacheManager] drop stale metadata (missing file):', uri.slice(0, 120));
         }
       } catch {
         delete files[uri];
@@ -252,16 +249,6 @@ export async function cleanupCache() {
     meta = { files: pass1.files };
     totalFreed += pass1.freedTotal;
 
-    const bytesAfterAgeAndLru = totalTrackedBytes(meta.files);
-    console.log(
-      '[CacheManager] cleanup done. Removed entries:',
-      removedAcc.size,
-      'approx freed MB:',
-      (totalFreed / (1024 * 1024)).toFixed(2),
-      'tracked MB:',
-      (bytesAfterAgeAndLru / (1024 * 1024)).toFixed(2)
-    );
-
     await saveCacheMetadata(meta);
     return { removedCount: removedAcc.size, freedBytes: totalFreed };
   });
@@ -273,12 +260,6 @@ export async function manualClearCache() {
     const removedAcc = new Set();
     const meta = await loadCacheMetadata();
     const result = await pruneMetadataFiles(meta, 'manual', removedAcc);
-    console.log(
-      '[CacheManager] manualClearCache removed:',
-      removedAcc.size,
-      'freed ~ MB:',
-      (result.freedTotal / (1024 * 1024)).toFixed(2)
-    );
     await saveCacheMetadata({ files: result.files });
     return { removedCount: removedAcc.size, freedBytes: result.freedTotal };
   });

@@ -17,6 +17,7 @@ import {
 } from '../lib/aria';
 import { V } from '../theme';
 import { setAudioModeAsync } from '../utils/audioMode';
+import { usePresence } from '../hooks/usePresence';
 
 const ARIA_REPLY_VOLUME = 0.3;
 const ARIA_MESSAGE_RECEIVED_MP3 = require('../assets/sounds/message_received.mp3');
@@ -337,7 +338,6 @@ export default function ChatRoomScreen({ route, navigation }) {
               text: replyText,
             });
             if (ariaInsertError) console.warn('[Aria] insert aria error:', ariaInsertError);
-            else console.warn('[Aria] insert aria ok, user_id:', user_id, 'text:', replyText?.slice(0, 30));
           } catch (e) {
             console.warn('[Aria] insert aria catch:', e);
           }
@@ -405,7 +405,12 @@ export default function ChatRoomScreen({ route, navigation }) {
     if (isAriaChat && contact?.display_name) return contact.display_name;
     return title || 'Чат';
   }, [title, isAriaChat, contact?.display_name]);
-  const [contactOnline, setContactOnline] = useState(false);
+  const contactOnline = usePresence({
+    roomId,
+    nickname,
+    targetName: headerTitle !== 'Чат' ? headerTitle : null,
+    skip: !roomId || !nickname || isAriaChat,
+  });
   const [ariaOnline, setAriaOnline] = useState(null);
   const [frostedHeaderH, setFrostedHeaderH] = useState(0);
   const [listPaddingTop, setListPaddingTop] = useState(insets.top + 75);
@@ -465,49 +470,6 @@ export default function ChatRoomScreen({ route, navigation }) {
       } catch {}
     };
   }, [isAriaChat]);
-
-  useEffect(() => {
-    if (!roomId || !nickname || isAriaChat) return;
-
-    const ch = supabase.channel(`presence-room-${roomId}`, {
-      config: { presence: { key: nickname } },
-    });
-
-    const recompute = () => {
-      const st = ch.presenceState?.() || {};
-      const online = new Set();
-      Object.values(st).forEach((arr) => {
-        (arr || []).forEach((p) => {
-          if (p?.nickname) online.add(p.nickname);
-        });
-      });
-      const other = headerTitle && headerTitle !== 'Чат' ? headerTitle : null;
-      if (!other) {
-        setContactOnline(false);
-        return;
-      }
-      setContactOnline(online.has(other));
-    };
-
-    ch.on('presence', { event: 'sync' }, recompute);
-    ch.on('presence', { event: 'join' }, recompute);
-    ch.on('presence', { event: 'leave' }, recompute);
-
-    ch.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        try {
-          await ch.track({ nickname, at: Date.now() });
-        } catch {}
-        recompute();
-      }
-    });
-
-    return () => {
-      try {
-        supabase.removeChannel(ch);
-      } catch {}
-    };
-  }, [roomId, nickname, headerTitle, isAriaChat]);
 
   return (
     <View style={[tw`flex-1`, { backgroundColor: V.bgApp }]}>

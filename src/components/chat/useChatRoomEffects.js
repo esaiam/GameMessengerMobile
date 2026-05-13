@@ -269,10 +269,6 @@ export default function useChatRoomEffects({
       setMessages((prev) => {
         const filtered = filterExpired(prev);
         if (filtered.length !== prev.length) {
-          const expiredIds = prev
-            .filter((m) => m.expires_at && new Date(m.expires_at).getTime() <= Date.now())
-            .map((m) => m.id);
-          if (expiredIds.length > 0) supabase.from('messages').delete().in('id', expiredIds).then();
           return filtered;
         }
         return prev;
