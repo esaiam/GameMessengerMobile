@@ -22,7 +22,7 @@ import BackgammonBoard from '../components/BackgammonBoard';
 import { DieFace } from '../components/Dice';
 import DiceThrow3D from '../components/DiceThrow3D';
 import SwipeBoardHint from '../components/SwipeBoardHint';
-import Chat from '../components/Chat';
+import { RoomChatContainer } from '../components/chat/RoomChatContainer';
 import { V } from '../theme';
 import {
   createInitialGameState,
@@ -1016,7 +1016,7 @@ export default function GameScreen({ route, navigation }) {
             isWideTablet ? { minWidth: 320 } : null,
           ]}
         >
-          <Chat
+          <RoomChatContainer
             roomId={roomId}
             roomCode={room?.code}
             nickname={nickname}

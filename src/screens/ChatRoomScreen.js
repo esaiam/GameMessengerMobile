@@ -5,6 +5,7 @@ import { createAudioPlayer, setIsAudioActiveAsync } from 'expo-audio';
 import { Audio } from 'expo-av';
 import tw from 'twrnc';
 import Chat from '../components/Chat';
+import { AriaChatContainer } from '../components/chat/AriaChatContainer';
 import { AriaClearHistoryHeaderButton } from '../components/ChatRoomHeader';
 import { supabase } from '../lib/supabase';
 import {
@@ -497,21 +498,30 @@ export default function ChatRoomScreen({ route, navigation }) {
 
   return (
     <View style={[tw`flex-1`, { backgroundColor: V.bgApp }]}>
-      <Chat
-        roomId={roomId}
-        roomCode={roomCode}
-        nickname={
-          isAriaChat && ariaResolvedNickname !== null ? ariaResolvedNickname : nickname
-        }
-        peerName={isAriaChat ? contact?.display_name || ARIA_CONTACT.display_name : peerName || title}
-        isAriaChat={!!isAriaChat}
-        ariaMessages={isAriaChat ? ariaMessages : undefined}
-        setAriaMessages={isAriaChat ? setAriaMessagesForChat : undefined}
-        sendToAria={isAriaChat ? sendToAria : undefined}
-        listPaddingTop={listPaddingTop}
-        chatRoomHeader={chatRoomHeader}
-        onTopOverlayHeight={setFrostedHeaderH}
-      />
+      {isAriaChat ? (
+        <AriaChatContainer
+          roomId={roomId}
+          roomCode={roomCode}
+          nickname={isAriaChat && ariaResolvedNickname !== null ? ariaResolvedNickname : nickname}
+          peerName={isAriaChat ? contact?.display_name || ARIA_CONTACT.display_name : peerName || title}
+          ariaMessages={ariaMessages}
+          setAriaMessages={setAriaMessagesForChat}
+          sendToAria={sendToAria}
+          listPaddingTop={listPaddingTop}
+          chatRoomHeader={chatRoomHeader}
+          onTopOverlayHeight={setFrostedHeaderH}
+        />
+      ) : (
+        <Chat
+          roomId={roomId}
+          roomCode={roomCode}
+          nickname={nickname}
+          peerName={peerName || title}
+          listPaddingTop={listPaddingTop}
+          chatRoomHeader={chatRoomHeader}
+          onTopOverlayHeight={setFrostedHeaderH}
+        />
+      )}
     </View>
   );
 }
