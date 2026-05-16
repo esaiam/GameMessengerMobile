@@ -40,6 +40,7 @@ import {
 import { playDiceRollSound, preloadDiceSound, unloadDiceSound } from '../utils/diceSound';
 import { useBoardAnimation } from '../hooks/useBoardAnimation';
 import { useGameSession } from '../hooks/useGameSession';
+import { useBackgammonGame } from '../hooks/useBackgammonGame';
 const NICKNAME_KEY = '@backgammon_nickname';
 const SWIPE_HINT_KEY = '@backgammon_swipe_hint_seen';
 /** Как у ChatRoomHeader.js — frosted шапка чата */
@@ -61,8 +62,6 @@ export default function GameScreen({ route, navigation }) {
 
   const [gameState, setGameState] = useState(createInitialGameState());
   const [playerNumber, setPlayerNumber] = useState(initialPlayerNumber);
-  const [selectedPoint, setSelectedPoint] = useState(null);
-  const [highlightedMoves, setHighlightedMoves] = useState([]);
 
   const [diceAnimating, setDiceAnimating] = useState(false);
   const diceAnimatingRef = useRef(false);
@@ -76,10 +75,6 @@ export default function GameScreen({ route, navigation }) {
   }, [showAnimDice]);
   const [animDice, setAnimDice] = useState(null);
   const [uiDice, setUiDice] = useState(null);
-
-  const [boardMode, setBoardMode] = useState('match'); // 'match' | 'sandbox' (auto-driven)
-  const [sandboxState, setSandboxState] = useState(createInitialGameState());
-  const [sandboxUiDice, setSandboxUiDice] = useState(null);
 
   const [swipeStart, setSwipeStart] = useState(null);
   const [swipeEnd, setSwipeEnd] = useState(null);
@@ -95,6 +90,8 @@ export default function GameScreen({ route, navigation }) {
   const [kbVisible, setKbVisible] = useState(false);
 
   const opponentNameRef = useRef(routePeerName);
+  const backgammonSettersRef = useRef(null);
+  const isMyTurn = gameState.currentPlayer === playerNumber;
   const {
     room,
     playerNumber: sessionPlayerNumber,
@@ -114,19 +111,54 @@ export default function GameScreen({ route, navigation }) {
     setPlayerNumber,
     gameStateRef,
     setGameState,
-    setSelectedPoint,
-    setHighlightedMoves,
+    setSelectedPoint: (v) => backgammonSettersRef.current?.setSelectedPoint?.(v),
+    setHighlightedMoves: (v) => backgammonSettersRef.current?.setHighlightedMoves?.(v),
     setDiceAnimating,
     setShowAnimDice,
     setAnimDice,
     setUiDice,
-    setSandboxUiDice,
+    setSandboxUiDice: (v) => backgammonSettersRef.current?.setSandboxUiDice?.(v),
     setSwipeStart,
     setSwipeEnd,
     pendingRollRef,
     navigation,
     setKbVisible,
   });
+
+  const backgammonGame = useBackgammonGame({
+    selfPlay,
+    gameState,
+    setGameState,
+    playerNumber,
+    setPlayerNumber,
+    syncGameState,
+    opponentOnline,
+    isMyTurn,
+    pendingRollRef,
+    setDiceAnimating,
+    setShowAnimDice,
+    setAnimDice,
+    setSwipeStart,
+    setSwipeEnd,
+  });
+  backgammonSettersRef.current = {
+    setSelectedPoint: backgammonGame.setSelectedPoint,
+    setHighlightedMoves: backgammonGame.setHighlightedMoves,
+    setSandboxUiDice: backgammonGame.setSandboxUiDice,
+  };
+  const {
+    selectedPoint,
+    highlightedMoves,
+    boardMode,
+    sandboxState,
+    sandboxUiDice,
+    setSandboxUiDice,
+    setMode,
+    handlePointPress,
+    handleBarPress,
+    handleBearOffPress,
+    handleEndTurn,
+  } = backgammonGame;
 
   useEffect(() => {
     if (sessionPlayerNumber !== undefined && sessionPlayerNumber !== null) {
@@ -149,7 +181,6 @@ export default function GameScreen({ route, navigation }) {
 
   const roomStatus = room?.status || 'playing';
 
-  const isMyTurn = gameState.currentPlayer === playerNumber;
   const gameStarted = gameState.gameStarted === true;
   // Pre-start roll: each player rolls ONE die in turn to decide who starts
   const isPreStart = gameStarted && gameState.turnPhase === 'preroll';
@@ -267,13 +298,6 @@ export default function GameScreen({ route, navigation }) {
     setDiceAnimating(true);
     setThrowKey((k) => k + 1);
   }, [boardMode, gameStarted, gameState.dice, diceAnimating, showAnimDice, diceEqual, pointH, windowW]);
-
-  useEffect(() => {
-    if (!selfPlay) return;
-    if (gameState.currentPlayer === 1 || gameState.currentPlayer === 2) {
-      setPlayerNumber(gameState.currentPlayer);
-    }
-  }, [selfPlay, gameState.currentPlayer]);
 
   const BOARD_TOP_GAP = 4;
   const BOARD_SIDE_GAP = 8;
@@ -409,27 +433,6 @@ export default function GameScreen({ route, navigation }) {
       AsyncStorage.setItem(SWIPE_HINT_KEY, '1');
     }
   }, [gameStarted]);
-
-  const setMode = useCallback((nextMode) => {
-    setBoardMode(nextMode);
-    // Drop any in-flight dice anim when switching modes
-    pendingRollRef.current = null;
-    setDiceAnimating(false);
-    setShowAnimDice(false);
-    setAnimDice(null);
-    setSwipeStart(null);
-    setSwipeEnd(null);
-    if (nextMode === 'sandbox') {
-      setSandboxState(createInitialGameState());
-      setSandboxUiDice(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selfPlay) return;
-    if (opponentOnline) setMode('match');
-    else setMode('sandbox');
-  }, [opponentOnline, setMode, selfPlay]);
 
   const handleDiceAnimComplete = useCallback(async () => {
     const pendingDice = pendingRollRef.current;
@@ -623,111 +626,10 @@ export default function GameScreen({ route, navigation }) {
     });
   }, [diceAnimating, isMyTurn, isPreStart, gameState, pointH, handleBoardSwipe, gameStarted, boardMode, playerNumber]);
 
-  const handlePointPress = useCallback(
-    (index) => {
-      if (boardMode !== 'match') return;
-      if (!isMyTurn || gameState.turnPhase !== 'move') return;
-
-      if (selectedPoint !== null) {
-        const matching = highlightedMoves.filter((m) => m.to === index);
-        if (matching.length >= 1) {
-          const matchingMove =
-            matching.find((m) => m?.kind === 'combo' && Array.isArray(m.sequence)) || matching[0];
-
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          const newState =
-            matchingMove?.kind === 'combo' && Array.isArray(matchingMove.sequence)
-              ? applyMoveSequence(gameState, matchingMove.sequence)
-              : applyMove(gameState, matchingMove);
-          setGameState(newState);
-          syncGameState(newState);
-          setSelectedPoint(null);
-          setHighlightedMoves([]);
-
-          if (newState.gameOver) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            const marsText = newState.mars ? '\nМарс! Счёт ×2' : '';
-            Alert.alert('Победа!', `${newState.winner === playerNumber ? 'Ты' : 'Соперник'} победил!${marsText}`);
-          }
-          return;
-        }
-      }
-
-      const val = gameState.board[index];
-      const isOwn = (playerNumber === 1 && val > 0) || (playerNumber === 2 && val < 0);
-
-      if (isOwn && (!gameState.bar || gameState.bar[playerNumber] === 0)) {
-        setSelectedPoint(index);
-        const opts = getMoveOptionsForSelection(gameState, index);
-        setHighlightedMoves(opts);
-      } else {
-        setSelectedPoint(null);
-        setHighlightedMoves([]);
-      }
-    },
-    [isMyTurn, gameState, selectedPoint, highlightedMoves, playerNumber, syncGameState]
-  );
-
-  const handleBarPress = useCallback(
-    (barPlayer) => {
-      if (boardMode !== 'match') return;
-      if (!isMyTurn || gameState.turnPhase !== 'move') return;
-      if (barPlayer !== playerNumber || gameState.bar[playerNumber] <= 0) return;
-      setSelectedPoint('bar');
-      setHighlightedMoves(getMoveOptionsForSelection(gameState, 'bar'));
-    },
-    [isMyTurn, gameState, playerNumber, boardMode]
-  );
-
-  const handleBearOffPress = useCallback(
-    () => {
-      if (boardMode !== 'match') return;
-      if (!isMyTurn || gameState.turnPhase !== 'move' || selectedPoint === null) return;
-      const matching = highlightedMoves.filter((m) => m.to === 'off');
-      if (matching.length >= 1) {
-        const matchingMove =
-          matching.find((m) => m?.kind === 'combo' && Array.isArray(m.sequence)) || matching[0];
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        const newState =
-          matchingMove?.kind === 'combo' && Array.isArray(matchingMove.sequence)
-            ? applyMoveSequence(gameState, matchingMove.sequence)
-            : applyMove(gameState, matchingMove);
-        setGameState(newState);
-        syncGameState(newState);
-        setSelectedPoint(null);
-        setHighlightedMoves([]);
-        if (newState.gameOver) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          const marsText = newState.mars ? '\nМарс! Счёт ×2' : '';
-          Alert.alert('Победа!', `${newState.winner === playerNumber ? 'Ты' : 'Соперник'} победил!${marsText}`);
-        }
-      }
-    },
-    [isMyTurn, gameState, selectedPoint, highlightedMoves, playerNumber, syncGameState]
-  );
-
   const handleSwipeHintComplete = useCallback(() => {
     setSwipeHintSeen(true);
     AsyncStorage.setItem(SWIPE_HINT_KEY, '1');
   }, []);
-
-  const handleEndTurn = useCallback(async () => {
-    if (boardMode !== 'match') return;
-    const opponent = playerNumber === 1 ? 2 : 1;
-    const newState = {
-      ...gameState,
-      currentPlayer: opponent,
-      dice: [],
-      remainingMoves: [],
-      turnPhase: 'roll',
-      headMovesThisTurn: 0,
-      isFirstMove: { ...(gameState.isFirstMove || { 1: true, 2: true }), [playerNumber]: false },
-    };
-    setGameState(newState);
-    setSelectedPoint(null);
-    setHighlightedMoves([]);
-    await syncGameState(newState);
-  }, [gameState, playerNumber, syncGameState, boardMode]);
 
   const canEndTurn =
     isMyTurn &&
