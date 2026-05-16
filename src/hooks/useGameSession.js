@@ -230,6 +230,10 @@ export function useGameSession({
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setActiveSessionId(payload.new.id);
+            setDiceAnimating(false);
+            setShowAnimDice(false);
+            setAnimDice(null);
+            pendingRollRef.current = null;
             if (payload.new.board_state) {
               const current = gameStateRef.current;
               const incoming = migrateGameState(payload.new.board_state);

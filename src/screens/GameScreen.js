@@ -18,24 +18,18 @@ import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SafeBlurView from '../components/SafeBlurView';
 import { Phone } from '../icons/lucideIcons';
-import { supabase } from '../lib/supabase';
 import BackgammonBoard from '../components/BackgammonBoard';
 import { DieFace } from '../components/Dice';
 import DiceThrow3D from '../components/DiceThrow3D';
 import SwipeBoardHint from '../components/SwipeBoardHint';
 import Chat from '../components/Chat';
-import { V, boardPalette } from '../theme';
+import { V } from '../theme';
 import {
   createInitialGameState,
-  migrateGameState,
-  stripTerminalMetaForDb,
   rollDice,
   diceToMoves,
   getAllValidMoves,
-  applyMove,
-  applyMoveSequence,
   shouldAutoEndTurn,
-  getMoveOptionsForSelection,
 } from '../utils/gameLogic';
 import { playDiceRollSound, preloadDiceSound, unloadDiceSound } from '../utils/diceSound';
 import { useBoardAnimation } from '../hooks/useBoardAnimation';
@@ -95,13 +89,9 @@ export default function GameScreen({ route, navigation }) {
   const {
     room,
     playerNumber: sessionPlayerNumber,
-    activeSessionId,
-    useLegacyRoomState,
     opponentOnline,
     syncGameState,
     newGame,
-    leaveRoom,
-    channelRef,
   } = useGameSession({
     roomId,
     nickname,
@@ -182,7 +172,7 @@ export default function GameScreen({ route, navigation }) {
   const roomStatus = room?.status || 'playing';
 
   const gameStarted = gameState.gameStarted === true;
-  // Pre-start roll: each player rolls ONE die in turn to decide who starts
+  // Pre-start roll: each player rolls two dice, higher sum goes first
   const isPreStart = gameStarted && gameState.turnPhase === 'preroll';
   const effectiveGameState = boardMode === 'sandbox' ? sandboxState : gameState;
 
@@ -440,17 +430,22 @@ export default function GameScreen({ route, navigation }) {
       pendingRollRef.current = null;
       const gs = gameStateRef.current;
       if (gs.turnPhase === 'preroll') {
-        const die = pendingDice?.[0];
-        if (!die) {
+        const die1 = pendingDice?.[0];
+        const die2 = pendingDice?.[1];
+        if (!die1 || !die2) {
           setShowAnimDice(false);
           setDiceAnimating(false);
           return;
         }
-
-        const nextRolls = { ...(gs.preStartRolls || { 1: null, 2: null }), [gs.currentPlayer]: die };
-        const p1 = nextRolls[1];
-        const p2 = nextRolls[2];
-
+        const myRoll = [die1, die2];
+        const nextRolls = {
+          ...(gs.preStartRolls || { 1: null, 2: null }),
+          [gs.currentPlayer]: myRoll,
+        };
+        const r1 = nextRolls[1];
+        const r2 = nextRolls[2];
+        const p1 = r1 ? r1[0] + r1[1] : null;
+        const p2 = r2 ? r2[0] + r2[1] : null;
         let newState = {
           ...gs,
           preStartRolls: nextRolls,
@@ -458,12 +453,8 @@ export default function GameScreen({ route, navigation }) {
           remainingMoves: [],
           headMovesThisTurn: 0,
         };
-
-        // Show pre-start dice in UI (both dice values when available)
-        setUiDice([p1, p2]);
-
+        setUiDice(myRoll);
         if (p1 == null || p2 == null) {
-          // other player rolls next
           newState.currentPlayer = gs.currentPlayer === 1 ? 2 : 1;
           newState.turnPhase = 'preroll';
           setGameState(newState);
@@ -472,9 +463,7 @@ export default function GameScreen({ route, navigation }) {
           setDiceAnimating(false);
           return;
         }
-
         if (p1 === p2) {
-          // tie -> reroll
           newState = {
             ...newState,
             preStartRolls: { 1: null, 2: null },
@@ -487,7 +476,6 @@ export default function GameScreen({ route, navigation }) {
           setDiceAnimating(false);
           return;
         }
-
         const starter = p1 > p2 ? 1 : 2;
         newState = {
           ...newState,
@@ -550,7 +538,11 @@ export default function GameScreen({ route, navigation }) {
 
       const inSandbox = boardMode === 'sandbox';
 
-      // Anti-stress rolls before starting the game: allow only one player to avoid state racing
+      // Anti-stress rolls: sandbox or non-real rolls outside of turn
+      if (!inSandbox && gameStarted && gameState.turnPhase === 'preroll' && gameState.currentPlayer !== playerNumber) {
+        Alert.alert('Подожди', 'Сначала должен бросить игрок 1.');
+        return;
+      }
       if (!inSandbox && !gameStarted && playerNumber !== 1) {
         Alert.alert('Недоступно', 'До начала игры «просто так» может кидать только игрок 1.');
         return;
@@ -569,7 +561,7 @@ export default function GameScreen({ route, navigation }) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       playDiceRollSound();
 
-      const dice = gameState.turnPhase === 'preroll' ? [rollDice()[0], rollDice()[0]] : rollDice();
+      const dice = rollDice();
       pauseJsForDiceThrow();
       setAnimDice(dice);
       if (isRealRoll) {
@@ -609,22 +601,6 @@ export default function GameScreen({ route, navigation }) {
     },
     [diceAnimating, showAnimDice, isMyTurn, isPreStart, gameState, roomStatus, gameStarted, boardMode, playerNumber, syncGameState, pauseJsForDiceThrow]
   );
-
-  const handleRollDice = useCallback(() => {
-    if (diceAnimating) return;
-    // Before the game starts: allow only player 1 (anti-stress roll), sandbox stays local
-    if (!gameStarted && !(boardMode === 'match' && playerNumber === 1)) return;
-    if (!(isMyTurn || isPreStart)) return;
-    if (!(gameState.turnPhase === 'roll' || gameState.turnPhase === 'preroll')) return;
-    const bw = windowW || Dimensions.get('window').width;
-    const bh = pointH * 2;
-    handleBoardSwipe({
-      startX: bw * 0.3,
-      startY: bh * 0.5,
-      endX: bw * 0.6,
-      endY: bh * 0.5,
-    });
-  }, [diceAnimating, isMyTurn, isPreStart, gameState, pointH, handleBoardSwipe, gameStarted, boardMode, playerNumber]);
 
   const handleSwipeHintComplete = useCallback(() => {
     setSwipeHintSeen(true);
@@ -905,14 +881,14 @@ export default function GameScreen({ route, navigation }) {
                           )}
                           <View style={tw`items-center justify-center`}>
                             {boardMode === 'match' && gameState.turnPhase === 'preroll' ? (
-                              <View style={tw`flex-row items-center`}>
-                                <View style={tw`items-center mr-4`}>
-                                  <Text style={[tw`text-[10px] mb-1`, { color: V.textMuted, fontWeight: '400' }]}>Ты</Text>
-                                  <DieFace value={Math.max(1, Math.min(6, (gameState.preStartRolls?.[playerNumber] ?? 1)))} isUsed={false} size={42} />
+                              <View style={tw`gap-2`}>
+                                <View style={tw`flex-row items-center justify-center gap-3`}>
+                                  <DieFace value={gameState.preStartRolls?.[1]?.[0] ?? 1} isUsed={false} size={36} />
+                                  <DieFace value={gameState.preStartRolls?.[1]?.[1] ?? 1} isUsed={false} size={36} />
                                 </View>
-                                <View style={tw`items-center`}>
-                                  <Text style={[tw`text-[10px] mb-1`, { color: V.textMuted, fontWeight: '400' }]}>Соперник</Text>
-                                  <DieFace value={Math.max(1, Math.min(6, (gameState.preStartRolls?.[playerNumber === 1 ? 2 : 1] ?? 1)))} isUsed={false} size={42} />
+                                <View style={tw`flex-row items-center justify-center gap-3`}>
+                                  <DieFace value={gameState.preStartRolls?.[2]?.[0] ?? 1} isUsed={false} size={36} />
+                                  <DieFace value={gameState.preStartRolls?.[2]?.[1] ?? 1} isUsed={false} size={36} />
                                 </View>
                               </View>
                             ) : (
