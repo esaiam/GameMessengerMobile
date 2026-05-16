@@ -49,13 +49,12 @@ export default function GameScreen({ route, navigation }) {
   const isWideTablet = isTablet && windowW > windowH;
 
   const roomId = route.params?.roomId;
-  const initialPlayerNumber = route.params?.playerNumber;
   const selfPlay = route.params?.selfPlay === true;
   const routePeerName = route.params?.peerName || route.params?.title || null;
   const [nickname, setNickname] = useState(route.params?.nickname || '');
 
   const [gameState, setGameState] = useState(createInitialGameState());
-  const [playerNumber, setPlayerNumber] = useState(initialPlayerNumber);
+  const [playerNumber, setPlayerNumber] = useState(route.params?.playerNumber);
 
   const [diceAnimating, setDiceAnimating] = useState(false);
   const diceAnimatingRef = useRef(false);
@@ -142,8 +141,6 @@ export default function GameScreen({ route, navigation }) {
     boardMode,
     sandboxState,
     sandboxUiDice,
-    setSandboxUiDice,
-    setMode,
     handlePointPress,
     handleBarPress,
     handleBearOffPress,
@@ -704,33 +701,6 @@ export default function GameScreen({ route, navigation }) {
   const THUMB_W_MAX = 48;
   const THUMB_W_MIN = 4;
   const THUMB_H_LINE = 4;
-  const thumbGripW = useMemo(
-    () =>
-      handleStretchAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [THUMB_W_MAX, THUMB_W_MIN],
-        extrapolate: 'clamp',
-      }),
-    [handleStretchAnim]
-  );
-  const thumbGripH = useMemo(
-    () =>
-      handleStretchAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [THUMB_H_LINE, THUMB_W_MIN],
-        extrapolate: 'clamp',
-      }),
-    [handleStretchAnim]
-  );
-  const thumbGripRadius = useMemo(
-    () =>
-      handleStretchAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [9999, THUMB_W_MIN / 2],
-        extrapolate: 'clamp',
-      }),
-    [handleStretchAnim]
-  );
 
   const stripWidthAnim = useMemo(
     () => Animated.add(
@@ -984,9 +954,21 @@ export default function GameScreen({ route, navigation }) {
               <Animated.View
                 pointerEvents="none"
                 style={{
-                  width: thumbGripW,
-                  height: thumbGripH,
-                  borderRadius: thumbGripRadius,
+                  width: handleStretchAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [THUMB_W_MAX, THUMB_W_MIN],
+                    extrapolate: 'clamp',
+                  }),
+                  height: handleStretchAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [THUMB_H_LINE, THUMB_W_MIN],
+                    extrapolate: 'clamp',
+                  }),
+                  borderRadius: handleStretchAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [9999, THUMB_W_MIN / 2],
+                    extrapolate: 'clamp',
+                  }),
                   overflow: 'hidden',
                 }}
               >
