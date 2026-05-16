@@ -35,8 +35,10 @@ import { playDiceRollSound, preloadDiceSound, unloadDiceSound } from '../utils/d
 import { useBoardAnimation } from '../hooks/useBoardAnimation';
 import { useGameSession } from '../hooks/useGameSession';
 import { useBackgammonGame } from '../hooks/useBackgammonGame';
-const NICKNAME_KEY = '@backgammon_nickname';
-const SWIPE_HINT_KEY = '@backgammon_swipe_hint_seen';
+const NICKNAME_KEY = '@vault_nickname';
+const SWIPE_HINT_KEY = '@vault_swipe_hint_seen';
+const LEGACY_NICKNAME_KEY = '@backgammon_nickname';
+const LEGACY_SWIPE_HINT_KEY = '@backgammon_swipe_hint_seen';
 /** Как у ChatRoomHeader.js — frosted шапка чата */
 const HANDLE_BLUR_INTENSITY_IOS = 78;
 const HANDLE_BLUR_INTENSITY_ANDROID = 56;
@@ -371,6 +373,20 @@ export default function GameScreen({ route, navigation }) {
   pauseJsForDiceThrowRef.current = pauseJsForDiceThrow;
 
   useEffect(() => {
+    // Migrate legacy keys on first run
+    AsyncStorage.getItem(LEGACY_NICKNAME_KEY).then((legacy) => {
+      if (legacy) {
+        AsyncStorage.setItem(NICKNAME_KEY, legacy);
+        AsyncStorage.removeItem(LEGACY_NICKNAME_KEY);
+      }
+    });
+    AsyncStorage.getItem(LEGACY_SWIPE_HINT_KEY).then((legacy) => {
+      if (legacy) {
+        AsyncStorage.setItem(LEGACY_SWIPE_HINT_KEY, '1');
+        AsyncStorage.removeItem(LEGACY_SWIPE_HINT_KEY);
+      }
+    });
+
     if (route.params?.nickname && route.params.nickname !== nickname) {
       setNickname(route.params.nickname);
       return;

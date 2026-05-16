@@ -23,85 +23,6 @@ import { Phone } from '../icons/lucideIcons';
 const ARIA_REPLY_VOLUME = 0.3;
 const ARIA_MESSAGE_RECEIVED_MP3 = require('../assets/sounds/message_received.mp3');
 
-let ariaReplyModeReady = false;
-let ariaReplyPlayer = null;
-let ariaReplyPlayerCreating = null;
-let ariaReplyFallbackSound = null;
-
-async function ensureAriaReplyAudioMode() {
-  if (ariaReplyModeReady) return;
-  await setIsAudioActiveAsync(true);
-  await setAudioModeAsync({
-    playsInSilentMode: true,
-    interruptionMode: 'mixWithOthers',
-    allowsRecording: false,
-    shouldRouteThroughEarpiece: false,
-  });
-  ariaReplyModeReady = true;
-}
-
-async function ensureAriaReplyPlayer() {
-  if (ariaReplyPlayer) return;
-  if (ariaReplyPlayerCreating) {
-    await ariaReplyPlayerCreating;
-    return;
-  }
-  ariaReplyPlayerCreating = (async () => {
-    await ensureAriaReplyAudioMode();
-    try {
-      ariaReplyPlayer = createAudioPlayer(ARIA_MESSAGE_RECEIVED_MP3, {
-        downloadFirst: true,
-        keepAudioSessionActive: false,
-      });
-    } catch {
-      ariaReplyPlayer = null;
-    }
-  })();
-  try {
-    await ariaReplyPlayerCreating;
-  } finally {
-    ariaReplyPlayerCreating = null;
-  }
-}
-
-async function playAriaReplySound() {
-  try {
-    await ensureAriaReplyPlayer();
-    if (ariaReplyPlayer) {
-      ariaReplyPlayer.volume = ARIA_REPLY_VOLUME;
-      await ariaReplyPlayer.seekTo(0);
-      ariaReplyPlayer.play();
-      return;
-    }
-  } catch {
-    ariaReplyPlayer = null;
-  }
-
-  try {
-    await ensureAriaReplyAudioMode();
-    if (ariaReplyFallbackSound) {
-      try {
-        await ariaReplyFallbackSound.unloadAsync();
-      } catch {
-        /* ignore */
-      }
-      ariaReplyFallbackSound = null;
-    }
-    const { sound } = await Audio.Sound.createAsync(
-      ARIA_MESSAGE_RECEIVED_MP3,
-      { shouldPlay: true, volume: ARIA_REPLY_VOLUME }
-    );
-    ariaReplyFallbackSound = sound;
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (!status.isLoaded || !status.didJustFinish) return;
-      sound.unloadAsync().catch(() => {});
-      ariaReplyFallbackSound = null;
-    });
-  } catch {
-    /* ignore */
-  }
-}
-
 /** Строка из `aria_messages` → формат ленты Chat. */
 function ariaMessagesFromDbRows(rows, nickname) {
   return rows.map((row) => {
@@ -148,6 +69,90 @@ export default function ChatRoomScreen({ route, navigation }) {
   ariaMessagesRef.current = ariaMessages;
 
   const ariaTypingSeqRef = useRef(0);
+
+  const ariaReplyModeReadyRef = useRef(false);
+  const ariaReplyPlayerRef = useRef(null);
+  const ariaReplyPlayerCreatingRef = useRef(null);
+  const ariaReplyFallbackSoundRef = useRef(null);
+
+  const ensureAriaReplyAudioMode = useCallback(async () => {
+    if (ariaReplyModeReadyRef.current) return;
+    await setIsAudioActiveAsync(true);
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      interruptionMode: 'mixWithOthers',
+      allowsRecording: false,
+      shouldRouteThroughEarpiece: false,
+    });
+    ariaReplyModeReadyRef.current = true;
+  }, []);
+
+  const ensureAriaReplyPlayer = useCallback(async () => {
+    if (ariaReplyPlayerRef.current) return;
+    if (ariaReplyPlayerCreatingRef.current) {
+      await ariaReplyPlayerCreatingRef.current;
+      return;
+    }
+    ariaReplyPlayerCreatingRef.current = (async () => {
+      await ensureAriaReplyAudioMode();
+      try {
+        ariaReplyPlayerRef.current = createAudioPlayer(ARIA_MESSAGE_RECEIVED_MP3, {
+          downloadFirst: true,
+          keepAudioSessionActive: false,
+        });
+      } catch {
+        ariaReplyPlayerRef.current = null;
+      }
+    })();
+    try {
+      await ariaReplyPlayerCreatingRef.current;
+    } finally {
+      ariaReplyPlayerCreatingRef.current = null;
+    }
+  }, [ensureAriaReplyAudioMode]);
+
+  const playAriaReplySound = useCallback(async () => {
+    try {
+      await ensureAriaReplyPlayer();
+      if (ariaReplyPlayerRef.current) {
+        ariaReplyPlayerRef.current.volume = ARIA_REPLY_VOLUME;
+        await ariaReplyPlayerRef.current.seekTo(0);
+        ariaReplyPlayerRef.current.play();
+        return;
+      }
+    } catch {
+      ariaReplyPlayerRef.current = null;
+    }
+    try {
+      await ensureAriaReplyAudioMode();
+      if (ariaReplyFallbackSoundRef.current) {
+        try {
+          await ariaReplyFallbackSoundRef.current.unloadAsync();
+        } catch {}
+        ariaReplyFallbackSoundRef.current = null;
+      }
+      const { sound } = await Audio.Sound.createAsync(
+        ARIA_MESSAGE_RECEIVED_MP3,
+        { shouldPlay: true, volume: ARIA_REPLY_VOLUME }
+      );
+      ariaReplyFallbackSoundRef.current = sound;
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (!status.isLoaded || !status.didJustFinish) return;
+        sound.unloadAsync().catch(() => {});
+        ariaReplyFallbackSoundRef.current = null;
+      });
+    } catch {}
+  }, [ensureAriaReplyPlayer, ensureAriaReplyAudioMode]);
+
+  useEffect(() => {
+    return () => {
+      try { ariaReplyPlayerRef.current?.release?.(); } catch {}
+      ariaReplyPlayerRef.current = null;
+      ariaReplyModeReadyRef.current = false;
+      try { ariaReplyFallbackSoundRef.current?.unloadAsync?.(); } catch {}
+      ariaReplyFallbackSoundRef.current = null;
+    };
+  }, []);
 
   /** Перед любым функциональным обновлением ленты убирает предыдущий typing-row (один индикатор). */
   const setAriaMessagesForChat = useCallback((update) => {
