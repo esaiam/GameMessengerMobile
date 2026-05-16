@@ -2,7 +2,7 @@
 export const ARIA_ROOM_ID = 'aria-direct';
 
 /** POST `${ARIA_API_URL}/message` — задай EXPO_PUBLIC_ARIA_API_URL или LAN-IP (Expo с телефона не видит localhost ПК). */
-export const ARIA_API_URL = process.env.EXPO_PUBLIC_ARIA_API_URL || 'http://192.168.1.101:8000';
+export const ARIA_API_URL = process.env.EXPO_PUBLIC_ARIA_API_URL || '';
 
 /**
  * POST `${ARIA_API_URL}/transcribe` — голос → текст для чата с Aria.

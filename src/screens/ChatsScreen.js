@@ -25,9 +25,13 @@ import {
   MESSENGER_HEADER_PADDING_HORIZONTAL,
   useMessengerHeaderLayout,
 } from '../components/MessengerHeaderLayout';
+import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
+import { useSplitDetail } from '../context/SplitDetailContext';
 
 export default function ChatsScreen({ route, navigation }) {
   const nickname = useNicknameFromRoute(route);
+  const isSplit = useIsSplitLayout();
+  const { setDetailParams } = useSplitDetail();
 
   useEffect(() => {
     clearPreviewCache();
@@ -65,27 +69,37 @@ export default function ChatsScreen({ route, navigation }) {
         isFirst={index === 0}
         onPress={() => {
           if (item.isAria) {
-            navigation.navigate('ChatRoom', {
+            const params = {
               roomId: ARIA_ROOM_ID,
               isAriaChat: true,
               contact: ARIA_CONTACT,
               nickname,
               title: ARIA_CONTACT.display_name,
               peerName: ARIA_CONTACT.display_name,
-            });
+            };
+            if (isSplit) {
+              setDetailParams({ type: 'ChatRoom', params });
+            } else {
+              navigation.navigate('ChatRoom', params);
+            }
             return;
           }
-          navigation.navigate('Room', {
+          const params = {
             nickname,
             roomId: item.roomId,
             roomCode: item.roomCode,
             peerName: item.contactName,
             title: item.contactName,
-          });
+          };
+          if (isSplit) {
+            setDetailParams({ type: 'Room', params });
+          } else {
+            navigation.navigate('Room', params);
+          }
         }}
       />
     ),
-    [nickname, navigation]
+    [nickname, navigation, isSplit, setDetailParams]
   );
 
   return (

@@ -2,9 +2,8 @@ import 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { registerRootComponent } from 'expo';
 
-import App from './App';
+// Side effect: sets globalThis.__VAULT_SUPABASE_URL__ before App → supabase.js loads
+import './src/lib/resolveSupabaseBaseUrl';
+import RootBootstrap from './RootBootstrap';
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
-registerRootComponent(App);
+registerRootComponent(RootBootstrap);

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import { buildHiddenForEveryone } from './buildHiddenForEveryone';
 
 /**
  * Реакции на сообщение и удаление (у меня / у всех через hidden_for), плюс закрытие модалки подтверждения.
@@ -9,11 +10,13 @@ export default function useChatMessageMutations({
   messages,
   setMessages,
   nickname,
+  peerName,
   roomId,
   popMessage,
   setDeletingIds,
   setDeleteConfirmVisible,
   setSelectedMessage,
+  chatSyncRef,
 }) {
   const toggleReaction = useCallback(
     async (messageId, emoji) => {
@@ -85,10 +88,13 @@ export default function useChatMessageMutations({
         .eq('id', roomId)
         .maybeSingle();
 
-      const u1 = room?.user1_id || room?.player1_name || null;
-      const u2 = room?.user2_id || room?.player2_name || null;
-      const hiddenForAll = [...new Set([u1, u2].filter(Boolean))];
-      if (hiddenForAll.length === 0) hiddenForAll.push(nickname);
+      const explicitPeer = typeof peerName === 'string' ? peerName.trim() : '';
+      const inferredPeer =
+        explicitPeer || messages.find((m) => m.player_name !== nickname)?.player_name || null;
+      const hiddenForAll = buildHiddenForEveryone(room, nickname, {
+        peerName: inferredPeer,
+        messagesSnapshot: messages,
+      });
 
       if (roomErr) {
         Alert.alert('Не удалось удалить у всех', roomErr.message);
@@ -124,8 +130,9 @@ export default function useChatMessageMutations({
         next.delete(messageId);
         return next;
       });
+      chatSyncRef?.current?.hideMessage?.(messageId);
     },
-    [nickname, popMessage, roomId, setMessages, setDeletingIds],
+    [messages, nickname, peerName, popMessage, roomId, setMessages, setDeletingIds, chatSyncRef],
   );
 
   return {

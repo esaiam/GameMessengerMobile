@@ -30,6 +30,8 @@ export default function useChatRoomEffects({
   setMessages,
   setMessagesLoading,
   messagesRef,
+  /** ref для отправки broadcast после «удалить у всех» / очистки (когда postgres UPDATE не доходит из‑за RLS) */
+  chatSyncRef,
 }) {
   const readSentRef = useRef(new Set());
 
@@ -222,8 +224,27 @@ export default function useChatRoomEffects({
       queueMicrotask(flushRealtimeInsertQueue);
     };
 
+    const syncRef = chatSyncRef;
+    if (syncRef) syncRef.current = null;
+
     const channel = supabase
       .channel(`chat-${roomId}`)
+      .on('broadcast', { event: 'vault_msg_hide' }, ({ payload }) => {
+        const id = payload?.id;
+        if (id == null) return;
+        setMessages((prev) => {
+          const next = prev.filter((m) => m.id !== id);
+          const filtered = filterHiddenForMeKeepingDeleting(filterExpired(next));
+          roomMessagesCache.set(roomId, filtered);
+          return filtered;
+        });
+      })
+      .on('broadcast', { event: 'vault_thread_clear' }, () => {
+        setMessages(() => {
+          roomMessagesCache.set(roomId, []);
+          return [];
+        });
+      })
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
@@ -235,21 +256,49 @@ export default function useChatRoomEffects({
             realtimeInsertQueueRef.current.push(msg);
             scheduleRealtimeInsertFlush();
           } else if (payload.eventType === 'UPDATE') {
-            const updatedMsg = await decryptMsg(payload.new);
+            const id = payload.new?.id ?? payload.old?.id;
+            if (id == null) return;
+            const base = messagesRef.current.find((m) => m.id === id) || {};
+            const merged = { ...base, ...payload.new, id };
+            const updatedMsg = await decryptMsg(merged);
             setMessages((prev) => {
-              const next = prev.map((m) => (m.id === payload.new.id ? updatedMsg : m));
-              return filterHiddenForMeKeepingDeleting(filterExpired(next));
+              const next = prev.map((m) => (m.id === id ? updatedMsg : m));
+              const filtered = filterHiddenForMeKeepingDeleting(filterExpired(next));
+              roomMessagesCache.set(roomId, filtered);
+              return filtered;
             });
           } else if (payload.eventType === 'DELETE') {
             const id = payload.old.id;
             if (deletingIdsRef.current?.has?.(id)) return;
-            setMessages((prev) => prev.filter((m) => m.id !== id));
+            setMessages((prev) => {
+              const next = prev.filter((m) => m.id !== id);
+              const filtered = filterHiddenForMeKeepingDeleting(filterExpired(next));
+              roomMessagesCache.set(roomId, filtered);
+              return filtered;
+            });
           }
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED' || !syncRef) return;
+        syncRef.current = {
+          hideMessage: (messageId) =>
+            channel.send({
+              type: 'broadcast',
+              event: 'vault_msg_hide',
+              payload: { id: messageId },
+            }),
+          clearThread: () =>
+            channel.send({
+              type: 'broadcast',
+              event: 'vault_thread_clear',
+              payload: {},
+            }),
+        };
+      });
 
     return () => {
+      if (syncRef) syncRef.current = null;
       realtimeFlushScheduledRef.current = false;
       const pending = realtimeInsertQueueRef.current;
       realtimeInsertQueueRef.current = [];
@@ -258,7 +307,7 @@ export default function useChatRoomEffects({
         applyRealtimeInsertBatch(pending);
       }
     };
-  }, [roomId, isAriaChat, decryptMsg, nickname, filterHiddenForMeKeepingDeleting, filterExpired]);
+  }, [roomId, isAriaChat, decryptMsg, nickname, filterHiddenForMeKeepingDeleting, filterExpired, chatSyncRef]);
 
   useEffect(() => {
     if (isAriaChat) return;

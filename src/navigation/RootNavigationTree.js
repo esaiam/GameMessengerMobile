@@ -9,6 +9,7 @@ import InviteScanScreen from '../screens/InviteScanScreen';
 import PickHandleScreen from '../screens/PickHandleScreen';
 import { V } from '../theme';
 import { MainTabs } from './MainTabsNavigator';
+import { TabletSplitShell } from './TabletSplitShell';
 
 const BG = V.bgApp;
 
@@ -30,7 +31,8 @@ const Stack = createNativeStackNavigator();
  */
 export function RootNavigationTree({ navRef, stackKey, session, profileHandle }) {
   return (
-    <View style={{ flex: 1 }}>
+    <TabletSplitShell>
+      <View style={{ flex: 1 }}>
       <NavigationContainer ref={navRef} theme={NavTheme}>
         <StatusBar style="light" />
         <Stack.Navigator
@@ -67,6 +69,7 @@ export function RootNavigationTree({ navRef, stackKey, session, profileHandle })
           )}
         </Stack.Navigator>
       </NavigationContainer>
-    </View>
+      </View>
+    </TabletSplitShell>
   );
 }

@@ -29,6 +29,12 @@ export const ICON_SELECTION_ACTION = 26;
 const SELECTION_COUNT_FONT = 18;
 const SELECTION_COUNT_LINE_HEIGHT = 26;
 const SELECTION_ACTION_GAP = 12;
+/** Глиф трубки в `headerRight` (ChatRoomScreen / GameScreen) */
+const HEADER_RIGHT_PHONE_ICON = 20;
+/** Зазор между глифами трубки и ⋮ (px, по краям иконок) */
+const HEADER_RIGHT_ICONS_GAP = 16;
+/** От правого края кнопки меню до края экрана */
+const HEADER_RIGHT_EDGE_INSET = 16;
 const MODE_ANIM_MS = 320;
 /** Для rotateY у иконок действий и морфа трубка ↔ корзина */
 const HEADER_ICON_PERSPECTIVE = 480;
@@ -116,6 +122,8 @@ export default function ChatRoomHeader({
   onDelete,
   /** Опциональный слот справа (обычный режим), напр. звонок в Game — в выделении морфится в «Удалить» */
   headerRight,
+  /** Справа от слота звонка (меню ⋮); скрывается в режиме выделения вместе со звонком */
+  headerRightTrailing,
   /** Если задан — заменяет insets.top + 8 (напр. шапка под уже учтённым safe area + полосой статуса на планшете) */
   topPaddingOverride,
   /** Чат Aria: null | true | false — подпись под именем; если проп не передан — обычный presence по contactOnline */
@@ -190,6 +198,15 @@ export default function ChatRoomHeader({
   const hasSecondary = title && title !== 'Чат';
   const actionsDisabled = selectedCount === 0;
   const morphTrashWithHeaderRight = !!headerRight;
+  const headerRightClusterVisible = !!(headerRight || headerRightTrailing);
+  const headerRightPhoneSlotW = morphTrashWithHeaderRight
+    ? ICON_SELECTION_ACTION
+    : HEADER_RIGHT_PHONE_ICON;
+  const headerRightMenuSlotW = ICON_SELECTION_ACTION;
+  const headerRightIconsSlotGap =
+    headerRight && headerRightTrailing
+      ? HEADER_RIGHT_ICONS_GAP - (headerRightPhoneSlotW - HEADER_RIGHT_PHONE_ICON) / 2
+      : 0;
 
   const ariaHeaderStatusText =
     hasSecondary && typeof ariaOnline !== 'undefined'
@@ -227,8 +244,10 @@ export default function ChatRoomHeader({
         />
         <View
           style={[
-            tw`flex-row px-4`,
+            tw`flex-row`,
             {
+              paddingLeft: HEADER_RIGHT_EDGE_INSET,
+              paddingRight: HEADER_RIGHT_EDGE_INSET,
               paddingTop: typeof topPaddingOverride === 'number' ? topPaddingOverride : insets.top + 10,
               /* 8px от нижнего края аватарки до низа шапки (ряд по высоте AVATAR_SIZE) */
               paddingBottom: 8,
@@ -483,60 +502,86 @@ export default function ChatRoomHeader({
             ) : null}
           </Animated.View>
         </View>
-        {headerRight ? (
+        {headerRightClusterVisible ? (
           <View
             style={{
-              width: AVATAR_SIZE,
-              height: AVATAR_SIZE,
-              marginLeft: 4,
+              flexDirection: 'row',
+              alignItems: 'flex-start',
               alignSelf: 'flex-start',
-              justifyContent: 'center',
-              alignItems: 'center',
+              marginLeft: 4,
               overflow: 'visible',
             }}
           >
-            <Animated.View
-              style={{
-                position: 'absolute',
-                width: '100%',
-                height: '100%',
-                justifyContent: 'center',
-                alignItems: 'center',
-                opacity: phoneOpacity,
-                transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: phoneRotateY }],
-                pointerEvents: selectionMode ? 'none' : 'auto',
-              }}
-            >
-              {headerRight}
-            </Animated.View>
-            <Animated.View
-              style={{
-                position: 'absolute',
-                width: '100%',
-                height: '100%',
-                justifyContent: 'center',
-                alignItems: 'center',
-                opacity: trashSlotOpacity,
-                transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: trashMorphRotateY }],
-                pointerEvents: selectionMode ? 'auto' : 'none',
-              }}
-            >
-              <TouchableOpacity
-                onPress={onDelete}
-                disabled={actionsDisabled || !selectionMode}
-                accessibilityLabel="Удалить"
+            {headerRight ? (
+              <View
                 style={{
-                  width: '100%',
-                  height: '100%',
+                  width: headerRightPhoneSlotW,
+                  height: AVATAR_SIZE,
                   justifyContent: 'center',
                   alignItems: 'center',
-                  opacity: actionsDisabled ? 0.35 : 1,
+                  overflow: 'visible',
                 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Trash2 size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
-              </TouchableOpacity>
-            </Animated.View>
+                <Animated.View
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    opacity: phoneOpacity,
+                    transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: phoneRotateY }],
+                    pointerEvents: selectionMode ? 'none' : 'auto',
+                  }}
+                >
+                  {headerRight}
+                </Animated.View>
+                <Animated.View
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    opacity: trashSlotOpacity,
+                    transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: trashMorphRotateY }],
+                    pointerEvents: selectionMode ? 'auto' : 'none',
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={onDelete}
+                    disabled={actionsDisabled || !selectionMode}
+                    accessibilityLabel="Удалить"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      opacity: actionsDisabled ? 0.35 : 1,
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Trash2 size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
+                  </TouchableOpacity>
+                </Animated.View>
+              </View>
+            ) : null}
+            {headerRightTrailing ? (
+              <Animated.View
+                style={{
+                  width: headerRightMenuSlotW,
+                  height: AVATAR_SIZE,
+                  marginLeft: headerRight ? headerRightIconsSlotGap : 0,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  opacity: phoneOpacity,
+                  transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: phoneRotateY }],
+                  pointerEvents: selectionMode ? 'none' : 'auto',
+                }}
+              >
+                {headerRightTrailing}
+              </Animated.View>
+            ) : null}
           </View>
         ) : null}
         </View>

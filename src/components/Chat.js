@@ -12,6 +12,8 @@ import {
   Keyboard,
   FlatList,
   useWindowDimensions,
+  Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
@@ -21,7 +23,7 @@ import { deriveKey } from '../utils/crypto';
 import { getOrCreateKeyPair } from '../utils/VaultKeyStore';
 import { publishMyPublicKey } from '../utils/VaultKeyServer';
 import { useVoicePlayer } from '../hooks/useVoicePlayer';
-import ChatRoomHeader from './ChatRoomHeader';
+import ChatRoomHeader, { ICON_SELECTION_ACTION } from './ChatRoomHeader';
 import ChatMessageContextMenuHost from './chat/ChatMessageContextMenuHost';
 import { EphemeralClockContext } from './chat/ephemeralClockContext';
 import { configureReplyTargetLayoutAnimation } from './chat/replyTargetLayoutAnimation';
@@ -31,6 +33,8 @@ import ChatComposer from './chat/ChatComposer';
 import ChatAttachMenuModal from './chat/ChatAttachMenuModal';
 import ChatFullScreenImageModal from './chat/ChatFullScreenImageModal';
 import ChatDeleteMessageModal from './chat/ChatDeleteMessageModal';
+import ChatHeaderOverflowMenuModal from './chat/ChatHeaderOverflowMenuModal';
+import ChatClearHistoryConfirmModal from './chat/ChatClearHistoryConfirmModal';
 import ChatUploadOverlay from './chat/ChatUploadOverlay';
 import ChatListFooter from './chat/ChatListFooter';
 import ChatRoomWallpaper from './chat/ChatRoomWallpaper';
@@ -67,6 +71,16 @@ import {
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
 import { useChatInvertedListScroll } from '../hooks/useChatInvertedListScroll';
+import { EllipsisVertical } from '../icons/lucideIcons';
+import { supabase } from '../lib/supabase';
+import roomMessagesCache from '../utils/roomMessagesCache';
+import { buildHiddenForEveryone } from './chat/buildHiddenForEveryone';
+import usePicInlineSearch from '../hooks/usePicInlineSearch';
+import useGifInlineSearch from '../hooks/useGifInlineSearch';
+import { parseActiveInlineMediaQuery } from '../lib/parseInlineTrigger';
+import { parsePicInlineQuery, stripPicInlineTrigger } from '../lib/parsePicInlineQuery';
+import { parseGifInlineQuery, stripGifInlineTrigger } from '../lib/parseGifInlineQuery';
+import { downloadRemoteImageToCache } from '../lib/downloadRemoteImageToCache';
 
 export default function Chat({
   roomId,
@@ -136,6 +150,8 @@ export default function Chat({
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [overflowMenuVisible, setOverflowMenuVisible] = useState(false);
+  const [clearHistoryConfirmVisible, setClearHistoryConfirmVisible] = useState(false);
 
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -221,6 +237,7 @@ export default function Chat({
 
   const listOpacity = useSharedValue(0);
   const headerMeasured = useSharedValue(0);
+  const vaultChatSyncRef = useRef(null);
 
   const listScrollSuppressRefs = useMemo(
     () => [keyboardSettlingRef, composerInsetSettlingRef],
@@ -449,12 +466,56 @@ export default function Chat({
     messages,
     setMessages,
     nickname,
+    peerName,
     roomId,
     popMessage,
     setDeletingIds,
     setDeleteConfirmVisible,
     setSelectedMessage,
+    chatSyncRef: vaultChatSyncRef,
   });
+
+  const executeClearHistory = useCallback(
+    async (deleteForEveryone) => {
+      setClearHistoryConfirmVisible(false);
+      if (!roomId) return;
+      const snapshot = [...messagesRef.current];
+      if (snapshot.length === 0) return;
+      try {
+        let hiddenTarget = null;
+        if (deleteForEveryone) {
+          const { data: room, error: roomErr } = await supabase
+            .from('rooms')
+            .select('*')
+            .eq('id', roomId)
+            .maybeSingle();
+          if (roomErr) throw roomErr;
+          hiddenTarget = buildHiddenForEveryone(room, nickname, {
+            peerName: otherPlayerName,
+            messagesSnapshot: snapshot,
+          });
+        }
+        const results = await Promise.all(
+          snapshot.map((msg) => {
+            const nextHidden = deleteForEveryone
+              ? hiddenTarget
+              : [...new Set([...(msg.hidden_for || []), nickname])];
+            return supabase.from('messages').update({ hidden_for: nextHidden }).eq('id', msg.id);
+          })
+        );
+        const failed = results.find((r) => r.error);
+        if (failed?.error) throw failed.error;
+        setMessages([]);
+        roomMessagesCache.set(roomId, []);
+        if (deleteForEveryone) {
+          vaultChatSyncRef.current?.clearThread?.();
+        }
+      } catch (e) {
+        Alert.alert('Ошибка', e?.message || 'Не удалось очистить переписку');
+      }
+    },
+    [roomId, nickname, otherPlayerName, setMessages]
+  );
 
   useChatRoomEffects({
     roomId,
@@ -477,6 +538,7 @@ export default function Chat({
     setMessages,
     setMessagesLoading,
     messagesRef,
+    chatSyncRef: vaultChatSyncRef,
   });
 
   const {
@@ -501,6 +563,66 @@ export default function Chat({
     filterExpired,
   });
 
+  const inlineMediaEnabled = !isAriaChat && Boolean(roomId);
+  const activeInlineMedia = useMemo(
+    () => (inlineMediaEnabled ? parseActiveInlineMediaQuery(text) : null),
+    [text, inlineMediaEnabled],
+  );
+  const picInline = usePicInlineSearch(text, {
+    enabled: inlineMediaEnabled && activeInlineMedia?.kind === 'pic',
+  });
+  const gifInline = useGifInlineSearch(text, {
+    enabled: inlineMediaEnabled && activeInlineMedia?.kind === 'gif',
+  });
+
+  useEffect(() => {
+    if ((picInline.active || gifInline.active) && showEmojiPicker) {
+      setShowEmojiPicker(false);
+    }
+  }, [picInline.active, gifInline.active, showEmojiPicker]);
+
+  const handlePicInlineSelect = useCallback(
+    async (item) => {
+      if (!item?.fullUrl && !item?.thumbUrl) return;
+      const remoteUrl = item.fullUrl || item.thumbUrl;
+      setUploading(true);
+      try {
+        const localUri = await downloadRemoteImageToCache(remoteUrl, 'jpg');
+        const url = await uploadMedia(localUri, 'images', 'jpg', 'image/jpeg');
+        const caption = stripPicInlineTrigger(text);
+        await sendMediaMessage('image', url, caption ? { text: caption } : {});
+        setText(caption);
+      } catch (e) {
+        const detail = e?.message || String(e);
+        Alert.alert('Ошибка', `Не удалось отправить фото.\n${detail}`);
+        console.warn(e);
+      }
+      setUploading(false);
+    },
+    [text, uploadMedia, sendMediaMessage, setText, setUploading],
+  );
+
+  const handleGifInlineSelect = useCallback(
+    async (item) => {
+      if (!item?.fullUrl && !item?.thumbUrl) return;
+      const remoteUrl = item.fullUrl || item.thumbUrl;
+      setUploading(true);
+      try {
+        const localUri = await downloadRemoteImageToCache(remoteUrl, 'gif');
+        const url = await uploadMedia(localUri, 'images', 'gif', 'image/gif');
+        const caption = stripGifInlineTrigger(text);
+        await sendMediaMessage('image', url, caption ? { text: caption } : {});
+        setText(caption);
+      } catch (e) {
+        const detail = e?.message || String(e);
+        Alert.alert('Ошибка', `Не удалось отправить GIF.\n${detail}`);
+        console.warn(e);
+      }
+      setUploading(false);
+    },
+    [text, uploadMedia, sendMediaMessage, setText, setUploading],
+  );
+
   const { sendMessage: sendVaultTextMessage } = useChatSendText({
     text,
     setText,
@@ -516,6 +638,7 @@ export default function Chat({
   const sendMessage = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
+    if (parsePicInlineQuery(trimmed) || parseGifInlineQuery(trimmed)) return;
     if (isAriaChat && chatRoomHeader?.ariaOnline === false) return;
     if (isAriaChat && sendToAria) {
       await sendAriaChatTextMessage({
@@ -679,6 +802,21 @@ export default function Chat({
     [isAriaChat, chatRoomHeader?.ariaOnline]
   );
 
+  const headerRightTrailingEl = useMemo(() => {
+    if (isAriaChat || !roomId || !chatRoomHeader?.headerRight) return undefined;
+    return (
+      <TouchableOpacity
+        onPress={() => setOverflowMenuVisible(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Меню чата"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+      >
+        <EllipsisVertical size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
+      </TouchableOpacity>
+    );
+  }, [isAriaChat, roomId, chatRoomHeader?.headerRight]);
+
   const listFooterComponent = useMemo(
     () => (
       <ChatListFooter
@@ -738,6 +876,20 @@ export default function Chat({
         messageId={selectedMessage?.id ?? null}
         onDeleteForMe={deleteMessageForMe}
         onDeleteForAll={deleteMessageForAll}
+      />
+
+      <ChatHeaderOverflowMenuModal
+        uiReady={uiReady}
+        visible={overflowMenuVisible}
+        onClose={() => setOverflowMenuVisible(false)}
+        onClearHistory={() => setClearHistoryConfirmVisible(true)}
+      />
+
+      <ChatClearHistoryConfirmModal
+        uiReady={uiReady}
+        visible={clearHistoryConfirmVisible}
+        onClose={() => setClearHistoryConfirmVisible(false)}
+        onConfirm={executeClearHistory}
       />
 
       <ChatAttachMenuModal
@@ -858,6 +1010,22 @@ export default function Chat({
             handleVideoRecorded={handleVideoRecorded}
             handleVideoSendError={handleVideoSendError}
             collapseEmojiForKeyboard={collapseEmojiForKeyboard}
+            picInlineVisible={picInline.active}
+            picInlineNeedsQuery={picInline.needsQuery}
+            picInlineLoading={picInline.loading}
+            picInlineError={picInline.error}
+            picInlineResults={picInline.results}
+            picInlineHasMore={picInline.hasMore}
+            onPicInlineSelect={handlePicInlineSelect}
+            onPicInlineLoadMore={picInline.loadMore}
+            gifInlineVisible={gifInline.active}
+            gifInlineNeedsQuery={gifInline.needsQuery}
+            gifInlineLoading={gifInline.loading}
+            gifInlineError={gifInline.error}
+            gifInlineResults={gifInline.results}
+            gifInlineHasMore={gifInline.hasMore}
+            onGifInlineSelect={handleGifInlineSelect}
+            onGifInlineLoadMore={gifInline.loadMore}
             {...ariaComposerSurfaceProps}
           />
         </Reanimated.View>
@@ -889,6 +1057,7 @@ export default function Chat({
               navigation={chatRoomHeader.navigation}
               ariaOnline={chatRoomHeader.ariaOnline}
               headerRight={chatRoomHeader.headerRight}
+              headerRightTrailing={headerRightTrailingEl}
               topPaddingOverride={chatRoomHeader.topPaddingOverride}
               onAriaStateChange={isAriaChat ? setAriaState : undefined}
               onHeaderPress={chatRoomHeader.onHeaderPress}

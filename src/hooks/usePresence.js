@@ -19,25 +19,36 @@ export function usePresence({ roomId, nickname, targetName, skip }) {
     });
 
     const recompute = () => {
-      const st = ch.presenceState?.() || {};
+      const st = typeof ch.presenceState === 'function' ? ch.presenceState() : {};
       const online = new Set();
-      Object.values(st).forEach((arr) => {
+      Object.entries(st || {}).forEach(([presenceKey, arr]) => {
+        if (presenceKey) online.add(presenceKey);
         (arr || []).forEach((p) => {
           if (p?.nickname) online.add(p.nickname);
         });
       });
-      setIsOnline(online.has(targetName));
+      const want = String(targetName || '').trim().toLowerCase();
+      if (!want) {
+        setIsOnline(false);
+        return;
+      }
+      setIsOnline([...online].some((n) => String(n).trim().toLowerCase() === want));
     };
 
     ch.on('presence', { event: 'sync' }, recompute);
     ch.on('presence', { event: 'join' }, recompute);
     ch.on('presence', { event: 'leave' }, recompute);
 
-    ch.subscribe(async (status) => {
+    ch.subscribe(async (status, err) => {
+      if (__DEV__ && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')) {
+        console.warn('[Vault][presence]', `presence-room-${roomId}`, '→', status, err?.message || err || '');
+      }
       if (status === 'SUBSCRIBED') {
         try {
           await ch.track({ nickname, at: Date.now() });
-        } catch {}
+        } catch (e) {
+          if (__DEV__) console.warn('[Vault][presence] track failed:', e?.message || e);
+        }
         recompute();
       }
     });

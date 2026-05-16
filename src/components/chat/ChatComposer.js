@@ -23,6 +23,7 @@ import {
   Sparkles,
 } from '../../icons/lucideIcons';
 import AiRewritePanel from './AiRewritePanel';
+import InlineMediaSearchPanel from './InlineMediaSearchPanel';
 import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import {
   REPLY_TARGET_PREVIEW_H,
@@ -80,6 +81,24 @@ export default function ChatComposer({
   ariaUnavailable = false,
   /** Ref обёртки капсулы ввода — для геометрии скрим-градиента ленты в `Chat`. */
   capsuleWrapperRef,
+  /** Inline `@pic` */
+  picInlineVisible = false,
+  picInlineNeedsQuery = false,
+  picInlineLoading = false,
+  picInlineError = null,
+  picInlineResults = [],
+  picInlineHasMore = false,
+  onPicInlineSelect,
+  onPicInlineLoadMore,
+  /** Inline `@gif` */
+  gifInlineVisible = false,
+  gifInlineNeedsQuery = false,
+  gifInlineLoading = false,
+  gifInlineError = null,
+  gifInlineResults = [],
+  gifInlineHasMore = false,
+  onGifInlineSelect,
+  onGifInlineLoadMore,
 }) {
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
@@ -89,6 +108,33 @@ export default function ChatComposer({
         collapsable={false}
         onLayout={(e) => reportComposerBaseHeight?.(e.nativeEvent.layout.height)}
       >
+        <InlineMediaSearchPanel
+          visible={picInlineVisible}
+          triggerLabel="@pic"
+          title="Поиск картинок"
+          needsQueryHint="Введите запрос после"
+          needsQuery={picInlineNeedsQuery}
+          loading={picInlineLoading}
+          error={picInlineError}
+          results={picInlineResults}
+          hasMore={picInlineHasMore}
+          onSelect={onPicInlineSelect}
+          onLoadMore={onPicInlineLoadMore}
+        />
+        <InlineMediaSearchPanel
+          visible={gifInlineVisible}
+          triggerLabel="@gif"
+          title="Поиск GIF"
+          needsQueryHint="Введите запрос после"
+          needsQuery={gifInlineNeedsQuery}
+          loading={gifInlineLoading}
+          error={gifInlineError}
+          results={gifInlineResults}
+          hasMore={gifInlineHasMore}
+          onSelect={onGifInlineSelect}
+          onLoadMore={onGifInlineLoadMore}
+        />
+
         {visibleReplyTo && (
           <Reanimated.View style={[{ overflow: 'hidden' }, replyTargetAnimatedStyle]}>
             <View

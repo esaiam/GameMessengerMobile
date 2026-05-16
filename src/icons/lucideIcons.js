@@ -46,6 +46,7 @@ import {
   Reply,
   Video,
   Sparkles,
+  EllipsisVertical,
 } from 'lucide-react-native/icons';
 
 /** В lucide-react-native нет `Unlock` — это `LockOpen` */
@@ -104,4 +105,5 @@ export {
   Reply,
   Video,
   Sparkles,
+  EllipsisVertical,
 };

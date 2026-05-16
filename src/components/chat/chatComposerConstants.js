@@ -4,6 +4,10 @@ import { TAB_BAR_LAYOUT } from '../../theme';
 export const REPLY_TARGET_PREVIEW_H = 52;
 export const EMOJI_PICKER_PANEL_H = 221;
 
+/** Inline-панель `@pic` над composer */
+export const PIC_INLINE_PANEL_H = 200;
+export const PIC_INLINE_COLS = 3;
+
 /** Иконки скрепки / микрофона / отправки */
 export const INPUT_BAR_ICON = TAB_BAR_LAYOUT.iconSize;
 /** Смайлик крупнее иконок вкладок */

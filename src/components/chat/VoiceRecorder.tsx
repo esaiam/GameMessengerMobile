@@ -35,6 +35,7 @@ import { Mic, Lock, Unlock, SendHorizontal, Trash2, Pause, Play, Video as VideoI
 import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import { setAudioModeAsync } from '../../utils/audioMode';
 import { pauseDiceSound } from '../../utils/diceSound';
+import { triggerRecordStartHaptic } from '../../utils/recordStartHaptic';
 import VideoRecorder, { type VideoRecorderHandle } from './VideoRecorder';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -561,6 +562,7 @@ function VoiceRecorder({
       holdTimerRef.current = null;
       if (stateRef.current !== 'IDLE') return; // guard
       isHoldingRef.current = true;
+      triggerRecordStartHaptic();
       if (mediaMode === 'video') {
         void videoRecorderRef.current?.beginInlineHold();
       } else {

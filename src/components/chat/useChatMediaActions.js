@@ -30,9 +30,11 @@ export default function useChatMediaActions({
     const filePath = `${folder}/${storageRoomSegment(roomId)}/${Date.now()}.${ext}`;
     const bucket = 'chat-media';
 
-    const useNativeVideoStream = folder === 'video' && Platform.OS !== 'web';
+    const useNativeStreamUpload =
+      Platform.OS !== 'web' &&
+      (folder === 'video' || (folder === 'images' && ext === 'gif'));
 
-    if (useNativeVideoStream) {
+    if (useNativeStreamUpload) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('Сессия недоступна, войди снова');

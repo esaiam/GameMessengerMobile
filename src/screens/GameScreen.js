@@ -26,7 +26,6 @@ import { DieFace } from '../components/Dice';
 import DiceThrow3D from '../components/DiceThrow3D';
 import SwipeBoardHint from '../components/SwipeBoardHint';
 import Chat from '../components/Chat';
-import { ICON_SELECTION_ACTION } from '../components/ChatRoomHeader';
 import { V, boardPalette } from '../theme';
 import {
   createInitialGameState,
@@ -41,7 +40,6 @@ import {
   getMoveOptionsForSelection,
 } from '../utils/gameLogic';
 import { playDiceRollSound, preloadDiceSound, unloadDiceSound } from '../utils/diceSound';
-import { usePresence } from '../hooks/usePresence';
 const NICKNAME_KEY = '@backgammon_nickname';
 const SWIPE_HINT_KEY = '@backgammon_swipe_hint_seen';
 /** Как у ChatRoomHeader.js — frosted шапка чата */
@@ -100,12 +98,13 @@ export default function GameScreen({ route, navigation }) {
     // fallback: if nickname isn't on the room record yet, pick "other" heuristically
     return routePeerName || u2 || u1;
   }, [room, nickname, selfPlay, routePeerName]);
-  const opponentOnline = usePresence({
-    roomId,
-    nickname,
-    targetName: opponentName,
-    skip: selfPlay,
-  });
+
+  /** Один realtime-канал `room-` + postgres + presence (отдельный presence-room-* на проде давал CHANNEL_ERROR). */
+  const [opponentOnline, setOpponentOnline] = useState(() => selfPlay === true);
+  const opponentNamePresenceRef = useRef(opponentName);
+  const nicknamePresenceRef = useRef(nickname);
+  opponentNamePresenceRef.current = opponentName;
+  nicknamePresenceRef.current = nickname;
   const [swipeStart, setSwipeStart] = useState(null);
   const [swipeEnd, setSwipeEnd] = useState(null);
   const [throwKey, setThrowKey] = useState(0);
@@ -725,9 +724,33 @@ export default function GameScreen({ route, navigation }) {
   useEffect(() => {
     if (!roomId) return;
 
-    const channel = supabase
-      .channel(`room-${roomId}`)
-      .on(
+    const onRoomPostgresPayload = (payload) => {
+      const updated = payload.new;
+      setRoom((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(updated)) return prev;
+        return updated;
+      });
+    };
+
+    const recomputeOpponentPresence = (ch) => {
+      const st = typeof ch.presenceState === 'function' ? ch.presenceState() : {};
+      const online = new Set();
+      Object.entries(st || {}).forEach(([presenceKey, arr]) => {
+        if (presenceKey) online.add(presenceKey);
+        (arr || []).forEach((p) => {
+          if (p?.nickname) online.add(p.nickname);
+        });
+      });
+      const want = String(opponentNamePresenceRef.current || '').trim().toLowerCase();
+      if (!want) {
+        setOpponentOnline(false);
+        return;
+      }
+      setOpponentOnline([...online].some((n) => String(n).trim().toLowerCase() === want));
+    };
+
+    const postgresOn = (ch) =>
+      ch.on(
         'postgres_changes',
         {
           event: 'UPDATE',
@@ -735,22 +758,61 @@ export default function GameScreen({ route, navigation }) {
           table: 'rooms',
           filter: `id=eq.${roomId}`,
         },
-        (payload) => {
-          const updated = payload.new;
-          setRoom((prev) => {
-            if (JSON.stringify(prev) === JSON.stringify(updated)) return prev;
-            return updated;
-          });
+        onRoomPostgresPayload
+      );
+
+    if (selfPlay) {
+      setOpponentOnline(true);
+      const channel = postgresOn(supabase.channel(`room-${roomId}`)).subscribe();
+      channelRef.current = channel;
+      return () => {
+        if (channelRef.current) supabase.removeChannel(channelRef.current);
+      };
+    }
+
+    if (!nickname || !opponentName) {
+      setOpponentOnline(false);
+      const channel = postgresOn(supabase.channel(`room-${roomId}`)).subscribe();
+      channelRef.current = channel;
+      return () => {
+        if (channelRef.current) supabase.removeChannel(channelRef.current);
+      };
+    }
+
+    const channel = postgresOn(
+      supabase.channel(`room-${roomId}`, {
+        config: { presence: { key: nickname } },
+      })
+    )
+      .on('presence', { event: 'sync' }, () => recomputeOpponentPresence(channel))
+      .on('presence', { event: 'join' }, () => recomputeOpponentPresence(channel))
+      .on('presence', { event: 'leave' }, () => recomputeOpponentPresence(channel))
+      .subscribe(async (status, err) => {
+        if (__DEV__ && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')) {
+          const errDetail =
+            err instanceof Error
+              ? err.message
+              : err && typeof err === 'object'
+                ? JSON.stringify(err)
+                : String(err || '');
+          console.warn('[Vault][room+presence]', `room-${roomId}`, status, errDetail);
         }
-      )
-      .subscribe();
+        if (status === 'SUBSCRIBED') {
+          try {
+            await channel.track({ nickname: nicknamePresenceRef.current, at: Date.now() });
+          } catch (e) {
+            if (__DEV__) console.warn('[Vault][presence] track failed:', e?.message || e);
+          }
+          recomputeOpponentPresence(channel);
+        }
+      });
 
     channelRef.current = channel;
 
     return () => {
       if (channelRef.current) supabase.removeChannel(channelRef.current);
     };
-  }, [roomId]);
+  }, [roomId, selfPlay, nickname, opponentName]);
 
   useEffect(() => {
     if (!roomId || useLegacyRoomState) {
@@ -1625,7 +1687,7 @@ export default function GameScreen({ route, navigation }) {
                   }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Phone size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
+                  <Phone size={20} color={V.textPrimary} strokeWidth={1.5} />
                 </TouchableOpacity>
               ),
             }}

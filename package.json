@@ -10,6 +10,7 @@
     "web": "npx expo start --web",
     "video:fix-one": "node scripts/process-chat-videos.mjs --url",
     "video:fix-latest": "node scripts/process-chat-videos.mjs --latest 20",
+    "verify:env": "node scripts/verify-env-consistency.mjs",
     "knockout-compass": "node scripts/knockout-compass-bg.mjs",
     "tint-compass": "node scripts/tint-compass-to-board.mjs"
   },

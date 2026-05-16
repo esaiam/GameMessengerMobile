@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { View, Alert } from 'react-native';
+import { View, Alert, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createAudioPlayer, setIsAudioActiveAsync } from 'expo-audio';
 import { Audio } from 'expo-av';
@@ -18,6 +18,7 @@ import {
 import { V } from '../theme';
 import { setAudioModeAsync } from '../utils/audioMode';
 import { usePresence } from '../hooks/usePresence';
+import { Phone } from '../icons/lucideIcons';
 
 const ARIA_REPLY_VOLUME = 0.3;
 const ARIA_MESSAGE_RECEIVED_MP3 = require('../assets/sounds/message_received.mp3');
@@ -403,8 +404,9 @@ export default function ChatRoomScreen({ route, navigation }) {
 
   const headerTitle = useMemo(() => {
     if (isAriaChat && contact?.display_name) return contact.display_name;
-    return title || 'Чат';
-  }, [title, isAriaChat, contact?.display_name]);
+    // peerName нужен для шапки и presence: с Контактов часто передают только peerName без title.
+    return title || peerName || 'Чат';
+  }, [title, peerName, isAriaChat, contact?.display_name]);
   const contactOnline = usePresence({
     roomId,
     nickname,
@@ -427,9 +429,26 @@ export default function ChatRoomScreen({ route, navigation }) {
               <AriaClearHistoryHeaderButton onPress={handleAriaClearHistory} />
             ),
           }
-        : {}),
+        : roomId
+          ? {
+              headerRight: (
+                <TouchableOpacity
+                  onPress={() => Alert.alert('Звонок', 'Голосовые звонки скоро!')}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Phone size={20} color={V.textPrimary} strokeWidth={1.5} />
+                </TouchableOpacity>
+              ),
+            }
+          : {}),
     }),
-    [headerTitle, contactOnline, navigation, isAriaChat, ariaOnline, handleAriaClearHistory]
+    [headerTitle, contactOnline, navigation, isAriaChat, ariaOnline, handleAriaClearHistory, roomId]
   );
 
   useEffect(() => {
