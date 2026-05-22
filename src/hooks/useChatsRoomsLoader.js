@@ -120,6 +120,7 @@ export function useChatsRoomsLoader(nickname) {
             const blocked = await getBlockedPeers(nickname);
             const idx = rowsRef.current.findIndex((r) => r.roomId === newMsg.room_id);
             if (idx === -1) {
+              await unhideChatRoom(nickname, newMsg.room_id);
               load();
               return;
             }

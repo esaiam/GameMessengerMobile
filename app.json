@@ -1,4 +1,4 @@
-﻿{
+{
   "expo": {
     "name": "GameMessengerMobile",
     "slug": "GameMessengerMobile",
@@ -58,7 +58,6 @@
         }
       ],
       "expo-audio",
-      "expo-av",
       "expo-asset",
       "expo-secure-store",
       [

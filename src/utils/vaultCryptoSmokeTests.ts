@@ -14,7 +14,7 @@ import {
   crypto_box_NONCEBYTES,
   randombytes_buf,
 } from 'react-native-libsodium';
-import { isVaultEncrypted } from './VaultCrypto';
+import { isVm2Payload } from '../lib/vm2MessageText';
 
 function base64ToUint8Array(b64: string): Uint8Array {
   const binary = atob(b64);
@@ -90,16 +90,17 @@ export async function runVaultCryptoTests(): Promise<void> {
     console.error('[TEST 1] FAIL:', error);
   }
 
-  // ─── Тест 2: isVaultEncrypted ────────────────────────────────────────────
+  // ─── Тест 2: isVm2Payload ────────────────────────────────────────────────
   try {
-    const oldFormat = 'U2FsdGVkX1abc123';
-    if (isVaultEncrypted(oldFormat) !== false) {
-      throw new Error('U2FsdGVkX1... должен возвращать false');
+    const plain = 'hello';
+    if (isVm2Payload(plain) !== false) {
+      throw new Error('plaintext не должен быть VM2');
     }
-    if (roundTripPayload && isVaultEncrypted(roundTripPayload) !== true) {
-      throw new Error('Валидный payload должен возвращать true');
+    const vm2 = `VM2:${JSON.stringify({ r: roundTripPayload, s: roundTripPayload })}`;
+    if (isVm2Payload(vm2) !== true) {
+      throw new Error('VM2: префикс должен определяться');
     }
-    console.log('[TEST 2] PASS: isVaultEncrypted корректно определяет формат');
+    console.log('[TEST 2] PASS: isVm2Payload корректно определяет формат');
   } catch (error) {
     console.error('[TEST 2] FAIL:', error);
   }

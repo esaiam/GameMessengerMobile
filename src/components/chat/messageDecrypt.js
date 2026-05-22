@@ -1,57 +1,23 @@
-import { decrypt, looksLikeEncryptedPayload } from '../../utils/crypto';
-import { getKeyFromCache } from '../../utils/VaultKeyServer';
-import { decryptMessage, isVaultEncrypted } from '../../utils/VaultCrypto';
+import { decryptVm2MessageText, isVm2Payload } from '../../lib/vm2MessageText';
 
 /** Кэш расшифрованных сообщений — персистится между ремонтированиями чата */
 const decryptedCache = new Map();
 
 /**
- * @param {{ nickname: string, cryptoKey: string | null }} ctx
+ * @param {{ nickname: string }} ctx
  * @returns {(msg: import('./chatMessageTypes').ChatMessageRow) => Promise<import('./chatMessageTypes').ChatMessageRow>}
  */
-export function createDecryptMsg({ nickname, cryptoKey }) {
+export function createDecryptMsg({ nickname }) {
   return async function decryptMsg(msg) {
     const raw = msg.text;
     if (!raw) return msg;
 
-    if (raw.startsWith('VM2:')) {
-      try {
-        const { r, s } = JSON.parse(raw.slice(4));
-        const isMyMessage = msg.player_name === nickname;
-        const box = isMyMessage ? s : r;
-        const senderName = isMyMessage ? nickname : msg.player_name;
-        const plain = await decryptMessage(box, senderName);
-        if (plain !== null) return { ...msg, text: plain };
-      } catch (e) {
-        if (__DEV__) console.warn('[Vault] VM2 parse error:', e?.message);
-      }
-    }
-
-    if (isVaultEncrypted(raw)) {
-      try {
-        const isMyMessage = msg.player_name === nickname;
-        if (!isMyMessage) {
-          const peerName = msg.player_name;
-          const cachedKey = getKeyFromCache(peerName);
-          if (peerName && cachedKey) {
-            const plain = await decryptMessage(raw, peerName);
-            if (plain !== null) {
-              const looksValid = /^[\x20-\x7E\u0400-\u04FF\s]+$/.test(plain);
-              if (looksValid) return { ...msg, text: plain };
-            }
-          }
-        }
-      } catch {}
-    }
-
-    if (looksLikeEncryptedPayload(raw) && cryptoKey) {
-      const plain = decrypt(raw, cryptoKey);
-      if (plain) return { ...msg, text: plain };
-    }
-
-    if (isVaultEncrypted(raw)) {
+    if (isVm2Payload(raw)) {
+      const plain = await decryptVm2MessageText(raw, msg, nickname);
+      if (plain !== null) return { ...msg, text: plain };
       return { ...msg, text: '🔒 Сообщение зашифровано' };
     }
+
     return msg;
   };
 }
@@ -69,13 +35,13 @@ export async function decryptMessagesBatch(msgs, decryptMsg) {
       chunk.map(async (m) => {
         if (decryptedCache.has(m.id)) {
           const cached = decryptedCache.get(m.id);
-          if (!isVaultEncrypted(cached) && !looksLikeEncryptedPayload(cached)) {
+          if (!isVm2Payload(cached)) {
             return { ...m, text: cached };
           }
           decryptedCache.delete(m.id);
         }
         const row = await decryptMsg(m);
-        if (row.text !== m.text && !isVaultEncrypted(row.text)) {
+        if (row.text !== m.text && !isVm2Payload(row.text)) {
           decryptedCache.set(m.id, row.text);
         }
         return row;

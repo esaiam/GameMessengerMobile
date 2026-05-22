@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { buildHiddenForEveryone } from './buildHiddenForEveryone';
+import { chatMutationErrorMessage } from './chatMutationErrorMessage';
 
 /** `aria-db-{uuid}` → uuid в `aria_messages`. */
 function ariaDbRowId(messageId) {
@@ -39,7 +40,10 @@ export default function useChatMessageMutations({
       }
       const { error } = await supabase.from('messages').update({ reactions }).eq('id', messageId);
       if (error) {
-        Alert.alert('Ошибка', error.message || 'Не удалось поставить реакцию');
+        Alert.alert(
+          'Ошибка',
+          chatMutationErrorMessage(error, 'Не удалось поставить реакцию'),
+        );
         return;
       }
     },
@@ -57,7 +61,10 @@ export default function useChatMessageMutations({
       if (dbId) {
         const { error } = await supabase.from('aria_messages').delete().eq('id', dbId);
         if (error) {
-          Alert.alert('Не удалось удалить', error.message);
+          Alert.alert(
+            'Не удалось удалить',
+            chatMutationErrorMessage(error, 'Не удалось удалить сообщение'),
+          );
           setDeletingIds((prev) => {
             const next = new Set(prev);
             next.delete(messageId);
@@ -95,7 +102,7 @@ export default function useChatMessageMutations({
       if (error) {
         Alert.alert(
           'Не удалось скрыть сообщение',
-          error.message || 'Не удалось скрыть сообщение',
+          chatMutationErrorMessage(error, 'Не удалось скрыть сообщение'),
         );
         setDeletingIds((prev) => {
           const next = new Set(prev);
@@ -142,7 +149,10 @@ export default function useChatMessageMutations({
         messagesSnapshot: messages });
 
       if (roomErr) {
-        Alert.alert('Не удалось удалить у всех', roomErr.message);
+        Alert.alert(
+          'Не удалось удалить у всех',
+          chatMutationErrorMessage(roomErr, 'Не удалось загрузить данные комнаты'),
+        );
         setDeletingIds((prev) => {
           const next = new Set(prev);
           next.delete(messageId);
@@ -159,7 +169,7 @@ export default function useChatMessageMutations({
       if (error) {
         Alert.alert(
           'Не удалось удалить у всех',
-          error.message || 'Не удалось удалить у всех',
+          chatMutationErrorMessage(error, 'Не удалось удалить у всех'),
         );
         setDeletingIds((prev) => {
           const next = new Set(prev);

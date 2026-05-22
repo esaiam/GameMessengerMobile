@@ -11,7 +11,8 @@ import {
 import tw from 'twrnc';
 import { Dices } from '../icons/lucideIcons';
 import { V } from '../theme';
-import { useAuthGate, NICKNAME_STORAGE_KEY } from '../context/AuthGateContext';
+import { useAuthGate } from '../context/AuthGateContext';
+import { writeNicknameToStorage } from '../lib/nicknameStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   HANDLE_MAX,
@@ -52,7 +53,7 @@ export default function PickHandleScreen() {
         return;
       }
 
-      await AsyncStorage.setItem(NICKNAME_STORAGE_KEY, slug);
+      await writeNicknameToStorage(slug);
       await refreshProfile();
     } catch (e) {
       Alert.alert('Ошибка', e?.message || 'Не удалось сохранить');

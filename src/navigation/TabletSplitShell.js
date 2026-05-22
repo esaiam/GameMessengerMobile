@@ -8,6 +8,8 @@ import GameScreen from '../screens/GameScreen';
 import ChatRoomScreen from '../screens/ChatRoomScreen';
 import ContactProfileScreen from '../screens/ContactProfileScreen';
 
+const MASTER_PORTRAIT_RATIO = 0.45;
+
 /** Декоративные кольца на пустом detail-экране */
 function DetailBackground() {
   return (
@@ -64,10 +66,9 @@ function useFakeNavigation(pushDetail, popDetail) {
  * Читает currentDetail из SplitDetailContext и рендерит соответствующий экран.
  * Поддерживает мини-стек: Room → ContactProfile → назад → Room.
  */
-function DetailPanel({ detailStyle }) {
+function DetailPanel({ panelStyle }) {
   const { currentDetail, pushDetail, popDetail } = useSplitDetail();
   const fakeNavigation = useFakeNavigation(pushDetail, popDetail);
-  const panelStyle = detailStyle ? [styles.detail, detailStyle] : styles.detail;
 
   if (!currentDetail) {
     return (
@@ -104,7 +105,7 @@ function DetailPanel({ detailStyle }) {
 /**
  * Структурная оболочка split-режима.
  *
- * На телефоне (width < SPLIT_BREAKPOINT): children как есть — ноль изменений.
+ * На телефоне (shortestSide < SPLIT_BREAKPOINT): children как есть — ноль изменений.
  * На планшете: [Master | Detail]. В портрете — 45% / 55%, в альбоме — 1:2.
  *
  * Предоставляет SplitDetailContext вниз по дереву.
@@ -114,9 +115,21 @@ function DetailPanel({ detailStyle }) {
 export function TabletSplitShell({ children }) {
   const isSplit = useIsSplitLayout();
   const { height, width: windowW } = useWindowDimensions();
-  const isTabletPortraitSplit = isSplit && height > windowW;
+  const isPortrait = height > windowW;
+  const layoutKey = `${Math.round(windowW)}x${Math.round(height)}`;
 
-  // Управляем стеком detail-панели здесь, чтобы можно было передать в контекст
+  const { masterStyle, detailStyle } = useMemo(() => {
+    if (!isPortrait) {
+      return {
+        masterStyle: styles.masterLandscape,
+        detailStyle: styles.detailLandscape };
+    }
+    const masterW = Math.round(windowW * MASTER_PORTRAIT_RATIO);
+    return {
+      masterStyle: [styles.masterPortrait, { width: masterW, maxWidth: masterW }],
+      detailStyle: styles.detailPortrait };
+  }, [isPortrait, windowW]);
+
   const [stack, setStack] = useState([]);
 
   const setDetailParams = useCallback((entry) => {
@@ -133,9 +146,10 @@ export function TabletSplitShell({ children }) {
 
   const currentDetail = stack.length > 0 ? stack[stack.length - 1] : null;
 
-  // Сбросить выбор при смене режима (поворот экрана)
+  const prevIsSplitRef = React.useRef(isSplit);
   useEffect(() => {
-    if (!isSplit) setStack([]);
+    if (prevIsSplitRef.current && !isSplit) setStack([]);
+    prevIsSplitRef.current = isSplit;
   }, [isSplit]);
 
   const contextValue = useMemo(
@@ -153,11 +167,11 @@ export function TabletSplitShell({ children }) {
 
   return (
     <SplitDetailContext.Provider value={contextValue}>
-      <View style={styles.root}>
-        <View style={[styles.master, isTabletPortraitSplit && styles.masterPortrait, { }]}>
+      <View key={layoutKey} style={styles.root}>
+        <View style={masterStyle}>
           {children}
         </View>
-        <DetailPanel detailStyle={isTabletPortraitSplit ? styles.detailPortrait : null} />
+        <DetailPanel panelStyle={detailStyle} />
       </View>
     </SplitDetailContext.Provider>
   );
@@ -168,22 +182,27 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     backgroundColor: V.bgApp },
-  master: {
+  masterPortrait: {
+    flexGrow: 0,
+    flexShrink: 0,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: V.border,
+    overflow: 'hidden' },
+  masterLandscape: {
     flex: 1,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: V.border,
     overflow: 'hidden' },
-  masterPortrait: {
-    flexGrow: 0,
-    flexShrink: 0,
-    flexBasis: '45%',
-    maxWidth: '45%' },
-  detail: {
+  detailLandscape: {
     flex: 2,
+    minWidth: 0,
     backgroundColor: V.bgApp,
     overflow: 'hidden' },
   detailPortrait: {
-    flex: 1 },
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: V.bgApp,
+    overflow: 'hidden' },
   detailCenter: {
     alignItems: 'center',
     justifyContent: 'center' },

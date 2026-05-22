@@ -8,6 +8,7 @@ import GameScreen from '../screens/GameScreen';
 import ChatsScreen from '../screens/ChatsScreen';
 import ChatRoomScreen from '../screens/ChatRoomScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import BlockedContactsScreen from '../screens/BlockedContactsScreen';
 import InviteFriendsScreen from '../screens/InviteFriendsScreen';
 import StorageScreen from '../screens/StorageScreen';
 import PokerHubScreen from '../screens/PokerHubScreen';
@@ -80,6 +81,8 @@ function ProfileStackNavigator() {
     <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
       <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} />
       <ProfileStack.Screen name="InviteFriends" component={InviteFriendsScreen} />
+      <ProfileStack.Screen name="BlockedContacts" component={BlockedContactsScreen} />
+      <ProfileStack.Screen name="ContactProfile" component={ContactProfileScreen} />
       {__DEV__ && <ProfileStack.Screen name="Storage" component={StorageScreen} />}
     </ProfileStack.Navigator>
   );

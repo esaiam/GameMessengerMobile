@@ -3,7 +3,7 @@ import { Animated, Easing, Pressable, Text, View } from 'react-native';
 import tw from 'twrnc';
 import { AriaGradientAvatar } from '../chat/AriaChatUi';
 import { V } from '../../theme';
-import { messagePreview } from '../../screens/chats/chatsPreviewCache';
+import { messagePreview, messagePreviewAsync } from '../../screens/chats/chatsPreviewCache';
 import { formatChatListTime, getInitials } from '../../screens/chats/chatsFormat';
 
 function Avatar({ name }) {
@@ -21,9 +21,25 @@ function Avatar({ name }) {
 }
 
 const ChatsListRow = React.memo(
-  function ChatsListRow({ item, onPress }) {
+  function ChatsListRow({ item, nickname, onPress }) {
     const ts = item.last?.created_at || null;
-    const preview = item.isAria ? 'Привет. Я здесь.' : messagePreview(item.last, item.roomCode);
+    const [preview, setPreview] = useState(() =>
+      item.isAria ? 'Привет. Я здесь.' : messagePreview(item.last),
+    );
+
+    useEffect(() => {
+      if (item.isAria) {
+        setPreview('Привет. Я здесь.');
+        return undefined;
+      }
+      let cancelled = false;
+      messagePreviewAsync(item.last, nickname).then((text) => {
+        if (!cancelled) setPreview(text);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [item.isAria, item.last?.id, item.last?.text, item.last?.message_type, nickname]);
     const [layout, setLayout] = useState({ w: 0, h: 0 });
     const [ripple, setRipple] = useState({ visible: false, x: 0, y: 0 });
     const scaleAnim = useRef(new Animated.Value(0)).current;

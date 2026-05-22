@@ -2,12 +2,12 @@
  * Storage-safe room segment + reading local URIs as ArrayBuffer for uploads.
  */
 
-import CryptoJS from 'crypto-js';
 import { File as ExpoFile } from 'expo-file-system';
+import { sha256Hex } from '../../lib/sha256Hex';
 
 /** Ключ объекта в Storage: только безопасные символы; `room_id` может быть с кириллицей и т.д. */
-export function storageRoomSegment(roomId) {
-  return CryptoJS.SHA256(String(roomId)).toString(CryptoJS.enc.Hex);
+export async function storageRoomSegment(roomId) {
+  return sha256Hex(roomId);
 }
 
 /** RN `fetch(content://|file://)` часто не читает файл; Expo `File.bytes()` обычно срабатывает. */
@@ -29,15 +29,9 @@ export async function readUriAsArrayBuffer(uri) {
 /** Base64 без префикса data: — для телеметрии/Aria API. */
 export function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
-  const chunk = 0x8000;
   let binary = '';
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
-}
-
-export async function readUriAsBase64(uri) {
-  const buf = await readUriAsArrayBuffer(uri);
-  return arrayBufferToBase64(buf);
 }

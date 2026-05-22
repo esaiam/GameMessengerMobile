@@ -9,8 +9,13 @@ import {
   inviteRedeemErrorMessage,
   inviteRedeemErrorTitle,
   parsePendingInvite } from '../utils/inviteRedeem';
+import {
+  NICKNAME_STORAGE_KEY,
+  readNicknameFromStorage,
+  writeNicknameToStorage,
+} from '../lib/nicknameStorage';
 
-export const NICKNAME_STORAGE_KEY = '@backgammon_nickname';
+export { NICKNAME_STORAGE_KEY };
 const SESSION_CACHE_KEY = '@vault_session_cache';
 
 const AuthGateContext = createContext(null);
@@ -53,7 +58,7 @@ async function writeCachedSession(session) {
 
 async function readCachedHandle() {
   try {
-    return await AsyncStorage.getItem(NICKNAME_STORAGE_KEY);
+    return await readNicknameFromStorage();
   } catch {
     return null;
   }
@@ -113,7 +118,7 @@ export function AuthGateProvider({ children }) {
     const handle = await fetchProfileHandle(userId);
     setProfileHandle(handle);
     if (handle) {
-      await AsyncStorage.setItem(NICKNAME_STORAGE_KEY, handle);
+      await writeNicknameToStorage(handle);
     }
     setProfileStatus('ready');
   }, []);

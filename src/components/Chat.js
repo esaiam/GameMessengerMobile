@@ -12,7 +12,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { deriveKey } from '../utils/crypto';
 import { getOrCreateKeyPair } from '../utils/VaultKeyStore';
 import { publishMyPublicKey } from '../utils/VaultKeyServer';
 import { useVoicePlayer } from '../hooks/useVoicePlayer';
@@ -272,8 +271,6 @@ export default function Chat({
     deletingIdsRef.current = deletingIds;
   }, [deletingIds]);
 
-  const legacyCryptoKey = useMemo(() => (roomCode ? deriveKey(roomCode) : null), [roomCode]);
-
   const composerStackHeightShared = useSharedValue(0);
 
   const {
@@ -352,10 +349,7 @@ export default function Chat({
     pauseVoice();
   }, [roomId, pauseVoice]);
 
-  const decryptMsg = useMemo(
-    () => createDecryptMsg({ nickname, cryptoKey: legacyCryptoKey }),
-    [nickname, legacyCryptoKey],
-  );
+  const decryptMsg = useMemo(() => createDecryptMsg({ nickname }), [nickname]);
 
   const decryptBatch = useCallback(async (msgs) => decryptMessagesBatch(msgs, decryptMsg), [decryptMsg]);
 
@@ -481,7 +475,6 @@ export default function Chat({
     handleSendVoice } = useChatMediaActions({
     roomId,
     nickname,
-    legacyCryptoKey,
     replyTo,
     ephemeralSec,
     setReplyTarget,

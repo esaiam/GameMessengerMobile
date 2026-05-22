@@ -3,7 +3,6 @@ import { View, Alert, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createAudioPlayer, setIsAudioActiveAsync } from 'expo-audio';
-import { Audio } from 'expo-av';
 import tw from 'twrnc';
 import Chat from '../components/Chat';
 import { AriaChatContainer } from '../components/chat/AriaChatContainer';
@@ -61,7 +60,7 @@ export default function ChatRoomScreen({ route, navigation }) {
   const ariaReplyModeReadyRef = useRef(false);
   const ariaReplyPlayerRef = useRef(null);
   const ariaReplyPlayerCreatingRef = useRef(null);
-  const ariaReplyFallbackSoundRef = useRef(null);
+  const ariaReplyFallbackPlayerRef = useRef(null);
 
   const ensureAriaReplyAudioMode = useCallback(async () => {
     if (ariaReplyModeReadyRef.current) return;
@@ -111,22 +110,32 @@ export default function ChatRoomScreen({ route, navigation }) {
     }
     try {
       await ensureAriaReplyAudioMode();
-      if (ariaReplyFallbackSoundRef.current) {
+      if (ariaReplyFallbackPlayerRef.current) {
         try {
-          await ariaReplyFallbackSoundRef.current.unloadAsync();
+          ariaReplyFallbackPlayerRef.current.remove();
         } catch {}
-        ariaReplyFallbackSoundRef.current = null;
+        ariaReplyFallbackPlayerRef.current = null;
       }
-      const { sound } = await Audio.Sound.createAsync(
-        ARIA_MESSAGE_RECEIVED_MP3,
-        { shouldPlay: true, volume: ARIA_REPLY_VOLUME }
-      );
-      ariaReplyFallbackSoundRef.current = sound;
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (!status.isLoaded || !status.didJustFinish) return;
-        sound.unloadAsync().catch(() => {});
-        ariaReplyFallbackSoundRef.current = null;
+      const fallback = createAudioPlayer(ARIA_MESSAGE_RECEIVED_MP3, {
+        downloadFirst: true,
+        keepAudioSessionActive: false,
       });
+      ariaReplyFallbackPlayerRef.current = fallback;
+      fallback.volume = ARIA_REPLY_VOLUME;
+      const sub = fallback.addListener('playbackStatusUpdate', (status) => {
+        if (!status.didJustFinish) return;
+        try {
+          sub.remove();
+        } catch {}
+        try {
+          fallback.remove();
+        } catch {}
+        if (ariaReplyFallbackPlayerRef.current === fallback) {
+          ariaReplyFallbackPlayerRef.current = null;
+        }
+      });
+      await fallback.seekTo(0);
+      fallback.play();
     } catch {}
   }, [ensureAriaReplyPlayer, ensureAriaReplyAudioMode]);
 
@@ -135,8 +144,8 @@ export default function ChatRoomScreen({ route, navigation }) {
       try { ariaReplyPlayerRef.current?.release?.(); } catch {}
       ariaReplyPlayerRef.current = null;
       ariaReplyModeReadyRef.current = false;
-      try { ariaReplyFallbackSoundRef.current?.unloadAsync?.(); } catch {}
-      ariaReplyFallbackSoundRef.current = null;
+      try { ariaReplyFallbackPlayerRef.current?.remove?.(); } catch {}
+      ariaReplyFallbackPlayerRef.current = null;
     };
   }, []);
 

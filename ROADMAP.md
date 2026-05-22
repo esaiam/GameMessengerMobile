@@ -67,24 +67,24 @@
 
 ### God-components (рефакторинг без смены поведения)
 - [x] `Chat.js` — вынесены inline media, clear history, input settling, message list, overlays (`src/components/chat/*`)
-- [ ] `GameScreen.js` (~1070 строк) — board vs chat chrome
-- [ ] `ContactsDrawer.js` (~450 строк)
+- [x] `GameScreen.js` — board vs chat chrome → `src/screens/game/*` (~454 строк wiring)
+- [x] `ContactsDrawer.js` → `src/components/contacts/*` (~95 строк wiring)
 
 ### Дубли и legacy
 - [x] Handle: `PickHandleScreen` + `ProfileEditHandleModal` → `src/lib/handleProfile.js`
-- [ ] E2E: VM2 + Vault + **CryptoJS** (`crypto.js`, room key) — миграция старых сообщений, один путь
-- [ ] `NICKNAME_STORAGE_KEY` = `@backgammon_nickname` → переименовать с миграцией ключа
+- [x] E2E: только VM2 + libsodium (`VaultCrypto`); CryptoJS/room-key удалены; `20260524_clear_messages_pre_beta.sql`
+- [x] `NICKNAME_STORAGE_KEY` → `@vault_nickname` + миграция из `@backgammon_nickname` (`nicknameStorage.js`, `RootBootstrap`)
 - [ ] **twrnc** + **Lumenmorphism** (`StyleSheet` + `V.*`) — два стилевых стека; постепенно унифицировать
 - [ ] `ROADMAP` фазы 1–8 не отражают текущий продукт *(этот файл обновлён)*
 
 ### Зависимости
 - [x] Удалён **`@shopify/react-native-skia`** (в `src` не использовался; dice = Three.js + expo-gl)
-- [ ] `expo-av` + `expo-audio` — два audio stack
+- [x] `expo-av` удалён — голос/звуки только `expo-audio` (`useVoicePlayer`, VoiceRecorder, diceSound, Aria)
 - [ ] `EXPO_PUBLIC_XAI_API_KEY` в клиенте — вынести на edge
 
 ### Качество
 - [ ] Минимальные smoke-тесты (auth, send message, open room)
-- [ ] Устаревшие тексты ошибок в `useChatMessageMutations` (ссылка на удалённый SQL-скрипт)
+- [x] Тексты ошибок в `useChatMessageMutations` → `chatMutationErrorMessage.js` (RLS/сеть/сессия)
 - [ ] `vaultCryptoSmokeTests.ts` — только dev, не в CI
 
 ---

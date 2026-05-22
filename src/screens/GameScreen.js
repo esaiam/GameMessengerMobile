@@ -2,45 +2,35 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
-  Text,
   TouchableOpacity,
   Alert,
-  Animated,
-  Dimensions,
   Keyboard,
-  Platform,
   useWindowDimensions,
-  StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
+} from 'react-native';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import SafeBlurView from '../components/SafeBlurView';
 import { Phone } from '../icons/lucideIcons';
-import BackgammonBoard from '../components/BackgammonBoard';
-import { DieFace } from '../components/Dice';
-import DiceThrow3D from '../components/DiceThrow3D';
-import SwipeBoardHint from '../components/SwipeBoardHint';
 import { RoomChatContainer } from '../components/chat/RoomChatContainer';
 import { V } from '../theme';
-import {
-  createInitialGameState,
-  rollDice,
-  diceToMoves,
-  getAllValidMoves,
-  shouldAutoEndTurn } from '../utils/gameLogic';
-import { playDiceRollSound, preloadDiceSound, unloadDiceSound } from '../utils/diceSound';
+import { createInitialGameState, shouldAutoEndTurn } from '../utils/gameLogic';
+import { preloadDiceSound, unloadDiceSound } from '../utils/diceSound';
 import { useBoardAnimation } from '../hooks/useBoardAnimation';
 import { useGameSession } from '../hooks/useGameSession';
 import { useBackgammonGame } from '../hooks/useBackgammonGame';
-const NICKNAME_KEY = '@vault_nickname';
-const SWIPE_HINT_KEY = '@vault_swipe_hint_seen';
-const LEGACY_NICKNAME_KEY = '@backgammon_nickname';
-const LEGACY_SWIPE_HINT_KEY = '@backgammon_swipe_hint_seen';
-/** Как у ChatRoomHeader.js — frosted шапка чата */
-const HANDLE_BLUR_INTENSITY_IOS = 78;
-const HANDLE_BLUR_INTENSITY_ANDROID = 56;
-const HANDLE_FROST_TINT_OPACITY = 0.28;
+import useGameScreenBootstrap from './game/useGameScreenBootstrap';
+import useGameKeyboardTransition from './game/useGameKeyboardTransition';
+import useGameDiceRemoteSync, { createDiceEqual } from './game/useGameDiceRemoteSync';
+import { resolveGameOpponentName } from './game/resolveGameOpponentName';
+import {
+  BOARD_TOP_GAP,
+  DEFAULT_PH,
+  MIN_PH,
+  BOARD_CHROME,
+} from './game/gameScreenConstants';
+import useGameDiceAnimComplete from './game/useGameDiceAnimComplete';
+import useGameBoardSwipe from './game/useGameBoardSwipe';
+import useGameBoardHandleStyles from './game/useGameBoardHandleStyles';
+import GameBoardColumn from './game/GameBoardColumn';
 
 export default function GameScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -54,9 +44,15 @@ export default function GameScreen({ route, navigation }) {
   const roomId = route.params?.roomId;
   const selfPlay = route.params?.selfPlay === true;
   const routePeerName = route.params?.peerName || route.params?.title || null;
-  const [nickname, setNickname] = useState(route.params?.nickname || '');
 
   const [gameState, setGameState] = useState(createInitialGameState());
+  const gameStarted = gameState.gameStarted === true;
+  const {
+    nickname,
+    swipeHintLoaded,
+    swipeHintSeen,
+    markSwipeHintSeen,
+  } = useGameScreenBootstrap(route.params?.nickname, gameStarted);
   const [playerNumber, setPlayerNumber] = useState(route.params?.playerNumber);
 
   const [diceAnimating, setDiceAnimating] = useState(false);
@@ -151,22 +147,14 @@ export default function GameScreen({ route, navigation }) {
     }
   }, [sessionPlayerNumber]);
 
-  const opponentName = useMemo(() => {
-    if (selfPlay) return nickname;
-    if (!room || !nickname) return routePeerName;
-    const u1 = room?.user1_id || room?.player1_name || null;
-    const u2 = room?.user2_id || room?.player2_name || null;
-    if (!u1 && !u2) return routePeerName;
-    if (u1 === nickname) return u2;
-    if (u2 === nickname) return u1;
-    // fallback: if nickname isn't on the room record yet, pick "other" heuristically
-    return routePeerName || u2 || u1;
-  }, [room, nickname, selfPlay, routePeerName]);
+  const opponentName = useMemo(
+    () => resolveGameOpponentName(room, nickname, selfPlay, routePeerName),
+    [room, nickname, selfPlay, routePeerName],
+  );
   opponentNameRef.current = opponentName;
 
   const roomStatus = room?.status || 'playing';
 
-  const gameStarted = gameState.gameStarted === true;
   // Pre-start roll: each player rolls two dice, higher sum goes first
   const isPreStart = gameStarted && gameState.turnPhase === 'preroll';
   const effectiveGameState = boardMode === 'sandbox' ? sandboxState : gameState;
@@ -174,120 +162,8 @@ export default function GameScreen({ route, navigation }) {
   /** Вызов из setTimeout удалённого броска — ref обновляется после объявления pauseJsForDiceThrow */
   const pauseJsForDiceThrowRef = useRef(() => {});
 
-  const diceEqual = useCallback((a, b) => {
-    if (a === b) return true;
-    if (!Array.isArray(a) || !Array.isArray(b)) return false;
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-    return true;
-  }, []);
+  const diceEqual = useMemo(() => createDiceEqual(), []);
 
-  // Remote roll animation: prefer explicit roll event from synced state
-  useEffect(() => {
-    if (boardMode !== 'match') return;
-    if (!gameStarted) return;
-    if (diceAnimating || showAnimDice) return;
-
-    const evt = gameState?.lastRollEvent || null;
-    const evtId = typeof evt?.id === 'string' ? evt.id : null;
-    if (!evtId) return;
-    if (prevNetRollEventIdRef.current === evtId) return;
-    prevNetRollEventIdRef.current = evtId;
-
-    // Don't replay our own event (or the echo of it)
-    if (evt?.by === playerNumber) return;
-    if (lastLocalRollEventIdRef.current && lastLocalRollEventIdRef.current === evtId) return;
-
-    const evtDice = Array.isArray(evt?.dice) ? evt.dice : [];
-    if (evtDice.length !== 2) return;
-
-    const now = Date.now();
-    const at = typeof evt?.at === 'number' ? evt.at : now;
-    const target = at + 50; // smaller cushion: feel more "instant"
-    const delay = Math.max(0, Math.min(110, target - now));
-
-    const startPos =
-      evt?.startPos && typeof evt.startPos.x === 'number' && typeof evt.startPos.y === 'number'
-        ? evt.startPos
-        : { x: 42, y: pointH * 1.25 };
-    const endPos =
-      evt?.endPos && typeof evt.endPos.x === 'number' && typeof evt.endPos.y === 'number'
-        ? evt.endPos
-        : { x: (windowW || Dimensions.get('window').width) - 42, y: pointH * 0.75 };
-
-    const t = setTimeout(() => {
-      // Re-check state at fire time (avoid racing with local animations)
-      if (boardMode !== 'match') return;
-      if (diceAnimating || showAnimDice) return;
-
-      try {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch {}
-      playDiceRollSound();
-
-      pendingRollRef.current = null;
-      pauseJsForDiceThrowRef.current();
-      setAnimDice(evtDice);
-      setSwipeStart(startPos);
-      setSwipeEnd(endPos);
-      setShowAnimDice(true);
-      setDiceAnimating(true);
-      setThrowKey((k) => k + 1);
-    }, delay);
-
-    return () => clearTimeout(t);
-  }, [
-    boardMode,
-    gameStarted,
-    gameState?.lastRollEvent,
-    diceAnimating,
-    showAnimDice,
-    playerNumber,
-    pointH]);
-
-  // Fallback: when synced state receives new dice (legacy), replay 3D throw locally
-  useEffect(() => {
-    if (boardMode !== 'match') return;
-    if (!gameStarted) return;
-    if (diceAnimating || showAnimDice) return;
-
-    const nextDice = Array.isArray(gameState.dice) ? gameState.dice : [];
-    const prevDice = Array.isArray(prevNetDiceRef.current) ? prevNetDiceRef.current : [];
-
-    prevNetDiceRef.current = nextDice;
-
-    // Only animate real rolls (two dice) that appeared/changed
-    if (!(nextDice.length === 2)) return;
-    if (diceEqual(prevDice, nextDice)) return;
-
-    // If we have an explicit roll event in state that matches these dice,
-    // do NOT double-animate via the legacy dice watcher.
-    const evt = gameState?.lastRollEvent || null;
-    const evtDice = Array.isArray(evt?.dice) ? evt.dice : [];
-    if (evtDice.length === 2 && diceEqual(evtDice, nextDice)) return;
-
-    // If this is our own roll just synced back, don't double-animate
-    const lastLocal = lastLocalRealRollRef.current;
-    if (lastLocal?.dice && diceEqual(lastLocal.dice, nextDice) && Date.now() - (lastLocal.at || 0) < 4000) {
-      return;
-    }
-
-    // Opponent roll animation (fixed throw vector so it looks like a throw)
-    pendingRollRef.current = null;
-    pauseJsForDiceThrowRef.current();
-    setAnimDice(nextDice);
-    setSwipeStart({ x: 42, y: pointH * 1.25 });
-    setSwipeEnd({ x: (windowW || Dimensions.get('window').width) - 42, y: pointH * 0.75 });
-    setShowAnimDice(true);
-    setDiceAnimating(true);
-    setThrowKey((k) => k + 1);
-  }, [boardMode, gameStarted, gameState.dice, diceAnimating, showAnimDice, diceEqual, pointH, windowW]);
-
-  const BOARD_TOP_GAP = 4;
-  const BOARD_SIDE_GAP = 8;
-  const DEFAULT_PH = 130;
-  const MIN_PH = 50;
-  const BOARD_CHROME = 32;
   /** Высота frosted ChatRoomHeader внутри Chat (как ChatRoomScreen) */
   const [frostedHeaderH, setFrostedHeaderH] = useState(0);
   const boardColRef = useRef(null);
@@ -295,9 +171,6 @@ export default function GameScreen({ route, navigation }) {
   const pointH = availableH > 0
     ? Math.max(MIN_PH, Math.floor((availableH - BOARD_CHROME) / 2))
     : DEFAULT_PH;
-
-  const [swipeHintLoaded, setSwipeHintLoaded] = useState(false);
-  const [swipeHintSeen, setSwipeHintSeen] = useState(true);
 
   const renderPausedRef = useRef(false);
   /** Не совмещать с renderPausedRef: pauseRendering() ставит ref в true и иначе остановит RAF в DiceThrow3D */
@@ -308,37 +181,8 @@ export default function GameScreen({ route, navigation }) {
   /** Пока false — Backgammon не в дереве (после сворачивания доски), игра в state родителя продолжается */
   const [boardContentActive, setBoardContentActive] = useState(false);
 
-  const [kbTransitioning, setKbTransitioning] = useState(false);
-  const kbTransitionTimerRef = useRef(null);
   const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
-
-  useEffect(() => {
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const mark = (vis) => {
-      setKbTransitioning(true);
-      setKbVisible(vis);
-      if (kbTransitionTimerRef.current) {
-        clearTimeout(kbTransitionTimerRef.current);
-        kbTransitionTimerRef.current = null;
-      }
-      kbTransitionTimerRef.current = setTimeout(() => {
-        kbTransitionTimerRef.current = null;
-        setKbTransitioning(false);
-      }, 420);
-    };
-    const sub1 = Keyboard.addListener(showEvt, () => mark(true));
-    const sub2 = Keyboard.addListener(hideEvt, () => mark(false));
-    return () => {
-      sub1.remove();
-      sub2.remove();
-      if (kbTransitionTimerRef.current) clearTimeout(kbTransitionTimerRef.current);
-    };
-  }, []);
-
-  const DRAG_MAX_EXTRA_H = 28;
-  const HANDLE_NARROW_RATIO = 0.6;
+  const { kbTransitioning } = useGameKeyboardTransition(setKbVisible);
 
   const {
     handleStretchAnim,
@@ -366,6 +210,30 @@ export default function GameScreen({ route, navigation }) {
     frostedHeaderH });
   pauseJsForDiceThrowRef.current = pauseJsForDiceThrow;
 
+  useGameDiceRemoteSync({
+    boardMode,
+    gameStarted,
+    gameState,
+    diceAnimating,
+    showAnimDice,
+    playerNumber,
+    pointH,
+    windowW,
+    diceEqual,
+    pauseJsForDiceThrowRef,
+    pendingRollRef,
+    prevNetDiceRef,
+    prevNetRollEventIdRef,
+    lastLocalRollEventIdRef,
+    lastLocalRealRollRef,
+    setAnimDice,
+    setSwipeStart,
+    setSwipeEnd,
+    setShowAnimDice,
+    setDiceAnimating,
+    setThrowKey,
+  });
+
   useEffect(() => {
     const t = setTimeout(() => computeMaxSlide(), 80);
     return () => clearTimeout(t);
@@ -376,32 +244,6 @@ export default function GameScreen({ route, navigation }) {
       runCloseSequence();
     }
   }, [showBackgammonBoard, boardContentActive, runCloseSequence]);
-
-  useEffect(() => {
-    // Migrate legacy keys on first run
-    AsyncStorage.getItem(LEGACY_NICKNAME_KEY).then((legacy) => {
-      if (legacy) {
-        AsyncStorage.setItem(NICKNAME_KEY, legacy);
-        AsyncStorage.removeItem(LEGACY_NICKNAME_KEY);
-      }
-    });
-    AsyncStorage.getItem(LEGACY_SWIPE_HINT_KEY).then((legacy) => {
-      if (legacy) {
-        AsyncStorage.setItem(LEGACY_SWIPE_HINT_KEY, '1');
-        AsyncStorage.removeItem(LEGACY_SWIPE_HINT_KEY);
-      }
-    });
-
-    if (route.params?.nickname && route.params.nickname !== nickname) {
-      setNickname(route.params.nickname);
-      return;
-    }
-    if (!route.params?.nickname && !nickname) {
-      AsyncStorage.getItem(NICKNAME_KEY).then((stored) => {
-        if (stored) setNickname(stored);
-      });
-    }
-  }, [route.params?.nickname, nickname]);
 
   useFocusEffect(
     useCallback(() => {
@@ -428,195 +270,43 @@ export default function GameScreen({ route, navigation }) {
     return () => clearTimeout(t);
   }, [diceAnimating]);
 
-  useEffect(() => {
-    AsyncStorage.getItem(SWIPE_HINT_KEY).then((v) => {
-      setSwipeHintSeen(v === '1');
-      setSwipeHintLoaded(true);
-    });
-  }, []);
+  const handleDiceAnimComplete = useGameDiceAnimComplete({
+    pendingRollRef,
+    gameStateRef,
+    playerNumber,
+    syncGameState,
+    setGameState,
+    setUiDice,
+    setShowAnimDice,
+    setDiceAnimating,
+    setAnimDice,
+  });
 
-  useEffect(() => {
-    if (gameStarted) {
-      setSwipeHintSeen(true);
-      AsyncStorage.setItem(SWIPE_HINT_KEY, '1');
-    }
-  }, [gameStarted]);
-
-  const handleDiceAnimComplete = useCallback(async () => {
-    const pendingDice = pendingRollRef.current;
-    if (pendingDice) {
-      pendingRollRef.current = null;
-      const gs = gameStateRef.current;
-      if (gs.turnPhase === 'preroll') {
-        const die1 = pendingDice?.[0];
-        const die2 = pendingDice?.[1];
-        if (!die1 || !die2) {
-          setShowAnimDice(false);
-          setDiceAnimating(false);
-          return;
-        }
-        const myRoll = [die1, die2];
-        const nextRolls = {
-          ...(gs.preStartRolls || { 1: null, 2: null }),
-          [gs.currentPlayer]: myRoll };
-        const r1 = nextRolls[1];
-        const r2 = nextRolls[2];
-        const p1 = r1 ? r1[0] + r1[1] : null;
-        const p2 = r2 ? r2[0] + r2[1] : null;
-        let newState = {
-          ...gs,
-          preStartRolls: nextRolls,
-          dice: [],
-          remainingMoves: [],
-          headMovesThisTurn: 0 };
-        setUiDice(myRoll);
-        if (p1 == null || p2 == null) {
-          newState.currentPlayer = gs.currentPlayer === 1 ? 2 : 1;
-          newState.turnPhase = 'preroll';
-          setGameState(newState);
-          await syncGameState(newState);
-          setShowAnimDice(false);
-          setDiceAnimating(false);
-          return;
-        }
-        if (p1 === p2) {
-          newState = {
-            ...newState,
-            preStartRolls: { 1: null, 2: null },
-            currentPlayer: 1,
-            turnPhase: 'preroll' };
-          setGameState(newState);
-          await syncGameState(newState);
-          setShowAnimDice(false);
-          setDiceAnimating(false);
-          return;
-        }
-        const starter = p1 > p2 ? 1 : 2;
-        newState = {
-          ...newState,
-          currentPlayer: starter,
-          turnPhase: 'roll' };
-        setGameState(newState);
-        await syncGameState(newState);
-        setShowAnimDice(false);
-        setDiceAnimating(false);
-        return;
-      }
-
-      // Normal roll (two dice) -> enters move phase
-      setUiDice(pendingDice);
-      const moves = diceToMoves(pendingDice);
-      const newState = {
-        ...gs,
-        currentPlayer: gs.currentPlayer,
-        dice: pendingDice,
-        remainingMoves: moves,
-        turnPhase: 'move',
-        // gameStarted is controlled only by "New game" button
-        headMovesThisTurn: 0 };
-
-      if (getAllValidMoves(newState).length === 0) {
-        const opponent = playerNumber === 1 ? 2 : 1;
-        const autoEndState = {
-          ...newState,
-          currentPlayer: opponent,
-          dice: [],
-          remainingMoves: [],
-          turnPhase: 'roll',
-          headMovesThisTurn: 0,
-          isFirstMove: { ...(newState.isFirstMove || { 1: true, 2: true }), [playerNumber]: false } };
-        setGameState(autoEndState);
-        await syncGameState(autoEndState);
-        setShowAnimDice(false);
-        setDiceAnimating(false);
-        Alert.alert('Нет ходов', 'У тебя нет доступных ходов. Ход переходит сопернику.');
-        return;
-      }
-
-      setGameState(newState);
-      await syncGameState(newState);
-      setShowAnimDice(false);
-      setDiceAnimating(false);
-    } else {
-      setDiceAnimating(false);
-      setShowAnimDice(false);
-      setAnimDice(null);
-    }
-  }, [playerNumber, syncGameState]);
-
-  const handleBoardSwipe = useCallback(
-    (swipe) => {
-      if (diceAnimating || showAnimDice) return;
-
-      const inSandbox = boardMode === 'sandbox';
-
-      // Anti-stress rolls: sandbox or non-real rolls outside of turn
-      if (!inSandbox && gameStarted && gameState.turnPhase === 'preroll' && gameState.currentPlayer !== playerNumber) {
-        Alert.alert('Подожди', 'Сначала должен бросить игрок 1.');
-        return;
-      }
-      if (!inSandbox && !gameStarted && playerNumber !== 1) {
-        Alert.alert('Недоступно', 'До начала игры «просто так» может кидать только игрок 1.');
-        return;
-      }
-
-      const isRealRoll =
-        !inSandbox &&
-        gameStarted &&
-        (isMyTurn || isPreStart) &&
-        (gameState.turnPhase === 'roll' || gameState.turnPhase === 'preroll') &&
-        roomStatus === 'playing';
-      const isAntiStress = inSandbox || (!isRealRoll && !(isMyTurn && gameState.turnPhase === 'move'));
-
-      if (!isRealRoll && !isAntiStress) return;
-
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      playDiceRollSound();
-
-      const dice = rollDice();
-      pauseJsForDiceThrow();
-      setAnimDice(dice);
-      if (isRealRoll) {
-        setUiDice(dice);
-      }
-      setSwipeStart({ x: swipe.startX, y: swipe.startY });
-      setSwipeEnd({ x: swipe.endX, y: swipe.endY });
-      setShowAnimDice(true);
-      setDiceAnimating(true);
-      setThrowKey((k) => k + 1);
-
-      if (isRealRoll) {
-        const at = Date.now();
-        lastLocalRealRollRef.current = { dice, at };
-
-        // Broadcast a roll event so both clients can start the throw animation from the same "event"
-        const rollEvent = {
-          id: `${at}-${playerNumber}-${Math.random().toString(16).slice(2)}`,
-          by: playerNumber,
-          at,
-          dice,
-          startPos: { x: swipe.startX, y: swipe.startY },
-          endPos: { x: swipe.endX, y: swipe.endY },
-          phase: gameState.turnPhase };
-        lastLocalRollEventIdRef.current = rollEvent.id;
-
-        // Update local state immediately (so subsequent syncs keep the field)
-        setGameState((prev) => ({ ...(prev || {}), lastRollEvent: rollEvent }));
-
-        // Sync immediately (fire-and-forget): only adds metadata, doesn't change game rules
-        try {
-          syncGameState({ ...gameStateRef.current, lastRollEvent: rollEvent });
-        } catch {}
-      }
-      pendingRollRef.current = isRealRoll ? dice : null;
-    },
-    [diceAnimating, showAnimDice, isMyTurn, isPreStart, gameState, roomStatus, gameStarted, boardMode, playerNumber, syncGameState, pauseJsForDiceThrow]
-  );
-
-  const handleSwipeHintComplete = useCallback(() => {
-    setSwipeHintSeen(true);
-    AsyncStorage.setItem(SWIPE_HINT_KEY, '1');
-  }, []);
+  const handleBoardSwipe = useGameBoardSwipe({
+    diceAnimating,
+    showAnimDice,
+    boardMode,
+    gameStarted,
+    gameState,
+    playerNumber,
+    isMyTurn,
+    isPreStart,
+    roomStatus,
+    pauseJsForDiceThrow,
+    pendingRollRef,
+    lastLocalRealRollRef,
+    lastLocalRollEventIdRef,
+    gameStateRef,
+    setGameState,
+    syncGameState,
+    setAnimDice,
+    setUiDice,
+    setSwipeStart,
+    setSwipeEnd,
+    setShowAnimDice,
+    setDiceAnimating,
+    setThrowKey,
+  });
 
   const canEndTurn =
     isMyTurn &&
@@ -633,109 +323,16 @@ export default function GameScreen({ route, navigation }) {
     boardMounted &&
     !showAnimDice;
 
-  const BOARD_MAX_W = isTabletLayout ? 720 : undefined;
+  const boardMaxW = isTabletLayout ? 720 : undefined;
   const [boardColW, setBoardColW] = useState(0);
-  const fullStripW = useMemo(() => {
-    if (boardColW > 0) return boardColW;
-    return windowW || Dimensions.get('window').width;
-  }, [boardColW, windowW]);
-  const narrowStripW = useMemo(() => Math.max(48, Math.floor(fullStripW / 5)), [fullStripW]);
-
-  const animatedHandleH = useMemo(
-    () => Animated.add(
-      28,
-      Animated.add(
-        Animated.multiply(handleStretchAnim, DRAG_MAX_EXTRA_H),
-        Animated.multiply(middlePulseAnim, DRAG_MAX_EXTRA_H * 0.5)
-      )
-    ),
-    [handleStretchAnim, middlePulseAnim]
-  );
-
-  const animatedHandleW = useMemo(
-    () =>
-      handleWidthAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [narrowStripW, fullStripW],
-        extrapolate: 'clamp' }),
-    [handleWidthAnim, narrowStripW, fullStripW]
-  );
-
-  const dragHandleW = useMemo(
-    () =>
-      handleStretchAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [narrowStripW, Math.max(36, Math.floor(narrowStripW * HANDLE_NARROW_RATIO))],
-        extrapolate: 'clamp' }),
-    [handleStretchAnim, narrowStripW]
-  );
-
-  /**
-   * Радиусы только снизу:
-   * - верх всегда плоский (0)
-   * - низ всегда скруглён (никогда не 0)
-   *
-   * При drag (handleWidthAnim=0) хотим «овал» снизу: bottomR ≈ width/2.
-   * При expand до полной ширины сохраняем заметное скругление снизу (не прямой угол).
-   */
-  const oneMinusHandleWidth = useMemo(
-    () => handleWidthAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0], extrapolate: 'clamp' }),
-    [handleWidthAnim]
-  );
-
-  const oneMinusStretch = useMemo(
-    () => handleStretchAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0], extrapolate: 'clamp' }),
-    [handleStretchAnim]
-  );
-
-  /** В покое — меньший радиус; при pull — “полуовал” (приближаемся к width/2) */
-  const BOTTOM_R_COLLAPSED = 10;
-  const bottomRDrag = useMemo(
-    () =>
-      Animated.add(
-        Animated.multiply(oneMinusStretch, BOTTOM_R_COLLAPSED),
-        Animated.multiply(handleStretchAnim, Animated.multiply(dragHandleW, 0.5))
-      ),
-    [oneMinusStretch, handleStretchAnim, dragHandleW]
-  );
-
-  /** На полной ширине тоже сохраняем скругление снизу */
-  const BOTTOM_R_FULL = 18;
-  const bottomR = useMemo(
-    () =>
-      Animated.add(
-        Animated.multiply(oneMinusHandleWidth, bottomRDrag),
-        Animated.multiply(handleWidthAnim, BOTTOM_R_FULL)
-      ),
-    [oneMinusHandleWidth, bottomRDrag, handleWidthAnim]
-  );
-
-  const THUMB_W_MAX = 48;
-  const THUMB_W_MIN = 4;
-  const THUMB_H_LINE = 4;
-
-  const stripWidthAnim = useMemo(
-    () => Animated.add(
-      Animated.multiply(
-        handleWidthAnim.interpolate({ inputRange: [0, 0.01], outputRange: [1, 0], extrapolate: 'clamp' }),
-        dragHandleW
-      ),
-      Animated.multiply(
-        handleWidthAnim.interpolate({ inputRange: [0, 0.01], outputRange: [0, 1], extrapolate: 'clamp' }),
-        animatedHandleW
-      )
-    ),
-    [handleWidthAnim, dragHandleW, animatedHandleW]
-  );
-
-  const boardRenderW = useMemo(() => {
-    const w = boardColW > 0 ? boardColW : fullStripW;
-    const fallbackW = windowW || Dimensions.get('window').width;
-    const raw = w || fallbackW;
-    const insetW = Math.max(0, raw - BOARD_SIDE_GAP * 2);
-    if (typeof BOARD_MAX_W === 'number' && BOARD_MAX_W > 0) return Math.floor(Math.min(insetW, BOARD_MAX_W));
-    return Math.floor(insetW);
-  }, [boardColW, fullStripW, windowW, BOARD_MAX_W, BOARD_SIDE_GAP]);
+  const { animatedHandleH, bottomR, stripWidthAnim, boardRenderW } = useGameBoardHandleStyles({
+    handleStretchAnim,
+    handleWidthAnim,
+    middlePulseAnim,
+    boardColW,
+    windowW,
+    boardMaxW,
+  });
 
   const listPaddingTop = frostedHeaderH > 0 ? frostedHeaderH : insets.top + 75;
   const boardTopOffset = listPaddingTop + BOARD_TOP_GAP;
@@ -748,234 +345,56 @@ export default function GameScreen({ route, navigation }) {
       <View style={[tw`flex-1`, { position: 'relative' }]}>
         {/* Board column */}
         {showBackgammonBoard && !kbVisible && !emojiPickerVisible && (
-          <View
-            ref={boardColRef}
-            onLayout={(e) => {
-              const w = e?.nativeEvent?.layout?.width;
-              if (typeof w === 'number' && w > 0) setBoardColW(w);
-              boardColRef.current?.measureInWindow((_x, y) => {
-                if (typeof y === 'number') {
-                  boardColTopYRef.current = y;
-                  computeMaxSlide();
-                }
-              });
-            }}
-            pointerEvents="box-none"
-            style={{
-              position: 'absolute',
-              top: boardTopOffset,
-              left: 0,
-              right: 0,
-              zIndex: 10,
-              elevation: 10 }}
-          >
-            <Animated.View
-              pointerEvents="box-none"
-              style={{
-                width: stripWidthAnim,
-                alignSelf: 'center' }}
-            >
-            <Animated.View
-              style={{ height: boardDropAnim, overflow: 'hidden' }}
-              pointerEvents="box-none"
-            >
-              {boardMounted && boardContentActive && (
-                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: BOARD_SIDE_GAP }}>
-                  <BackgammonBoard
-                    ref={boardRef}
-                    renderPausedRef={renderPausedRef}
-                    gameState={effectiveGameState}
-                    isMyTurn={isMyTurn}
-                    turnPhase={gameState.turnPhase}
-                    selfPlay={selfPlay}
-                    opponentOnline={opponentOnline}
-                    playerNumber={playerNumber}
-                    selectedPoint={selectedPoint}
-                    highlightedMoves={highlightedMoves}
-                    onPointPress={handlePointPress}
-                    onBarPress={handleBarPress}
-                    onBearOffPress={handleBearOffPress}
-                    onSwipe={handleBoardSwipe}
-                    topBarMiddle={
-                      <TouchableOpacity
-                        onPress={newGame}
-                        disabled={!selfPlay && !opponentOnline}
-                        style={[
-                          tw`px-3 py-1.5 rounded-[10px]`,
-                          { backgroundColor: V.bgElevated, borderWidth: 0.5, borderColor: V.border },
-                          (!selfPlay && !opponentOnline) && { opacity: 0.45 }]}
-                      >
-                        <Text style={[tw`text-[10px] font-medium`, { color: V.textSecondary }]}>Новая игра</Text>
-                      </TouchableOpacity>
-                    }
-                    enableLayoutAnimations={!kbTransitioning && !isTabletLayout}
-                    maxBoardWidth={BOARD_MAX_W}
-                    diceOverlay={
-                      showAnimDice && (
-                        <DiceThrow3D
-                          key={throwKey}
-                          dice={animDice}
-                          startPos={swipeStart}
-                          endPos={swipeEnd}
-                          boardWidth={boardRenderW}
-                          boardHeight={pointH * 2}
-                          onComplete={handleDiceAnimComplete}
-                          pausedRef={diceGlPausedRef}
-                        />
-                      )
-                    }
-                    centerOverlay={
-                      (boardMode === 'sandbox'
-                        ? (Array.isArray(sandboxUiDice) && sandboxUiDice.length === 2)
-                        : (gameStarted
-                            ? (gameState.turnPhase === 'preroll' || (Array.isArray(gameState.dice) && gameState.dice.length === 2))
-                            : (Array.isArray(uiDice) && uiDice.length === 2)
-                          )
-                      ) &&
-                      !showAnimDice && (
-                        <View style={tw`flex-1 items-center justify-center`}>
-                          {boardMode === 'sandbox' && (
-                            <View
-                              style={[
-                                tw`mb-2 px-3 py-1 rounded-[10px]`,
-                                { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border }]}
-                            >
-                              <Text style={[tw`text-[10px]`, { color: V.textSecondary }]}>
-                                Песочница
-                              </Text>
-                            </View>
-                          )}
-                          <View style={tw`items-center justify-center`}>
-                            {boardMode === 'match' && gameState.turnPhase === 'preroll' ? (
-                              <View style={tw`gap-2`}>
-                                <View style={tw`flex-row items-center justify-center gap-3`}>
-                                  <DieFace value={gameState.preStartRolls?.[1]?.[0] ?? 1} isUsed={false} size={36} />
-                                  <DieFace value={gameState.preStartRolls?.[1]?.[1] ?? 1} isUsed={false} size={36} />
-                                </View>
-                                <View style={tw`flex-row items-center justify-center gap-3`}>
-                                  <DieFace value={gameState.preStartRolls?.[2]?.[0] ?? 1} isUsed={false} size={36} />
-                                  <DieFace value={gameState.preStartRolls?.[2]?.[1] ?? 1} isUsed={false} size={36} />
-                                </View>
-                              </View>
-                            ) : (
-                              <>
-                                <View style={{ marginBottom: 10 }}>
-                                  <DieFace
-                                    value={
-                                      boardMode === 'sandbox'
-                                        ? sandboxUiDice[0]
-                                        : (gameStarted ? gameState.dice?.[0] : uiDice?.[0])
-                                    }
-                                    isUsed={false}
-                                    size={42}
-                                  />
-                                </View>
-                                <DieFace
-                                  value={
-                                    boardMode === 'sandbox'
-                                      ? sandboxUiDice[1]
-                                      : (gameStarted ? gameState.dice?.[1] : uiDice?.[1])
-                                  }
-                                  isUsed={false}
-                                  size={42}
-                                />
-                              </>
-                            )}
-                          </View>
-                        </View>
-                      )
-                    }
-                    swipeHintOverlay={
-                      <SwipeBoardHint
-                        visible={showFingerHint}
-                        boardWidth={boardRenderW}
-                        boardHeight={pointH * 2}
-                        onComplete={handleSwipeHintComplete}
-                      />
-                    }
-                    pointHeight={pointH}
-                    pointHeightMin={MIN_PH}
-                    pointHeightMax={pointH}
-                  >
-                    {canEndTurn && (
-                      <View style={tw`flex-row items-center justify-center`}>
-                        <TouchableOpacity
-                          style={[
-                            tw`rounded-[10px] px-4 py-2`,
-                            { backgroundColor: V.bgElevated, borderWidth: 0.5, borderColor: V.border }]}
-                          onPress={handleEndTurn}
-                        >
-                          <Text style={[tw`text-[10px] font-medium`, { color: V.textSecondary }]}>Завершить ход</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </BackgammonBoard>
-                </View>
-              )}
-            </Animated.View>
-
-            {/* Handle — капсула с 4-фазной анимацией */}
-            <Animated.View
-              {...slidePan.panHandlers}
-              style={[
-                tw`items-center justify-center`,
-                {height: animatedHandleH,
-                  overflow: 'hidden',
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: V.border,
-                  borderTopLeftRadius: bottomR,
-                  borderTopRightRadius: bottomR,
-                  borderBottomLeftRadius: bottomR,
-                  borderBottomRightRadius: bottomR}]}
-              accessibilityLabel="Потяни вниз, чтобы открыть доску"
-            >
-              <SafeBlurView
-                intensity={Platform.OS === 'ios' ? HANDLE_BLUR_INTENSITY_IOS : HANDLE_BLUR_INTENSITY_ANDROID}
-                tint="dark"
-                blurReductionFactor={Platform.OS === 'android' ? 4.5 : 3.5}
-                pointerEvents="none"
-                style={StyleSheet.absoluteFillObject}
-              />
-              <View
-                pointerEvents="none"
-                style={[
-                  StyleSheet.absoluteFillObject,
-                  { backgroundColor: V.bgElevated, opacity: HANDLE_FROST_TINT_OPACITY }]}
-              />
-              <Animated.View
-                pointerEvents="none"
-                style={{
-                  width: handleStretchAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [THUMB_W_MAX, THUMB_W_MIN],
-                    extrapolate: 'clamp' }),
-                  height: handleStretchAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [THUMB_H_LINE, THUMB_W_MIN],
-                    extrapolate: 'clamp' }),
-                  borderRadius: handleStretchAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [9999, THUMB_W_MIN / 2],
-                    extrapolate: 'clamp' }),
-                  overflow: 'hidden' }}
-              >
-                <SafeBlurView
-                  intensity={Platform.OS === 'ios' ? 18 : 14}
-                  tint="dark"
-                  blurReductionFactor={Platform.OS === 'android' ? 4.5 : 3.5}
-                  pointerEvents="none"
-                  style={StyleSheet.absoluteFillObject}
-                />
-                <View
-                  pointerEvents="none"
-                  style={[
-                    StyleSheet.absoluteFillObject,
-                    { backgroundColor: V.textPrimary, opacity: 0.22 }]}
-                />
-              </Animated.View>
-            </Animated.View>
-            </Animated.View>
-          </View>
+          <GameBoardColumn
+            boardColRef={boardColRef}
+            boardTopOffset={boardTopOffset}
+            boardColTopYRef={boardColTopYRef}
+            computeMaxSlide={computeMaxSlide}
+            onBoardColLayoutWidth={setBoardColW}
+            stripWidthAnim={stripWidthAnim}
+            boardDropAnim={boardDropAnim}
+            slidePan={slidePan}
+            boardMounted={boardMounted}
+            boardContentActive={boardContentActive}
+            boardRef={boardRef}
+            renderPausedRef={renderPausedRef}
+            effectiveGameState={effectiveGameState}
+            gameState={gameState}
+            isMyTurn={isMyTurn}
+            selfPlay={selfPlay}
+            opponentOnline={opponentOnline}
+            playerNumber={playerNumber}
+            selectedPoint={selectedPoint}
+            highlightedMoves={highlightedMoves}
+            onPointPress={handlePointPress}
+            onBarPress={handleBarPress}
+            onBearOffPress={handleBearOffPress}
+            onSwipe={handleBoardSwipe}
+            onNewGame={newGame}
+            kbTransitioning={kbTransitioning}
+            isTabletLayout={isTabletLayout}
+            boardMaxW={boardMaxW}
+            showAnimDice={showAnimDice}
+            throwKey={throwKey}
+            animDice={animDice}
+            swipeStart={swipeStart}
+            swipeEnd={swipeEnd}
+            boardRenderW={boardRenderW}
+            pointH={pointH}
+            onDiceAnimComplete={handleDiceAnimComplete}
+            diceGlPausedRef={diceGlPausedRef}
+            boardMode={boardMode}
+            gameStarted={gameStarted}
+            sandboxUiDice={sandboxUiDice}
+            uiDice={uiDice}
+            showFingerHint={showFingerHint}
+            onSwipeHintComplete={markSwipeHintSeen}
+            canEndTurn={canEndTurn}
+            onEndTurn={handleEndTurn}
+            animatedHandleH={animatedHandleH}
+            bottomR={bottomR}
+            handleStretchAnim={handleStretchAnim}
+          />
         )}
 
         {/* Chat column */}

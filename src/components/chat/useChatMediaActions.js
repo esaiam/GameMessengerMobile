@@ -4,7 +4,6 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { uploadAsync, FileSystemUploadType } from 'expo-file-system/legacy';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase';
-import { encrypt } from '../../utils/crypto';
 import { storageRoomSegment, readUriAsArrayBuffer } from './chatMediaIo';
 import { DEFAULT_VOICE_WAVEFORM } from './voiceWaveformSamples';
 import { formatDuration } from './chatMessageListFormat';
@@ -12,7 +11,6 @@ import { formatDuration } from './chatMessageListFormat';
 export default function useChatMediaActions({
   roomId,
   nickname,
-  legacyCryptoKey,
   replyTo,
   ephemeralSec,
   setReplyTarget,
@@ -26,7 +24,8 @@ export default function useChatMediaActions({
     if (!roomId) {
       throw new Error('room_id отсутствует');
     }
-    const filePath = `${folder}/${storageRoomSegment(roomId)}/${Date.now()}.${ext}`;
+    const roomSeg = await storageRoomSegment(roomId);
+    const filePath = `${folder}/${roomSeg}/${Date.now()}.${ext}`;
     const bucket = 'chat-media';
 
     const useNativeStreamUpload =
@@ -76,7 +75,7 @@ export default function useChatMediaActions({
     const row = {
       room_id: roomId,
       player_name: nickname,
-      text: rawText && legacyCryptoKey ? encrypt(rawText, legacyCryptoKey) : rawText,
+      text: rawText || '',
       message_type: messageType,
       media_url: mediaUrl || null,
       latitude: extra.latitude ?? null,
@@ -98,7 +97,7 @@ export default function useChatMediaActions({
     }
     setReplyTarget(null);
     return data ?? null;
-  }, [roomId, nickname, replyTo, ephemeralSec, setReplyTarget, legacyCryptoKey]);
+  }, [roomId, nickname, replyTo, ephemeralSec, setReplyTarget]);
 
   const pickImageFromGallery = useCallback(async () => {
     setShowAttachMenu(false);

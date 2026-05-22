@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { unhideChatRoom } from './hiddenChats';
+import { normalizeUserPair } from '../utils/roomIds';
 
 const key = (nickname) => `@vault_blocked_${nickname}`;
 
@@ -33,4 +35,6 @@ export async function unblockPeer(nickname, peerHandle) {
   const set = await getBlockedPeers(nickname);
   set.delete(peerHandle);
   await AsyncStorage.setItem(key(nickname), JSON.stringify([...set]));
+  const { roomId } = normalizeUserPair(nickname, peerHandle);
+  if (roomId) await unhideChatRoom(nickname, roomId);
 }

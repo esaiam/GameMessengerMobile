@@ -107,14 +107,4 @@ export async function decryptMessage(
   }
 }
 
-/**
- * Проверяет, является ли строка зашифрованным Vault-сообщением.
- * Признаки: длина > 60, валидный base64, не является старым CryptoJS-форматом.
- */
-export function isVaultEncrypted(text: string): boolean {
-  if (text.length <= 60) return false;
-  if (text.startsWith('U2FsdGVkX1')) return false;
-  return /^[A-Za-z0-9+/]+=*$/.test(text);
-}
-
-export default { encryptMessage, decryptMessage, isVaultEncrypted };
+export default { encryptMessage, decryptMessage };

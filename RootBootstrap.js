@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { runAuthStorageMigration } from './src/lib/authStorageMigration';
+import { runNicknameStorageMigration } from './src/lib/nicknameStorage';
 
 /** Токены Vault (без импорта theme — меньше шансов на цикл/ранний резолв при бандле). */
 const SPLASH_BG = '#0D0F14';
@@ -17,6 +18,7 @@ export default function RootBootstrap() {
     (async () => {
       try {
         await runAuthStorageMigration();
+        await runNicknameStorageMigration();
         if (!alive) return;
         const { default: App } = await import('./App');
         if (alive) setAppComponent(() => App);

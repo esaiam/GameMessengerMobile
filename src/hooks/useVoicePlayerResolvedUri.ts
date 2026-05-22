@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import CryptoJS from 'crypto-js';
 import { File as ExpoFile, Paths } from 'expo-file-system';
+import { sha256Hex } from '../lib/sha256Hex';
 import {
   voiceCacheExtensionFromUrl,
   VOICE_CACHE_MIN_BYTES,
@@ -36,7 +36,7 @@ export function useVoicePlayerResolvedUri(
     setResolved(null);
     (async () => {
       try {
-        const hash = CryptoJS.SHA256(mediaUrl).toString(CryptoJS.enc.Hex).slice(0, 24);
+        const hash = (await sha256Hex(mediaUrl)).slice(0, 24);
         const ext = voiceCacheExtensionFromUrl(mediaUrl);
         const dest = new ExpoFile(Paths.cache, `voice-${hash}.${ext}`);
         let fileUri: string | null = null;

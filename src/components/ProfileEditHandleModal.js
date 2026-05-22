@@ -15,7 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import tw from 'twrnc';
 import SafeBlurView from './SafeBlurView';
 import { V } from '../theme';
-import { useAuthGate, NICKNAME_STORAGE_KEY } from '../context/AuthGateContext';
+import { useAuthGate } from '../context/AuthGateContext';
+import { writeNicknameToStorage } from '../lib/nicknameStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   HANDLE_MAX,
@@ -62,7 +63,7 @@ export default function ProfileEditHandleModal({ visible, onClose, currentHandle
         return;
       }
 
-      await AsyncStorage.setItem(NICKNAME_STORAGE_KEY, slug);
+      await writeNicknameToStorage(slug);
       await refreshProfile();
       onSaved?.(slug);
       onClose();

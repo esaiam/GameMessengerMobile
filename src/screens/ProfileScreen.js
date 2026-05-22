@@ -21,7 +21,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import tw from 'twrnc';
 import { V } from '../theme';
 import { supabase } from '../lib/supabase';
-import { NICKNAME_STORAGE_KEY, useAuthGate } from '../context/AuthGateContext';
+import { useAuthGate } from '../context/AuthGateContext';
+import { clearNicknameFromStorage } from '../lib/nicknameStorage';
 import { UserAvatar } from '../components/UserAvatar';
 import ProfileAvatarModal from '../components/ProfileAvatarModal';
 import ProfileEditHandleModal from '../components/ProfileEditHandleModal';
@@ -39,6 +40,7 @@ import {
   getDmPolicy,
   setChatWallpaperEnabled,
   setDmPolicy } from '../lib/profileSettings';
+import { getBlockedPeers } from '../lib/blockedContacts';
 
 const AVATAR_SIZE = 96;
 const AVATAR_MARGIN_TOP = 8;
@@ -117,6 +119,7 @@ export default function ProfileScreen({ route, navigation }) {
   const [dmPolicyLabel, setDmPolicyLabel] = useState(DM_POLICY_LABELS.everyone);
   const [wallpaperOn, setWallpaperOn] = useState(true);
   const [pushStatusLabel, setPushStatusLabel] = useState('');
+  const [blockedCount, setBlockedCount] = useState(0);
   const [nameWidth, setNameWidth] = useState(0);
   const headerLayout = useMessengerHeaderLayout();
   const { width: screenW } = useWindowDimensions();
@@ -167,17 +170,20 @@ export default function ProfileScreen({ route, navigation }) {
   });
 
   const refreshSettingsLabels = useCallback(async () => {
-    const [policy, wallpaper, perm] = await Promise.all([
+    const [policy, wallpaper, perm, blocked] = await Promise.all([
       getDmPolicy(),
       getChatWallpaperEnabled(),
-      Notifications.getPermissionsAsync()]);
+      Notifications.getPermissionsAsync(),
+      nickname ? getBlockedPeers(nickname) : Promise.resolve(new Set()),
+    ]);
     setDmPolicyLabel(DM_POLICY_LABELS[policy] || DM_POLICY_LABELS.everyone);
     setWallpaperOn(wallpaper);
+    setBlockedCount(blocked.size);
     const st = perm?.status;
     if (st === 'granted') setPushStatusLabel('Включены');
     else if (st === 'denied') setPushStatusLabel('Отклонены — откройте настройки системы');
     else setPushStatusLabel('Не запрошены');
-  }, []);
+  }, [nickname]);
 
   useFocusEffect(
     useCallback(() => {
@@ -296,7 +302,7 @@ export default function ProfileScreen({ route, navigation }) {
 
   const logout = async () => {
     await supabase.auth.signOut();
-    await AsyncStorage.removeItem(NICKNAME_STORAGE_KEY);
+    await clearNicknameFromStorage();
   };
 
   const deleteAccount = () => {
@@ -326,9 +332,8 @@ export default function ProfileScreen({ route, navigation }) {
                     try {
                       await supabase.from('profiles').delete().eq('id', uid);
                       await removeAvatar();
-                      await AsyncStorage.multiRemove([
-                        NICKNAME_STORAGE_KEY,
-                        '@vault_session_cache']);
+                      await clearNicknameFromStorage();
+                      await AsyncStorage.removeItem('@vault_session_cache');
                       await supabase.auth.signOut();
                     } catch (e) {
                       Alert.alert('Ошибка', e?.message || 'Не удалось удалить аккаунт.');
@@ -417,6 +422,15 @@ export default function ProfileScreen({ route, navigation }) {
             title="Кто может написать мне"
             subtitle={dmPolicyLabel}
             onPress={openDmPolicyPicker}
+          />
+          <RowButton
+            title="Заблокированные контакты"
+            subtitle={
+              blockedCount > 0
+                ? `${blockedCount} — нажмите, чтобы разблокировать`
+                : 'Список пуст'
+            }
+            onPress={() => navigation.navigate('BlockedContacts')}
           />
         </Section>
 

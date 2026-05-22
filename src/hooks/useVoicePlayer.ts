@@ -1,12 +1,56 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { setIsAudioActiveAsync } from 'expo-audio';
-import { Audio, type AVPlaybackStatus } from 'expo-av';
+import { createAudioPlayer, setIsAudioActiveAsync, type AudioPlayer } from 'expo-audio';
+import { setAudioModeAsync } from '../utils/audioMode';
+
+type StatusSub = { remove: () => void };
+
+function detachPlayer(player: AudioPlayer | null, sub: StatusSub | null) {
+  try {
+    sub?.remove();
+  } catch {
+    /* ignore */
+  }
+  try {
+    player?.remove();
+  } catch {
+    /* ignore */
+  }
+}
+
+function isRemoteUri(uri: string) {
+  return /^https?:\/\//i.test(uri);
+}
+
+/** Ждём загрузки file:// / https перед play (expo-audio не auto-play как expo-av). */
+function waitUntilLoaded(player: AudioPlayer, timeoutMs = 10000): Promise<boolean> {
+  if (player.isLoaded) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let sub: StatusSub | null = null;
+    const timer = setTimeout(() => {
+      try {
+        sub?.remove();
+      } catch {
+        /* ignore */
+      }
+      resolve(false);
+    }, timeoutMs);
+    sub = player.addListener('playbackStatusUpdate', (status) => {
+      if (!status.isLoaded) return;
+      clearTimeout(timer);
+      try {
+        sub?.remove();
+      } catch {
+        /* ignore */
+      }
+      resolve(true);
+    });
+  });
+}
 
 export function useVoicePlayer() {
-  const soundRef = useRef<Audio.Sound | null>(null);
-  /** URI экземпляра, сейчас в `soundRef` (для «та же дорожка» до любых await). */
+  const playerRef = useRef<AudioPlayer | null>(null);
+  const statusSubRef = useRef<StatusSub | null>(null);
   const loadedUriRef = useRef<string | null>(null);
-  /** Инкремент при старте новой дорожки — глушит onStatus от предыдущего Sound. */
   const playbackGenRef = useRef(0);
 
   const [activeUri, setActiveUri] = useState<string | null>(null);
@@ -16,128 +60,141 @@ export function useVoicePlayer() {
   const activeUriRef = useRef<string | null>(null);
   activeUriRef.current = activeUri;
 
-  const play = useCallback(async (uri: string) => {
-    if (__DEV__) console.log('[VOICE] play called with uri:', uri);
-    try {
-      const sameLoaded = soundRef.current != null && loadedUriRef.current === uri;
-      if (!sameLoaded) {
-        playbackGenRef.current += 1;
+  const bindStatusListener = useCallback((player: AudioPlayer, bindGen: number) => {
+    statusSubRef.current?.remove();
+    statusSubRef.current = player.addListener('playbackStatusUpdate', (status) => {
+      if (bindGen !== playbackGenRef.current) return;
+      if (!status.isLoaded) return;
+      setPlaying(status.playing ?? false);
+      const dur = status.duration ?? 0;
+      setDuration(dur);
+      setProgress(dur > 0 ? (status.currentTime ?? 0) / dur : 0);
+      if (status.didJustFinish) {
+        if (bindGen !== playbackGenRef.current) return;
         setPlaying(false);
         setProgress(0);
-        setDuration(0);
-      }
-
-      try {
-        await setIsAudioActiveAsync(false);
-      } catch {}
-      await new Promise((r) => setTimeout(r, 300));
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: false,
-        playThroughEarpieceAndroid: false,
-        interruptionModeIOS: 1,
-        interruptionModeAndroid: 1,
-      });
-
-      if (soundRef.current && loadedUriRef.current === uri) {
-        const s = await soundRef.current.getStatusAsync();
-        if (!s.isLoaded) return;
-        if (s.isPlaying) {
-          await soundRef.current.pauseAsync();
-        } else {
-          if (s.durationMillis && s.positionMillis >= s.durationMillis - 100) {
-            await soundRef.current.setPositionAsync(0);
-          }
-          await soundRef.current.playAsync();
-        }
-        return;
-      }
-
-      if (soundRef.current) {
-        try {
-          await soundRef.current.unloadAsync();
-        } catch {
-          /* ignore */
-        }
-        soundRef.current = null;
-        loadedUriRef.current = null;
-      }
-
-      const bindGen = playbackGenRef.current;
-
-      const onStatusForThisSound = (s: AVPlaybackStatus) => {
-        if (bindGen !== playbackGenRef.current) return;
-        if (!s.isLoaded) return;
-        setPlaying(s.isPlaying ?? false);
-        setDuration((s.durationMillis ?? 0) / 1000);
-        setProgress(
-          s.durationMillis && s.durationMillis > 0
-            ? (s.positionMillis ?? 0) / s.durationMillis
-            : 0
-        );
-        if (s.didJustFinish) {
-          if (bindGen !== playbackGenRef.current) return;
-          setPlaying(false);
-          setProgress(0);
-          setActiveUri(null);
-          activeUriRef.current = null;
-        }
-      };
-
-      setActiveUri(uri);
-      activeUriRef.current = uri;
-
-      let sound: Audio.Sound | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const result = await Audio.Sound.createAsync(
-            { uri },
-            { shouldPlay: true, progressUpdateIntervalMillis: 300 },
-            onStatusForThisSound
-          );
-          sound = result.sound;
-          break;
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
-          if (__DEV__) console.warn('[useVoicePlayer] createAsync attempt', attempt + 1, 'failed:', msg);
-          if (attempt < 2) await new Promise((r) => setTimeout(r, 200));
-        }
-      }
-
-      if (!sound) {
-        if (__DEV__) console.warn('[useVoicePlayer] all createAsync attempts failed, aborting');
         setActiveUri(null);
         activeUriRef.current = null;
-        return;
       }
-
-      if (bindGen !== playbackGenRef.current) {
-        try {
-          await sound.unloadAsync();
-        } catch {
-          /* ignore */
-        }
-        return;
-      }
-
-      await sound.setVolumeAsync(1.0);
-      await sound.setIsMutedAsync(false);
-      const status = await sound.getStatusAsync();
-      if (__DEV__) console.log('[VOICE] status after create:', JSON.stringify(status));
-      if (__DEV__) console.log('[VOICE] sound created, playing...');
-      soundRef.current = sound;
-      loadedUriRef.current = uri;
-    } catch (e) {
-      if (__DEV__) console.warn('[useVoicePlayer] error', JSON.stringify(e), e instanceof Error ? e.message : e);
-    }
+    });
   }, []);
+
+  const ensurePlaybackMode = useCallback(async () => {
+    await setIsAudioActiveAsync(true);
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: false,
+      shouldRouteThroughEarpiece: false,
+      interruptionMode: 'doNotMix',
+    });
+  }, []);
+
+  const play = useCallback(
+    async (uri: string) => {
+      if (__DEV__) console.log('[VOICE] play called with uri:', uri);
+      try {
+        const sameLoaded = playerRef.current != null && loadedUriRef.current === uri;
+        if (!sameLoaded) {
+          playbackGenRef.current += 1;
+          setPlaying(false);
+          setProgress(0);
+          setDuration(0);
+        }
+
+        await ensurePlaybackMode();
+
+        if (playerRef.current && loadedUriRef.current === uri) {
+          const p = playerRef.current;
+          if (p.playing) {
+            p.pause();
+          } else {
+            const dur = p.duration ?? 0;
+            if (dur > 0 && (p.currentTime ?? 0) >= dur - 0.1) {
+              await p.seekTo(0);
+            }
+            p.play();
+          }
+          return;
+        }
+
+        if (playerRef.current) {
+          detachPlayer(playerRef.current, statusSubRef.current);
+          playerRef.current = null;
+          statusSubRef.current = null;
+          loadedUriRef.current = null;
+        }
+
+        const bindGen = playbackGenRef.current;
+        setActiveUri(uri);
+        activeUriRef.current = uri;
+
+        let player: AudioPlayer | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            player = createAudioPlayer(
+              { uri },
+              {
+                downloadFirst: isRemoteUri(uri),
+                updateInterval: 300,
+              },
+            );
+            break;
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (__DEV__) {
+              console.warn('[useVoicePlayer] createAudioPlayer attempt', attempt + 1, 'failed:', msg);
+            }
+            if (attempt < 2) await new Promise((r) => setTimeout(r, 200));
+          }
+        }
+
+        if (!player) {
+          if (__DEV__) console.warn('[useVoicePlayer] all create attempts failed, aborting');
+          setActiveUri(null);
+          activeUriRef.current = null;
+          return;
+        }
+
+        if (bindGen !== playbackGenRef.current) {
+          detachPlayer(player, null);
+          return;
+        }
+
+        player.volume = 1;
+        player.muted = false;
+        bindStatusListener(player, bindGen);
+        playerRef.current = player;
+        loadedUriRef.current = uri;
+
+        const loaded = await waitUntilLoaded(player);
+        if (bindGen !== playbackGenRef.current) {
+          detachPlayer(player, statusSubRef.current);
+          playerRef.current = null;
+          statusSubRef.current = null;
+          loadedUriRef.current = null;
+          return;
+        }
+        if (!loaded) {
+          if (__DEV__) console.warn('[useVoicePlayer] load timeout');
+          setActiveUri(null);
+          activeUriRef.current = null;
+          return;
+        }
+
+        player.play();
+        if (__DEV__) console.log('[VOICE] player playing');
+      } catch (e) {
+        if (__DEV__) {
+          console.warn('[useVoicePlayer] error', e instanceof Error ? e.message : e);
+        }
+      }
+    },
+    [bindStatusListener, ensurePlaybackMode],
+  );
 
   const pause = useCallback(async () => {
     try {
-      await soundRef.current?.pauseAsync();
+      playerRef.current?.pause();
     } catch {
       /* ignore */
     }
@@ -148,7 +205,9 @@ export function useVoicePlayer() {
 
   useEffect(() => {
     return () => {
-      soundRef.current?.unloadAsync().catch(() => {});
+      detachPlayer(playerRef.current, statusSubRef.current);
+      playerRef.current = null;
+      statusSubRef.current = null;
     };
   }, []);
 
@@ -158,10 +217,10 @@ export function useVoicePlayer() {
       playing,
       duration,
       currentTime,
-      isLoaded: !!soundRef.current,
+      isLoaded: !!playerRef.current,
       playbackState: playing ? 'playing' : ('paused' as const),
     }),
-    [playing, duration, currentTime]
+    [playing, duration, currentTime],
   );
 
   return { play, pause, activeUri, status };

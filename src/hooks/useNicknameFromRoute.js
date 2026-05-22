@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NICKNAME_STORAGE_KEY } from '../context/AuthGateContext';
+import { readNicknameFromStorage } from '../lib/nicknameStorage';
 
 /**
  * Никнейм для таб-экранов: приоритет `route.params.nickname`, иначе последнее значение из AsyncStorage.
@@ -14,7 +13,7 @@ export function useNicknameFromRoute(route) {
       return;
     }
     if (!route.params?.nickname && !nickname) {
-      AsyncStorage.getItem(NICKNAME_STORAGE_KEY).then((stored) => {
+      readNicknameFromStorage().then((stored) => {
         if (stored) setNickname(stored);
       });
     }

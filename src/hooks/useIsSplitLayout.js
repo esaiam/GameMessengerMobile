@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useWindowDimensions } from 'react-native';
 
 /**
@@ -7,11 +8,25 @@ import { useWindowDimensions } from 'react-native';
  */
 export const SPLIT_BREAKPOINT = 540;
 
+/** Гистерезис: сбрасываем split только если окно явно телефонное (не «мигание» при повороте). */
+const SPLIT_RELEASE_BELOW = SPLIT_BREAKPOINT - 48;
+
 /**
- * Возвращает true, если текущая ширина окна ≥ SPLIT_BREAKPOINT.
- * Реагирует на смену ориентации без перезапуска.
+ * true, если устройство планшетное (короткая сторона ≥ порога).
+ * После первого срабатывания «залипает» в true, пока короткая сторона не упадёт
+ * заметно ниже порога — иначе при повороте на Android/MIUI бывают кадры с
+ * некорректными width/height и split на мгновение выключается.
  */
 export function useIsSplitLayout() {
-  const { width } = useWindowDimensions();
-  return width >= SPLIT_BREAKPOINT;
+  const { width, height } = useWindowDimensions();
+  const shortestSide = Math.min(width, height);
+  const latchedRef = useRef(shortestSide >= SPLIT_BREAKPOINT);
+
+  if (shortestSide >= SPLIT_BREAKPOINT) {
+    latchedRef.current = true;
+  } else if (shortestSide < SPLIT_RELEASE_BELOW) {
+    latchedRef.current = false;
+  }
+
+  return latchedRef.current;
 }

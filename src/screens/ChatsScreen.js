@@ -27,6 +27,7 @@ import {
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import { useSplitDetail } from '../context/SplitDetailContext';
 import { isBlocked } from '../lib/blockedContacts';
+import { navigateToBlockedContacts } from '../lib/navigateToBlockedContacts';
 
 export default function ChatsScreen({ route, navigation }) {
   const nickname = useNicknameFromRoute(route);
@@ -65,6 +66,7 @@ export default function ChatsScreen({ route, navigation }) {
     ({ item }) => (
       <ChatsListRow
         item={item}
+        nickname={nickname}
         onPress={async () => {
           if (item.isAria) {
             const params = {
@@ -82,7 +84,17 @@ export default function ChatsScreen({ route, navigation }) {
             return;
           }
           if (await isBlocked(nickname, item.contactName)) {
-            Alert.alert('Контакт заблокирован', 'Диалог скрыт из списка чатов.');
+            Alert.alert(
+              'Контакт заблокирован',
+              'Разблокируйте в Профиль → Заблокированные контакты.',
+              [
+                { text: 'Отмена', style: 'cancel' },
+                {
+                  text: 'Заблокированные',
+                  onPress: () => navigateToBlockedContacts(navigation),
+                },
+              ],
+            );
             return;
           }
           const params = {
