@@ -23,7 +23,7 @@ export function createDecryptMsg({ nickname, cryptoKey }) {
         const plain = await decryptMessage(box, senderName);
         if (plain !== null) return { ...msg, text: plain };
       } catch (e) {
-        console.warn('[Vault] VM2 parse error:', e?.message);
+        if (__DEV__) console.warn('[Vault] VM2 parse error:', e?.message);
       }
     }
 

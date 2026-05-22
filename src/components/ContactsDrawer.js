@@ -9,8 +9,7 @@ import {
   Alert,
   TextInput,
   Platform,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import tw from 'twrnc';
 import SafeBlurView from './SafeBlurView';
 import { supabase } from '../lib/supabase';
@@ -18,12 +17,13 @@ import { SEARCH_FIELD_LAYOUT, SEARCH_CONTACTS_CAPSULE_RADIUS, V } from '../theme
 import { UserPlus } from '../icons/lucideIcons';
 import { normalizeUserPair } from '../utils/roomIds';
 import { generateRoomCode } from '../utils/roomCode';
+import { getBlockedPeers, isBlocked } from '../lib/blockedContacts';
 import { useMessengerHeaderLayout } from './MessengerHeaderLayout';
 
 const HANDLE_PREFIX_DEBOUNCE_MS = 350;
 const HANDLE_SLUG_MAX = 32;
 /** Совпадает с проверкой в RPC search_profiles_by_handle_prefix */
-const HANDLE_RPC_PREFIX_RE = /^[a-z0-9_]{2,}$/;
+const HANDLE_RPC_PREFIX_RE = /^[a-z0-9_]{2 }$/;
 
 function sanitizeHandleSlug(raw) {
   return String(raw || '')
@@ -38,8 +38,7 @@ function AvatarCircle({ name }) {
     <View
       style={[
         tw`w-12 h-12 rounded-full items-center justify-center mr-3`,
-        { backgroundColor: V.outBubbleBg },
-      ]}
+        { backgroundColor: V.outBubbleBg }]}
     >
       <Text style={[tw`text-[14px] font-medium`, { color: V.accentSage }]}>{letter}</Text>
     </View>
@@ -105,8 +104,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
       try {
         const { data, error } = await supabase.rpc('search_profiles_by_handle_prefix', {
           prefix: slug,
-          lim: 20,
-        });
+          lim: 20 });
         if (seq !== handleSearchSeqRef.current) return;
         if (error) {
           setHandleResults([]);
@@ -135,9 +133,10 @@ export default function ContactsDrawer({ nickname, navigation }) {
     if (!rooms) return;
 
     const names = new Set();
+    const blocked = await getBlockedPeers(nickname);
     rooms.forEach((r) => {
-      if (r.user1_id && r.user1_id !== nickname) names.add(r.user1_id);
-      if (r.user2_id && r.user2_id !== nickname) names.add(r.user2_id);
+      if (r.user1_id && r.user1_id !== nickname && !blocked.has(r.user1_id)) names.add(r.user1_id);
+      if (r.user2_id && r.user2_id !== nickname && !blocked.has(r.user2_id)) names.add(r.user2_id);
     });
     setContacts([...names].sort());
   };
@@ -153,6 +152,10 @@ export default function ContactsDrawer({ nickname, navigation }) {
 
   const openOrCreateRoom = async (contactName) => {
     try {
+      if (await isBlocked(nickname, contactName)) {
+        Alert.alert('Контакт заблокирован', 'Разблокируйте в настройках профиля контакта.');
+        return;
+      }
       const { user1Id, user2Id, roomId } = normalizeUserPair(nickname, contactName);
 
       const { data: existing, error: selErr } = await supabase
@@ -188,8 +191,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
         roomId: room.id,
         nickname,
         peerName: contactName,
-        playerNumber: room.user1_id === nickname ? 1 : 2,
-      });
+        playerNumber: room.user1_id === nickname ? 1 : 2 });
     } catch (e) {
       Alert.alert('Ошибка', e?.message || 'Не удалось открыть чат');
     }
@@ -199,8 +201,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
     <View
       style={[
         tw`flex-row items-center py-3 px-4`,
-        { borderBottomWidth: 0.5, borderBottomColor: V.border },
-      ]}
+        {borderBottomWidth: 0.5, borderBottomColor: V.border}]}
     >
       <AvatarCircle name={item} />
       <View style={tw`flex-1`}>
@@ -209,8 +210,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
       <TouchableOpacity
         style={[
           tw`rounded-[8px] px-3 py-1.5`,
-          { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.accentSage },
-        ]}
+          { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.accentSage }]}
         onPress={() => openOrCreateRoom(item)}
       >
         <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]}>Открыть</Text>
@@ -233,7 +233,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
 
   const listHeader = (
     <View style={{ backgroundColor: 'transparent' }}>
-      <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
+      <View style={[headerLayout.containerStyle, {backgroundColor: 'transparent'}]}>
         <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
           Контакты
         </Text>
@@ -244,12 +244,9 @@ export default function ContactsDrawer({ nickname, navigation }) {
             pointerEvents="none"
             style={[
               StyleSheet.absoluteFillObject,
-              {
-                borderRadius: SEARCH_CONTACTS_CAPSULE_RADIUS,
+              {borderRadius: SEARCH_CONTACTS_CAPSULE_RADIUS,
                 borderWidth: 2,
-                borderColor: V.sageBorder,
-              },
-            ]}
+                borderColor: V.sageBorder}]}
           />
           <View
             pointerEvents="none"
@@ -258,9 +255,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
               {
                 borderRadius: SEARCH_CONTACTS_CAPSULE_RADIUS,
                 borderWidth: 1,
-                borderColor: V.sageFocus,
-              },
-            ]}
+                borderColor: V.sageFocus }]}
           />
           <SafeBlurView
             intensity={20}
@@ -275,9 +270,8 @@ export default function ContactsDrawer({ nickname, navigation }) {
                 borderWidth: StyleSheet.hairlineWidth,
                 borderColor: V.border,
                 paddingLeft: SEARCH_FIELD_LAYOUT.rowPaddingH,
-                paddingRight: 0,
-              },
-            ]}
+                paddingRight: 0
+              }]}
           >
             <View
               pointerEvents="none"
@@ -285,19 +279,14 @@ export default function ContactsDrawer({ nickname, navigation }) {
                 StyleSheet.absoluteFillObject,
                 {
                   backgroundColor: V.sageSubtle,
-                  opacity: 1,
-                },
-              ]}
+                  opacity: 1 }]}
             />
             <TextInput
               style={[
                 tw`flex-1 text-[16px]`,
-                {
-                  color: V.textPrimary,
+                {color: V.textPrimary,
                   paddingVertical: 0,
-                  height: SEARCH_FIELD_LAYOUT.contactsRowHeight,
-                },
-              ]}
+                  height: SEARCH_FIELD_LAYOUT.contactsRowHeight }]}
               placeholder="Поиск по имени или @handle"
               placeholderTextColor={V.textGhost}
               value={searchQ}
@@ -331,29 +320,22 @@ export default function ContactsDrawer({ nickname, navigation }) {
                     Animated.timing(inviteScaleX, {
                       toValue: 1.08,
                       duration: 95,
-                      useNativeDriver: true,
-                    }),
+                      useNativeDriver: true }),
                     Animated.timing(inviteScaleY, {
                       toValue: 0.84,
                       duration: 95,
-                      useNativeDriver: true,
-                    }),
-                  ]),
+                      useNativeDriver: true })]),
                   Animated.parallel([
                     Animated.spring(inviteScaleX, {
                       toValue: 1,
                       friction: 3,
                       tension: 200,
-                      useNativeDriver: true,
-                    }),
+                      useNativeDriver: true }),
                     Animated.spring(inviteScaleY, {
                       toValue: 1,
                       friction: 3,
                       tension: 200,
-                      useNativeDriver: true,
-                    }),
-                  ]),
-                ]);
+                      useNativeDriver: true })])]);
 
                 inviteRunAnimRef.current = anim;
                 anim.start();
@@ -376,8 +358,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
                   backgroundColor: V.sageSubtle,
                   borderWidth: 1,
                   borderColor: V.accentSage,
-                  transform: [{ scaleX: inviteScaleX }, { scaleY: inviteScaleY }],
-                }}
+                  transform: [{ scaleX: inviteScaleX }, { scaleY: inviteScaleY }] }}
               >
                 <View
                   pointerEvents="none"
@@ -387,8 +368,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
                     borderRadius: SEARCH_FIELD_LAYOUT.contactsRowHeight / 2,
                     borderWidth: 2,
                     borderColor: V.sageFocus,
-                    opacity: 1,
-                  }}
+                    opacity: 1 }}
                 />
                 <UserPlus size={16} color={V.accentSage} strokeWidth={1.5} />
               </Animated.View>
@@ -431,7 +411,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
   );
 
   return (
-    <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
+    <View style={[tw`flex-1`, {backgroundColor: 'transparent'}]}>
       <FlatList
         style={tw`flex-1`}
         data={filteredContacts}

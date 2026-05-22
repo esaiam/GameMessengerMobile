@@ -3,6 +3,14 @@ import { TAB_BAR_LAYOUT } from '../../theme';
 /** Reply-плашка над капсулой ввода */
 export const REPLY_TARGET_PREVIEW_H = 52;
 export const EMOJI_PICKER_PANEL_H = 221;
+/** Видимая высота панели над клавиатурой при поиске GIF */
+export const EMOJI_GIF_EXPANDED_VISIBLE_H = 248;
+/** Островок Эмодзи / GIF в панели */
+export const EMOJI_PANEL_ISLAND_H = 34;
+/** Строка поиска GIF в панели */
+export const EMOJI_PANEL_SEARCH_H = 36;
+export const EMOJI_PANEL_SEARCH_RADIUS = 18;
+export const EMOJI_PANEL_GIF_COLS = 3;
 
 /** Inline-панель `@pic` над composer */
 export const PIC_INLINE_PANEL_H = 200;
@@ -34,5 +42,4 @@ export const EMOJI_SET = [
   '🙌','💪','🤙','👌','🤘','🫡','❤️','🧡','💛','💚',
   '💙','💜','🖤','💔','💯','💥','🔥','⭐','💫','🎉',
   '🎊','🎮','🎲','🏆','🏅','⚡','💣','💀','👑','💎',
-  '🎯','🚀',
-];
+  '🎯','🚀'];

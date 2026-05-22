@@ -6,8 +6,7 @@ import React, {
   forwardRef,
   useImperativeHandle,
   memo,
-  useCallback,
-} from 'react';
+  useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,8 +17,7 @@ import {
   LayoutAnimation,
   Image,
   Platform,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import SafeBlurView from './SafeBlurView';
 import tw from 'twrnc';
 import { V, boardPalette } from '../theme';
@@ -47,8 +45,7 @@ const COLORS = {
   player2Border: boardPalette.checkerDarkBorder,
   highlight: V.accentGold,
   selected: V.accentSage,
-  barBg: boardPalette.bar,
-};
+  barBg: boardPalette.bar };
 
 const Checker = memo(function Checker({ player, size, isSelected }) {
   const bg = player === 1 ? COLORS.player1 : COLORS.player2;
@@ -62,9 +59,7 @@ const Checker = memo(function Checker({ player, size, isSelected }) {
           height: size,
           backgroundColor: bg,
           borderWidth: 2,
-          borderColor: isSelected ? COLORS.selected : border,
-        },
-      ]}
+          borderColor: isSelected ? COLORS.selected : border }]}
     >
       {isSelected && (
         <View
@@ -72,8 +67,7 @@ const Checker = memo(function Checker({ player, size, isSelected }) {
             width: size * 0.3,
             height: size * 0.3,
             borderRadius: size * 0.15,
-            backgroundColor: COLORS.selected,
-          }}
+            backgroundColor: COLORS.selected }}
         />
       )}
     </View>
@@ -92,8 +86,7 @@ const Triangle = memo(function Triangle({
   pointHeight,
   maxDisplay,
   pointWidth,
-  checkerSize,
-}) {
+  checkerSize }) {
   const handlePointPress = useCallback(() => {
     onPointPress(index);
   }, [onPointPress, index]);
@@ -117,10 +110,8 @@ const Triangle = memo(function Triangle({
           width: pointWidth,
           height: pointHeight,
           alignItems: 'center',
-          justifyContent: isTop ? 'flex-start' : 'flex-end',
-        },
-        isHighlighted && { backgroundColor: 'rgba(90, 158, 154, 0.22)', borderRadius: 4 },
-      ]}
+          justifyContent: isTop ? 'flex-start' : 'flex-end' },
+        isHighlighted && { backgroundColor: 'rgba(90, 158, 154, 0.22)', borderRadius: 4 }]}
     >
       <View
         style={{
@@ -134,16 +125,14 @@ const Triangle = memo(function Triangle({
             ? { borderTopWidth: pointHeight * 0.8, borderTopColor: color }
             : { borderBottomWidth: pointHeight * 0.8, borderBottomColor: color }),
           position: 'absolute',
-          [isTop ? 'top' : 'bottom']: 0,
-        }}
+          [isTop ? 'top' : 'bottom']: 0 }}
       />
 
       <View
         style={{
           position: 'absolute',
           [isTop ? 'top' : 'bottom']: 2,
-          alignItems: 'center',
-        }}
+          alignItems: 'center' }}
       >
         {Array.from({ length: show }).map((_, pos) => {
           const stackIdx = startIndex + pos;
@@ -177,8 +166,7 @@ function PrisonCompassStarImage({ size }) {
         width: size,
         height: size,
         opacity: 0.98,
-        backgroundColor: 'transparent',
-      }}
+        backgroundColor: 'transparent' }}
       resizeMode="contain"
     />
   );
@@ -188,8 +176,7 @@ const BoardOverlayHint = React.memo(function BoardOverlayHint({
   isMyTurn,
   turnPhase,
   selfPlay,
-  opponentOnline,
-}) {
+  opponentOnline }) {
   const hint =
     isMyTurn === true && turnPhase === 'roll'
       ? !selfPlay && opponentOnline
@@ -215,14 +202,11 @@ const BoardOverlayHint = React.memo(function BoardOverlayHint({
           Animated.timing(opacityAnim, {
             toValue: 0.26,
             duration: 900,
-            useNativeDriver: true,
-          }),
+            useNativeDriver: true }),
           Animated.timing(opacityAnim, {
             toValue: 0.14,
             duration: 900,
-            useNativeDriver: true,
-          }),
-        ])
+            useNativeDriver: true })])
       );
       pulseLoopRef.current = loop;
       loop.start();
@@ -240,8 +224,7 @@ const BoardOverlayHint = React.memo(function BoardOverlayHint({
           toValue: 0.2,
           duration: 400,
           easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }).start(({ finished }) => {
+          useNativeDriver: true }).start(({ finished }) => {
           if (!finished || !showHintRef.current) return;
           startPulseLoop();
         });
@@ -254,8 +237,7 @@ const BoardOverlayHint = React.memo(function BoardOverlayHint({
       Animated.timing(opacityAnim, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
+        useNativeDriver: true }).start(({ finished }) => {
         if (finished) setHintLabel(null);
       });
     }
@@ -283,8 +265,7 @@ const BoardOverlayHint = React.memo(function BoardOverlayHint({
         zIndex: 6,
         elevation: 6,
         justifyContent: 'center',
-        alignItems: 'center',
-      }}
+        alignItems: 'center' }}
     >
       <Animated.Text
         style={{
@@ -292,8 +273,7 @@ const BoardOverlayHint = React.memo(function BoardOverlayHint({
           fontWeight: 'bold',
           color: '#ffffff',
           opacity: opacityAnim,
-          textAlign: 'center',
-        }}
+          textAlign: 'center' }}
       >
         {hintLabel}
       </Animated.Text>
@@ -324,12 +304,10 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
   turnPhase,
   selfPlay = true,
   opponentOnline = false,
-  children,
-}, ref) {
+  children }, ref) {
   useImperativeHandle(ref, () => ({
     pauseRendering() { if (renderPausedRef) renderPausedRef.current = true; },
-    resumeRendering() { if (renderPausedRef) renderPausedRef.current = false; },
-  }), [renderPausedRef]);
+    resumeRendering() { if (renderPausedRef) renderPausedRef.current = false; } }), [renderPausedRef]);
 
   const { board, bar = { 1: 0, 2: 0 }, borneOff } = gameState;
 
@@ -408,10 +386,8 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
         onSwipeRef.current({
           startX: ex - gs.dx, startY: ey - gs.dy,
           endX: ex, endY: ey,
-          vx: gs.vx, vy: gs.vy,
-        });
-      },
-    })
+          vx: gs.vx, vy: gs.vy });
+      } })
   ).current;
 
   const topIndices = useMemo(() => [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], []);
@@ -458,8 +434,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
               backgroundColor: COLORS.barBg,
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: 4,
-            }}
+              borderRadius: 4 }}
           >
             {(isTop ? bar[2] : bar[1]) > 0 && (
               <View style={tw`items-center`}>
@@ -510,8 +485,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
         backgroundColor: 'transparent',
         width: '100%',
         alignSelf: 'stretch',
-        alignItems: 'center',
-      }}
+        alignItems: 'center' }}
     >
       <View
         style={{
@@ -521,8 +495,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
           overflow: 'hidden',
           backgroundColor: 'transparent',
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: V.border,
-        }}
+          borderColor: V.border }}
       >
         <SafeBlurView
           intensity={Platform.OS === 'ios' ? 52 : 40}
@@ -530,7 +503,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
           blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
           style={{ width: '100%', borderRadius: 12, overflow: 'hidden' }}
         >
-          <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: GLASS_TINT }]} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, {backgroundColor: GLASS_TINT}]} />
           {/* Верхний блик «стекла» — тонкая линия, без градиента */}
           <View
             pointerEvents="none"
@@ -541,23 +514,20 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
               right: 0,
               height: StyleSheet.hairlineWidth,
               backgroundColor: V.sectionBorder,
-              zIndex: 3,
-            }}
+              zIndex: 3 }}
           />
       <View style={{ width: '100%' }}>
       <View
         style={[
           tw`flex-row items-center justify-between px-2 py-1`,
-          { borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden' },
-        ]}
+          { borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden' }]}
       >
         <View style={tw`flex-row items-center`}>
           <TouchableOpacity
             onPress={() => onBearOffPress(2)}
             style={[
               tw`flex-row items-center`,
-              offHighlight && playerNumber === 2 && { backgroundColor: 'rgba(90,158,154,0.18)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
-            ]}
+              offHighlight && playerNumber === 2 && { backgroundColor: 'rgba(90,158,154,0.18)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }]}
           >
             <Checker player={2} size={16} />
             <Text style={[tw`text-[10px] font-medium ml-1`, { color: V.textPrimary }]}>{borneOff[2]}/15</Text>
@@ -573,8 +543,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
             onPress={() => onBearOffPress(1)}
             style={[
               tw`flex-row items-center`,
-              offHighlight && playerNumber === 1 && { backgroundColor: 'rgba(90,158,154,0.18)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
-            ]}
+              offHighlight && playerNumber === 1 && {backgroundColor: 'rgba(90,158,154,0.18)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2}]}
           >
             <Text style={[tw`text-[10px] font-medium mr-1`, { color: V.textPrimary }]}>{borneOff[1]}/15</Text>
             <Checker player={1} size={16} />
@@ -608,8 +577,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
             width: 2,
             height: pointHeight * 2,
             backgroundColor: boardPalette.divider,
-            zIndex: 1,
-          }}
+            zIndex: 1 }}
         />
         <View
           pointerEvents="none"
@@ -619,8 +587,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
             top: pointHeight - starSize / 2,
             width: starSize,
             height: starSize,
-            zIndex: 2,
-          }}
+            zIndex: 2 }}
         >
           <PrisonCompassStarImage size={starSize} />
         </View>
@@ -632,8 +599,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
             top: pointHeight - starSize / 2,
             width: starSize,
             height: starSize,
-            zIndex: 2,
-          }}
+            zIndex: 2 }}
         >
           <PrisonCompassStarImage size={starSize} />
         </View>
@@ -647,8 +613,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
               right: 0,
               bottom: 0,
               zIndex: 10,
-              elevation: 10,
-            }}
+              elevation: 10 }}
           >
             {centerOverlay}
           </View>
@@ -663,8 +628,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
               right: 0,
               bottom: 0,
               zIndex: 50,
-              elevation: 50,
-            }}
+              elevation: 50 }}
           >
             {diceOverlay}
           </View>

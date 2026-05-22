@@ -4,8 +4,7 @@ import { supabase } from '../lib/supabase';
 import {
   createInitialGameState,
   migrateGameState,
-  stripTerminalMetaForDb,
-} from '../utils/gameLogic';
+  stripTerminalMetaForDb } from '../utils/gameLogic';
 
 export function useGameSession({
   roomId,
@@ -27,8 +26,7 @@ export function useGameSession({
   setSwipeEnd,
   pendingRollRef,
   navigation,
-  setKbVisible,
-}) {
+  setKbVisible }) {
   const [room, setRoom] = useState(null);
   const channelRef = useRef(null);
   const sessionChannelRef = useRef(null);
@@ -155,8 +153,7 @@ export function useGameSession({
           event: 'UPDATE',
           schema: 'public',
           table: 'rooms',
-          filter: `id=eq.${roomId}`,
-        },
+          filter: `id=eq.${roomId}` },
         onRoomPostgresPayload
       );
 
@@ -180,8 +177,7 @@ export function useGameSession({
 
     const channel = postgresOn(
       supabase.channel(`room-${roomId}`, {
-        config: { presence: { key: nickname } },
-      })
+        config: { presence: { key: nickname } } })
     )
       .on('presence', { event: 'sync' }, () => recomputeOpponentPresence(channel))
       .on('presence', { event: 'join' }, () => recomputeOpponentPresence(channel))
@@ -271,7 +267,7 @@ export function useGameSession({
       const { error } = useLegacyRoomState
         ? await supabase.from('rooms').update({ game_state: toPersist }).eq('id', roomId)
         : await supabase.from('game_sessions').update({ board_state: toPersist }).eq('id', activeSessionId);
-      if (error) console.warn('Sync error:', error.message);
+      if (error && __DEV__) console.warn('Sync error:', error.message);
     },
     [roomId, activeSessionId, useLegacyRoomState]
   );
@@ -293,8 +289,7 @@ export function useGameSession({
         gameStarted: true,
         turnPhase: 'preroll',
         currentPlayer: 1,
-        preStartRolls: { 1: null, 2: null },
-      };
+        preStartRolls: { 1: null, 2: null } };
       if (useLegacyRoomState) {
         const { error } = await supabase.from('rooms').update({ game_state: fresh }).eq('id', roomId);
         if (error) {
@@ -343,6 +338,5 @@ export function useGameSession({
     syncGameState,
     newGame,
     leaveRoom,
-    channelRef,
-  };
+    channelRef };
 }

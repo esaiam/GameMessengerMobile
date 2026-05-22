@@ -17,8 +17,7 @@ export function useBoardAnimation({
   setBoardMounted,
   setBoardContentActive,
   kbVisible,
-  frostedHeaderH,
-}) {
+  frostedHeaderH }) {
   const maxSlideRef = useRef(600);
   const boardColTopYRef = useRef(null);
   const chatInputTopYRef = useRef(null);
@@ -79,15 +78,13 @@ export function useBoardAnimation({
         toValue: 0,
         duration: 140,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
+        useNativeDriver: false }).start();
 
       Animated.timing(handleWidthAnim, {
         toValue: 1,
         duration: 240,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start(() => {
+        useNativeDriver: false }).start(() => {
         const firstMount = !boardMountedRef.current;
         if (firstMount) {
           boardMountedRef.current = true;
@@ -98,34 +95,28 @@ export function useBoardAnimation({
             toValue: freshMaxH,
             duration: 380,
             easing: Easing.in(Easing.quad),
-            useNativeDriver: false,
-          }).start(() => {
+            useNativeDriver: false }).start(() => {
             Animated.sequence([
               Animated.timing(boardDropAnim, {
                 toValue: freshMaxH - 18,
                 duration: 100,
                 easing: Easing.out(Easing.quad),
-                useNativeDriver: false,
-              }),
+                useNativeDriver: false }),
               Animated.timing(boardDropAnim, {
                 toValue: freshMaxH,
                 duration: 100,
                 easing: Easing.in(Easing.quad),
-                useNativeDriver: false,
-              }),
+                useNativeDriver: false }),
               Animated.timing(boardDropAnim, {
                 toValue: freshMaxH - 5,
                 duration: 60,
                 easing: Easing.out(Easing.quad),
-                useNativeDriver: false,
-              }),
+                useNativeDriver: false }),
               Animated.timing(boardDropAnim, {
                 toValue: freshMaxH,
                 duration: 60,
                 easing: Easing.in(Easing.quad),
-                useNativeDriver: false,
-              }),
-            ]).start(() => {
+                useNativeDriver: false })]).start(() => {
               suppressAvailableHRef.current = false;
               computeMaxSlide();
             });
@@ -169,8 +160,7 @@ export function useBoardAnimation({
         toValue: 0,
         duration: 280,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start(() => {
+        useNativeDriver: false }).start(() => {
         if (!showAnimDiceRef.current) {
           renderPausedRef.current = false;
         }
@@ -184,8 +174,7 @@ export function useBoardAnimation({
         toValue: 0,
         duration: 220,
         easing: Easing.in(Easing.quad),
-        useNativeDriver: false,
-      }).start(afterBoardCollapsed);
+        useNativeDriver: false }).start(afterBoardCollapsed);
     };
 
     handleWidthAnim.stopAnimation((w) => {
@@ -197,8 +186,7 @@ export function useBoardAnimation({
           toValue: 1,
           duration: 160,
           easing: Easing.out(Easing.quad),
-          useNativeDriver: false,
-        }).start(collapseBoardHeightOnly);
+          useNativeDriver: false }).start(collapseBoardHeightOnly);
       }
     });
   }, [handleStretchAnim, handleWidthAnim, boardDropAnim, middlePulseAnim, computeMaxSlide]);
@@ -245,8 +233,7 @@ export function useBoardAnimation({
                 toValue: maxH,
                 duration: 220,
                 easing: Easing.out(Easing.cubic),
-                useNativeDriver: false,
-              }).start();
+                useNativeDriver: false }).start();
             } else {
               closeRef.current();
             }
@@ -255,8 +242,7 @@ export function useBoardAnimation({
               toValue: maxH,
               duration: 220,
               easing: Easing.out(Easing.cubic),
-              useNativeDriver: false,
-            }).start();
+              useNativeDriver: false }).start();
           }
           return;
         }
@@ -268,8 +254,7 @@ export function useBoardAnimation({
             toValue: 0,
             duration: 160,
             easing: Easing.out(Easing.cubic),
-            useNativeDriver: false,
-          }).start();
+            useNativeDriver: false }).start();
         }
       },
       onPanResponderTerminate: () => {
@@ -278,11 +263,9 @@ export function useBoardAnimation({
             toValue: 0,
             duration: 160,
             easing: Easing.out(Easing.cubic),
-            useNativeDriver: false,
-          }).start();
+            useNativeDriver: false }).start();
         }
-      },
-    })
+      } })
   ).current;
 
   useEffect(() => {
@@ -312,6 +295,5 @@ export function useBoardAnimation({
     pauseJsForDiceThrow,
     computeMaxSlide,
     runOpenSequence,
-    runCloseSequence,
-  };
+    runCloseSequence };
 }

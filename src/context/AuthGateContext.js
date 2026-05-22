@@ -8,10 +8,10 @@ import {
   callRedeemInviteCode,
   inviteRedeemErrorMessage,
   inviteRedeemErrorTitle,
-  parsePendingInvite,
-} from '../utils/inviteRedeem';
+  parsePendingInvite } from '../utils/inviteRedeem';
 
 export const NICKNAME_STORAGE_KEY = '@backgammon_nickname';
+const SESSION_CACHE_KEY = '@vault_session_cache';
 
 const AuthGateContext = createContext(null);
 
@@ -22,10 +22,41 @@ async function fetchProfileHandle(userId) {
     .eq('id', userId)
     .maybeSingle();
   if (error) {
-    console.warn('[AuthGate] profiles select', error.message);
+    if (__DEV__) console.warn('[AuthGate] profiles select', error.message);
     return null;
   }
   return data?.handle ?? null;
+}
+
+async function readCachedSession() {
+  try {
+    const raw = await AsyncStorage.getItem(SESSION_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Не используем просроченную сессию (expires_at в секундах unix)
+    if (parsed?.expires_at && parsed.expires_at * 1000 < Date.now()) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedSession(session) {
+  try {
+    if (session) {
+      await AsyncStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(session));
+    } else {
+      await AsyncStorage.removeItem(SESSION_CACHE_KEY);
+    }
+  } catch {}
+}
+
+async function readCachedHandle() {
+  try {
+    return await AsyncStorage.getItem(NICKNAME_STORAGE_KEY);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -99,8 +130,7 @@ export function AuthGateProvider({ children }) {
       if (!parsed) return;
       const { error } = await supabase.auth.setSession({
         access_token: parsed.access_token,
-        refresh_token: parsed.refresh_token,
-      });
+        refresh_token: parsed.refresh_token });
       if (error && mounted) {
         Alert.alert('Сброс пароля', error.message);
         return;
@@ -111,8 +141,9 @@ export function AuthGateProvider({ children }) {
     };
 
     const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      // Сохраняем актуальную сессию в кэш при каждом изменении
+      writeCachedSession(nextSession ?? null);
       setSession(nextSession ?? null);
       if (event === 'PASSWORD_RECOVERY') {
         setPasswordRecoveryPending(true);
@@ -132,10 +163,29 @@ export function AuthGateProvider({ children }) {
 
     (async () => {
       try {
+        // Шаг 1: читаем кэш из AsyncStorage — мгновенно, без сети
+        const [cachedSession, cachedHandle] = await Promise.all([
+          readCachedSession(),
+          readCachedHandle()]);
+        if (!mounted) return;
+
+        if (cachedSession) {
+          setSession(cachedSession);
+          if (cachedHandle) {
+            setProfileHandle(cachedHandle);
+            setProfileStatus('ready');
+          }
+        }
+        // Показываем UI сразу — даже если сессия из кэша
+        setBootstrapped(true);
+
+        // Шаг 2: проверяем сессию у Supabase в фоне (обновляет токен если надо)
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
-        setSession(data.session ?? null);
-        setBootstrapped(true);
+        const liveSession = data.session ?? null;
+        writeCachedSession(liveSession);
+        setSession(liveSession);
+
         const url = await Linking.getInitialURL();
         if (mounted && url) await applyRecoveryUrl(url);
       } catch {
@@ -188,7 +238,8 @@ export function AuthGateProvider({ children }) {
       }
       return;
     }
-    loadProfile(uid, { quiet: false });
+    // quiet=true если handle уже есть из кэша — не показываем loading, просто обновляем в фоне
+    loadProfile(uid, { quiet: Boolean(profileHandle) });
   }, [session?.user?.id, inviteCheckDone, loadProfile]);
 
   const refreshProfile = useCallback(async () => {
@@ -206,8 +257,7 @@ export function AuthGateProvider({ children }) {
       inviteCheckDone,
       profileStatus,
       profileHandle,
-      refreshProfile,
-    }),
+      refreshProfile }),
     [
       bootstrapped,
       session,
@@ -216,8 +266,7 @@ export function AuthGateProvider({ children }) {
       inviteCheckDone,
       profileStatus,
       profileHandle,
-      refreshProfile,
-    ]
+      refreshProfile]
   );
 
   return <AuthGateContext.Provider value={value}>{children}</AuthGateContext.Provider>;

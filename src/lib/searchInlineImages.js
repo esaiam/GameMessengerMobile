@@ -14,9 +14,7 @@ async function searchViaEdgeFunction(query, page, accessToken) {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      apikey: SUPABASE_ANON_KEY,
-    },
-  });
+      apikey: SUPABASE_ANON_KEY } });
 
   let body = {};
   try {
@@ -42,8 +40,7 @@ async function searchViaEdgeFunction(query, page, accessToken) {
   return {
     results: Array.isArray(body.results) ? body.results : [],
     page: typeof body.page === 'number' ? body.page : page,
-    hasMore: Boolean(body.hasMore),
-  };
+    hasMore: Boolean(body.hasMore) };
 }
 
 /**
@@ -58,8 +55,7 @@ export async function searchInlineImages(query, page = 1) {
   }
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
     throw new Error('Войдите в аккаунт для поиска картинок');
   }

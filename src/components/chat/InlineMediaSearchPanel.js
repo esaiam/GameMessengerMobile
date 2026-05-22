@@ -7,8 +7,7 @@ import {
   FlatList,
   ActivityIndicator,
   StyleSheet,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import tw from 'twrnc';
 import { V } from '../../theme';
 import { PIC_INLINE_PANEL_H, PIC_INLINE_COLS } from './chatComposerConstants';
@@ -30,8 +29,7 @@ export default function InlineMediaSearchPanel({
   results,
   hasMore,
   onSelect,
-  onLoadMore,
-}) {
+  onLoadMore }) {
   const { width: windowWidth } = useWindowDimensions();
 
   const cellSize = useMemo(
@@ -52,8 +50,7 @@ export default function InlineMediaSearchPanel({
         marginBottom: ROW_GAP,
         borderRadius: 8,
         overflow: 'hidden',
-        backgroundColor: V.bgElevated,
-      }}
+        backgroundColor: V.bgElevated }}
     >
       <Image
         source={{ uri: item.thumbUrl || item.fullUrl }}
@@ -104,14 +101,12 @@ export default function InlineMediaSearchPanel({
         height: PIC_INLINE_PANEL_H,
         backgroundColor: V.bgSurface,
         borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: V.border,
-      }}
+        borderTopColor: V.border }}
     >
       <View
         style={[
           tw`flex-row items-center px-3 py-1.5`,
-          { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: V.border },
-        ]}
+          {borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: V.border}]}
       >
         <Text style={[tw`text-[11px]`, { color: V.accentSage, fontWeight: '500' }]}>
           {triggerLabel}

@@ -5,8 +5,7 @@ import {
   createInitialGameState,
   applyMove,
   applyMoveSequence,
-  getMoveOptionsForSelection,
-} from '../utils/gameLogic';
+  getMoveOptionsForSelection } from '../utils/gameLogic';
 
 export function useBackgammonGame({
   selfPlay,
@@ -22,8 +21,7 @@ export function useBackgammonGame({
   setShowAnimDice,
   setAnimDice,
   setSwipeStart,
-  setSwipeEnd,
-}) {
+  setSwipeEnd }) {
   const [selectedPoint, setSelectedPoint] = useState(null);
   const [highlightedMoves, setHighlightedMoves] = useState([]);
   const [boardMode, setBoardMode] = useState('match');
@@ -151,8 +149,7 @@ export function useBackgammonGame({
       remainingMoves: [],
       turnPhase: 'roll',
       headMovesThisTurn: 0,
-      isFirstMove: { ...(gameState.isFirstMove || { 1: true, 2: true }), [playerNumber]: false },
-    };
+      isFirstMove: { ...(gameState.isFirstMove || { 1: true, 2: true }), [playerNumber]: false } };
     setGameState(newState);
     setSelectedPoint(null);
     setHighlightedMoves([]);
@@ -172,6 +169,5 @@ export function useBackgammonGame({
     handlePointPress,
     handleBarPress,
     handleBearOffPress,
-    handleEndTurn,
-  };
+    handleEndTurn };
 }

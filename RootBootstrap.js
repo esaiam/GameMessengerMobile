@@ -45,7 +45,5 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: SPLASH_BG,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  text: { color: SPLASH_FG, fontSize: 13, fontWeight: '400' },
-});
+    justifyContent: 'center' },
+  text: { color: SPLASH_FG, fontSize: 13, fontWeight: '400'  } });

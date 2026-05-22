@@ -12,8 +12,7 @@ export default function useChatSendText({
   nickname,
   ephemeralSec,
   otherPlayerName,
-  sendInProgressRef,
-}) {
+  sendInProgressRef }) {
   const sendMessage = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -31,7 +30,7 @@ export default function useChatSendText({
       cipherText = 'VM2:' + JSON.stringify({ r: forRecipient, s: forSelf });
     } catch (e) {
       const detail = e?.message || 'Не удалось зашифровать сообщение';
-      console.warn('[Vault E2E] Ошибка шифрования:', detail);
+      if (__DEV__) console.warn('[Vault E2E] Ошибка шифрования:', detail);
       Alert.alert('Ошибка', detail);
       sendInProgressRef.current = false;
       return;
@@ -40,8 +39,7 @@ export default function useChatSendText({
       room_id: roomId,
       player_name: nickname,
       text: cipherText,
-      reply_to: replyId,
-    };
+      reply_to: replyId };
     if (ephemeralSec) {
       row.expires_at = new Date(Date.now() + ephemeralSec * 1000).toISOString();
     }
@@ -50,14 +48,14 @@ export default function useChatSendText({
     try {
       const { error } = await supabase.from('messages').insert(row);
       if (error) {
-        console.warn('Chat insert error:', error.message);
+        if (__DEV__) console.warn('Chat insert error:', error.message);
         setText(trimmed);
         setReplyTarget(replySnapshot);
         Alert.alert('Ошибка', error.message || 'Не удалось отправить сообщение');
       }
     } catch (e) {
       const detail = e?.message || String(e);
-      console.warn('Chat insert error:', detail);
+      if (__DEV__) console.warn('Chat insert error:', detail);
       setText(trimmed);
       setReplyTarget(replySnapshot);
       Alert.alert('Ошибка', detail);

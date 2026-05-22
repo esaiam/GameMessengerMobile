@@ -1,0 +1,8 @@
+# Vault Messenger — Supabase CLI (linked: supabase/.temp/linked-project.json)
+project_id = "nqssqplizwsukowggzxd"
+
+[db]
+major_version = 15
+
+[db.migrations]
+enabled = true

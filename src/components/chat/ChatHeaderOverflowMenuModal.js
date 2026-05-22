@@ -9,8 +9,7 @@ export default function ChatHeaderOverflowMenuModal({
   uiReady,
   visible,
   onClose,
-  onClearHistory,
-}) {
+  onClearHistory }) {
   const insets = useSafeAreaInsets();
   if (!uiReady) return null;
 
@@ -21,8 +20,7 @@ export default function ChatHeaderOverflowMenuModal({
         accessibilityLabel="Закрыть меню"
         style={[
           tw`flex-1 justify-start items-end px-3`,
-          { backgroundColor: 'rgba(0,0,0,0.35)', paddingTop: insets.top + 10 },
-        ]}
+          { backgroundColor: 'rgba(0,0,0,0.35)', paddingTop: insets.top + 10 }]}
         onPress={onClose}
       >
         <Pressable onPress={() => {}} accessibilityRole="menu">
@@ -32,9 +30,7 @@ export default function ChatHeaderOverflowMenuModal({
               {
                 backgroundColor: V.bgElevated,
                 borderWidth: StyleSheet.hairlineWidth,
-                borderColor: V.border,
-              },
-            ]}
+                borderColor: V.border }]}
           >
             <Pressable
               accessibilityRole="menuitem"
@@ -45,8 +41,7 @@ export default function ChatHeaderOverflowMenuModal({
               }}
               style={({ pressed }) => [
                 tw`px-4 py-3.5`,
-                pressed && { backgroundColor: V.hoverBg },
-              ]}
+                pressed && { backgroundColor: V.hoverBg }]}
             >
               <Text style={[tw`text-[15px]`, { color: V.textPrimary, fontWeight: '400' }]}>
                 Очистить переписку

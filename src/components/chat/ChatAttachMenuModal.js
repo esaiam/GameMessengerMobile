@@ -6,8 +6,7 @@ import {
   View,
   Text,
   Platform,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import tw from 'twrnc';
 import SafeBlurView from '../SafeBlurView';
 import { Camera, ImageIcon, MapPin, Timer } from '../../icons/lucideIcons';
@@ -18,8 +17,7 @@ const EPHEMERAL_OPTIONS = [
   { label: '5с', value: 5 },
   { label: '30с', value: 30 },
   { label: '1м', value: 60 },
-  { label: '5м', value: 300 },
-];
+  { label: '5м', value: 300 }];
 
 /** Нижний sheet: камера / галерея / гео + выбор таймера сгорающих сообщений */
 export default function ChatAttachMenuModal({
@@ -30,8 +28,7 @@ export default function ChatAttachMenuModal({
   pickImageFromGallery,
   sendCurrentLocation,
   ephemeralSec,
-  setEphemeralSec,
-}) {
+  setEphemeralSec }) {
   if (!uiReady) return null;
 
   return (
@@ -60,9 +57,7 @@ export default function ChatAttachMenuModal({
                 borderBottomRightRadius: 0,
                 overflow: 'hidden',
                 borderWidth: StyleSheet.hairlineWidth,
-                borderColor: V.border,
-              },
-            ]}
+                borderColor: V.border }]}
           />
           <View style={[tw`w-10 h-1 rounded-full self-center mb-5`, { backgroundColor: V.textGhost }]} />
 
@@ -71,8 +66,7 @@ export default function ChatAttachMenuModal({
               <View
                 style={[
                   tw`w-14 h-14 rounded-full items-center justify-center mb-2`,
-                  { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border },
-                ]}
+                  { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border }]}
               >
                 <Camera size={20} color={V.textSecondary} strokeWidth={1.5} />
               </View>
@@ -83,8 +77,7 @@ export default function ChatAttachMenuModal({
               <View
                 style={[
                   tw`w-14 h-14 rounded-full items-center justify-center mb-2`,
-                  { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border },
-                ]}
+                  {backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border}]}
               >
                 <ImageIcon size={20} color={V.textSecondary} strokeWidth={1.5} />
               </View>
@@ -95,8 +88,7 @@ export default function ChatAttachMenuModal({
               <View
                 style={[
                   tw`w-14 h-14 rounded-full items-center justify-center mb-2`,
-                  { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border },
-                ]}
+                  {backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border}]}
               >
                 <MapPin size={20} color={V.textSecondary} strokeWidth={1.5} />
               </View>
@@ -104,7 +96,7 @@ export default function ChatAttachMenuModal({
             </TouchableOpacity>
           </View>
 
-          <View style={[tw`pt-4`, { borderTopWidth: 0.5, borderTopColor: V.border }]}>
+          <View style={[tw`pt-4`, {borderTopWidth: 0.5, borderTopColor: V.border}]}>
             <View style={tw`flex-row items-center justify-center mb-2`}>
               <Timer size={14} color={V.textSecondary} strokeWidth={1.5} style={tw`mr-1`} />
               <Text style={[tw`text-[10px]`, { color: V.textSecondary }]}>
@@ -129,9 +121,7 @@ export default function ChatAttachMenuModal({
                       {
                         backgroundColor: active ? V.btnPrimaryBg : V.bgSurface,
                         borderWidth: 0.5,
-                        borderColor: active ? V.accentSage : V.border,
-                      },
-                    ]}
+                        borderColor: active ? V.accentSage : V.border }]}
                   >
                     <Text style={[tw`text-[10px] font-medium`, { color: active ? V.accentSage : V.textSecondary }]}>
                       {opt.label}

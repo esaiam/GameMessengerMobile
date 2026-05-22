@@ -17,8 +17,7 @@ async function ensureMode() {
     playsInSilentMode: true,
     interruptionMode: 'mixWithOthers',
     allowsRecording: false,
-    shouldRouteThroughEarpiece: false,
-  });
+    shouldRouteThroughEarpiece: false });
   modeReady = true;
 }
 
@@ -54,7 +53,7 @@ export async function playDiceRollSound() {
     await player.seekTo(0);
     player.play();
   } catch (e) {
-    console.warn('playDiceRollSound:', e?.message || e);
+    if (__DEV__) console.warn('playDiceRollSound:', e?.message || e);
   }
 }
 

@@ -10,9 +10,8 @@ function Avatar({ name }) {
   return (
     <View
       style={[
-        tw`w-12 h-12 rounded-full items-center justify-center`,
-        { backgroundColor: V.outBubbleBg },
-      ]}
+        tw`w-14 h-14 rounded-full items-center justify-center`,
+        { backgroundColor: V.outBubbleBg }]}
     >
       <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>
         {getInitials(name)}
@@ -22,7 +21,7 @@ function Avatar({ name }) {
 }
 
 const ChatsListRow = React.memo(
-  function ChatsListRow({ item, onPress, isFirst }) {
+  function ChatsListRow({ item, onPress }) {
     const ts = item.last?.created_at || null;
     const preview = item.isAria ? 'Привет. Я здесь.' : messagePreview(item.last, item.roomCode);
     const [layout, setLayout] = useState({ w: 0, h: 0 });
@@ -45,17 +44,13 @@ const ChatsListRow = React.memo(
           toValue: 1,
           duration: 250,
           easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
+          useNativeDriver: true }),
         Animated.sequence([
           Animated.delay(200),
           Animated.timing(opacityAnim, {
             toValue: 0,
             duration: 300,
-            useNativeDriver: true,
-          }),
-        ]),
-      ]);
+            useNativeDriver: true })])]);
       rippleAnimRef.current = anim;
       anim.start(({ finished }) => {
         if (finished) {
@@ -95,10 +90,7 @@ const ChatsListRow = React.memo(
 
     return (
       <View
-        style={[
-          isFirst ? tw`pt-0 pb-3` : tw`py-3`,
-          { borderBottomWidth: 0.5, borderBottomColor: V.border, overflow: 'hidden' },
-        ]}
+        style={[tw`pt-0 pb-5`, {overflow: 'hidden'}]}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
           setLayout((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
@@ -117,12 +109,11 @@ const ChatsListRow = React.memo(
                 borderRadius: maxD / 2,
                 backgroundColor: 'rgba(90, 158, 154, 0.2)',
                 transform: [{ scale: scaleAnim }],
-                opacity: opacityAnim,
-              }}
+                opacity: opacityAnim }}
             />
           ) : null}
           <View style={tw`flex-row items-center`}>
-            {item.isAria ? <AriaGradientAvatar size={48} /> : <Avatar name={item.contactName} />}
+            {item.isAria ? <AriaGradientAvatar size={56} /> : <Avatar name={item.contactName} />}
             <View style={tw`flex-1 ml-3`}>
               <View style={tw`flex-row items-center justify-between`}>
                 <View style={tw`flex-row items-center flex-1 min-w-0 mr-2`}>
@@ -154,8 +145,7 @@ const ChatsListRow = React.memo(
     prev.item.isAria === next.item.isAria &&
     prev.item.roomId === next.item.roomId &&
     prev.item.last?.id === next.item.last?.id &&
-    prev.item.last?.created_at === next.item.last?.created_at &&
-    prev.isFirst === next.isFirst
+    prev.item.last?.created_at === next.item.last?.created_at
 );
 
 export default ChatsListRow;

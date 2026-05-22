@@ -13,10 +13,9 @@ export default function ChatReactionsBar({ reactions, onReact }) {
           onPress={() => onReact(emoji)}
           style={[
             tw`flex-row items-center rounded-full px-1.5 py-0.5`,
-            { backgroundColor: V.bgElevated },
-          ]}
+            { backgroundColor: V.bgElevated }]}
         >
-          <Text style={tw`text-[10px]`}>{emoji}</Text>
+          <Text style={[tw`text-[10px]`, { }]}>{emoji}</Text>
           {users.length > 1 && (
             <Text style={[tw`text-[10px] ml-0.5`, { color: V.textSecondary }]}>{users.length}</Text>
           )}

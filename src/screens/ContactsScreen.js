@@ -22,8 +22,7 @@ export default function ContactsScreen({ route, navigation }) {
         } else {
           navigation.navigate(name, params);
         }
-      },
-    };
+      } };
   }, [isSplit, navigation, setDetailParams]);
 
   return (

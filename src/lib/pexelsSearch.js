@@ -14,11 +14,9 @@ export function mapPexelsSearchResponse(json, page) {
       fullUrl: p.src?.large || p.src?.original || p.src?.medium || '',
       width: p.width ?? 0,
       height: p.height ?? 0,
-      photographer: p.photographer ?? '',
-    })),
+      photographer: p.photographer ?? '' })),
     page,
-    hasMore: page * PER_PAGE < total,
-  };
+    hasMore: page * PER_PAGE < total };
 }
 
 /**

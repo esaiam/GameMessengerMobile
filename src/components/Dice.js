@@ -12,8 +12,7 @@ const DOT_POSITIONS = {
   3: [[0, 2], [1, 1], [2, 0]],
   4: [[0, 0], [0, 2], [2, 0], [2, 2]],
   5: [[0, 0], [0, 2], [1, 1], [2, 0], [2, 2]],
-  6: [[0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2]],
-};
+  6: [[0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2]] };
 
 export function DieFace({ value, isUsed, size = 48, animValue }) {
   const dots = DOT_POSITIONS[value] || [];
@@ -22,15 +21,13 @@ export function DieFace({ value, isUsed, size = 48, animValue }) {
   const spin = animValue
     ? animValue.interpolate({
         inputRange: [0, 1],
-        outputRange: ['0deg', '720deg'],
-      })
+        outputRange: ['0deg', '720deg'] })
     : '0deg';
 
   const scale = animValue
     ? animValue.interpolate({
         inputRange: [0, 0.5, 1],
-        outputRange: [0.3, 1.2, 1],
-      })
+        outputRange: [0.3, 1.2, 1] })
     : 1;
 
   const Inner = (
@@ -41,9 +38,7 @@ export function DieFace({ value, isUsed, size = 48, animValue }) {
           width: size,
           height: size,
           backgroundColor: isUsed ? V.bgElevated : '#FFFDE7',
-          opacity: isUsed ? 0.4 : 1,
-        },
-      ]}
+          opacity: isUsed ? 0.4 : 1 }]}
     >
       {dots.map(([row, col], i) => (
         <View
@@ -55,8 +50,7 @@ export function DieFace({ value, isUsed, size = 48, animValue }) {
             borderRadius: DOT_SIZE / 2,
             backgroundColor: isUsed ? V.textMuted : '#212121',
             top: row * cellSize + (cellSize - DOT_SIZE) / 2,
-            left: col * cellSize + (cellSize - DOT_SIZE) / 2,
-          }}
+            left: col * cellSize + (cellSize - DOT_SIZE) / 2 }}
         />
       ))}
     </View>
@@ -76,8 +70,7 @@ export default function Dice({
   remainingMoves,
   canRoll,
   onRoll,
-  rolling,
-}) {
+  rolling }) {
   const anim1 = useRef(new Animated.Value(0)).current;
   const anim2 = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(1)).current;
@@ -93,15 +86,12 @@ export default function Dice({
           toValue: 1,
           duration: 500,
           easing: Easing.out(Easing.back(1.5)),
-          useNativeDriver: true,
-        }),
+          useNativeDriver: true }),
         Animated.timing(anim2, {
           toValue: 1,
           duration: 500,
           easing: Easing.out(Easing.back(1.5)),
-          useNativeDriver: true,
-        }),
-      ]).start();
+          useNativeDriver: true })]).start();
     }
   }, [dice]);
 
@@ -113,15 +103,12 @@ export default function Dice({
             toValue: 1.05,
             duration: 800,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
+            useNativeDriver: true }),
           Animated.timing(bounceAnim, {
             toValue: 1,
             duration: 800,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
+            useNativeDriver: true })])
       ).start();
     } else {
       bounceAnim.setValue(1);
@@ -155,9 +142,7 @@ export default function Dice({
               {
                 backgroundColor: V.btnPrimaryBg,
                 borderWidth: 0.5,
-                borderColor: V.accentSage,
-              },
-            ]}
+                borderColor: V.accentSage }]}
           >
             <Dices size={18} color={V.accentSage} strokeWidth={1.5} style={tw`mr-2`} />
             <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>

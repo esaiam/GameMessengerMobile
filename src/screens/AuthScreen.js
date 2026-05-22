@@ -7,8 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
-} from 'react-native';
+  Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import tw from 'twrnc';
@@ -18,8 +17,7 @@ import { supabase } from '../lib/supabase';
 import {
   VAULT_PENDING_INVITE_KEY,
   normalizePendingInviteCode,
-  serializePendingInvite,
-} from '../utils/inviteRedeem';
+  serializePendingInvite } from '../utils/inviteRedeem';
 import { AUTH_RECOVERY_REDIRECT_URL } from '../utils/authRecoveryDeepLink';
 
 export default function AuthScreen() {
@@ -50,8 +48,7 @@ export default function AuthScreen() {
     setBusy(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-        redirectTo: AUTH_RECOVERY_REDIRECT_URL,
-      });
+        redirectTo: AUTH_RECOVERY_REDIRECT_URL });
       if (error) throw error;
       Alert.alert(
         'Сброс пароля',
@@ -94,8 +91,7 @@ export default function AuthScreen() {
       if (mode === 'signIn') {
         const { error } = await supabase.auth.signInWithPassword({
           email: trimmedEmail,
-          password,
-        });
+          password });
         if (error) throw error;
       } else {
         await AsyncStorage.setItem(
@@ -105,8 +101,7 @@ export default function AuthScreen() {
         try {
           const { data, error } = await supabase.auth.signUp({
             email: trimmedEmail,
-            password,
-          });
+            password });
           if (error) throw error;
           if (!data.session) {
             Alert.alert(
@@ -157,15 +152,12 @@ export default function AuthScreen() {
                   {
                     backgroundColor: mode === m ? V.bgElevated : V.bgSurface,
                     borderWidth: 0.5,
-                    borderColor: V.border,
-                  },
-                ]}
+                    borderColor: V.border }]}
               >
                 <Text
                   style={[
                     tw`text-[13px] font-medium`,
-                    { color: mode === m ? V.accentSage : V.textMuted },
-                  ]}
+                    { color: mode === m ? V.accentSage : V.textMuted }]}
                 >
                   {m === 'signIn' ? 'Вход' : 'Регистрация'}
                 </Text>
@@ -194,9 +186,7 @@ export default function AuthScreen() {
                 backgroundColor: V.bgSurface,
                 color: V.textPrimary,
                 borderWidth: 0.5,
-                borderColor: V.border,
-              },
-            ]}
+                borderColor: V.border }]}
             placeholder="you@example.com"
             placeholderTextColor={V.textGhost}
             value={email}
@@ -220,9 +210,7 @@ export default function AuthScreen() {
                   backgroundColor: V.bgSurface,
                   color: V.textPrimary,
                   borderWidth: 0.5,
-                  borderColor: V.border,
-                },
-              ]}
+                  borderColor: V.border }]}
               placeholder="••••••••"
               placeholderTextColor={V.textGhost}
               value={password}
@@ -258,9 +246,7 @@ export default function AuthScreen() {
                   backgroundColor: V.bgSurface,
                   color: V.textPrimary,
                   borderWidth: 0.5,
-                  borderColor: V.border,
-                },
-              ]}
+                  borderColor: V.border }]}
               placeholder="••••••••"
               placeholderTextColor={V.textGhost}
               value={confirmPassword}
@@ -284,9 +270,7 @@ export default function AuthScreen() {
                   backgroundColor: V.bgSurface,
                   color: V.textPrimary,
                   borderWidth: 0.5,
-                  borderColor: V.border,
-                },
-              ]}
+                  borderColor: V.border }]}
               placeholder="Вставьте код из профиля"
               placeholderTextColor={V.textGhost}
               value={inviteCode}
@@ -318,9 +302,7 @@ export default function AuthScreen() {
               backgroundColor: V.btnPrimaryBg,
               borderWidth: 0.5,
               borderColor: V.accentSage,
-              opacity: busy ? 0.6 : 1,
-            },
-          ]}
+              opacity: busy ? 0.6 : 1 }]}
           onPress={onSubmit}
           disabled={busy}
         >

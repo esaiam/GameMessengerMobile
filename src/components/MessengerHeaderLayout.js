@@ -17,8 +17,7 @@ export function getMessengerHeaderLayout(insetsTop, topPaddingOverride) {
     paddingBottom: MESSENGER_HEADER_PADDING_BOTTOM,
     paddingHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL,
     contentMinHeight: MESSENGER_HEADER_CONTENT_MIN_HEIGHT,
-    minHeight,
-  };
+    minHeight };
 }
 
 /**
@@ -36,9 +35,7 @@ export function useMessengerHeaderLayout({ topPaddingOverride } = {}) {
         paddingTop: layout.paddingTop,
         paddingBottom: layout.paddingBottom,
         paddingHorizontal: layout.paddingHorizontal,
-        minHeight: layout.minHeight,
-      },
-    };
+        minHeight: layout.minHeight } };
   }, [insets.top, topPaddingOverride]);
 }
 

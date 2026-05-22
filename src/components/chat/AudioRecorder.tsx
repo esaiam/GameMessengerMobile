@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 're
 import { Audio } from 'expo-av';
 import { Mic, Square } from '../../icons/lucideIcons';
 
+
 const WAVE_MAX = 40;
 const POLL_MS = 100;
 const BAR_GAP = 2;
@@ -109,8 +110,7 @@ export default function AudioRecorder({ onRecorded, onRecordingChange }: Props) 
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-      });
+        playsInSilentModeIOS: true });
     } catch {
       /* ignore */
     }
@@ -125,8 +125,7 @@ export default function AudioRecorder({ onRecorded, onRecordingChange }: Props) 
       onRecorded({
         uri,
         waveformData: snapshot,
-        durationMillis,
-      });
+        durationMillis });
     }
   }, [onRecorded, onRecordingChange, stopPolling]);
 
@@ -142,13 +141,11 @@ export default function AudioRecorder({ onRecorded, onRecordingChange }: Props) 
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-      });
+        staysActiveInBackground: false });
       const rec = new Audio.Recording();
       await rec.prepareToRecordAsync({
         ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        isMeteringEnabled: true,
-      });
+        isMeteringEnabled: true });
       await rec.startAsync();
       recordingRef.current = rec;
       waveformRef.current = [];
@@ -201,9 +198,7 @@ export default function AudioRecorder({ onRecorded, onRecordingChange }: Props) 
                 styles.bar,
                 {
                   height: h,
-                  marginRight: i === waveformData.length - 1 ? 0 : BAR_GAP,
-                },
-              ]}
+                  marginRight: i === waveformData.length - 1 ? 0 : BAR_GAP }]}
             />
           ))}
         </View>
@@ -216,25 +211,20 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
-  },
+    minHeight: 44 },
   mainTap: {
     width: 44,
     height: 44,
     borderRadius: 22,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   waveRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     height: WAVE_MAX,
     marginLeft: 8,
-    flex: 1,
-  },
+    flex: 1 },
   bar: {
     width: 3,
     borderRadius: BAR_RADIUS,
-    backgroundColor: ACCENT,
-  },
-});
+    backgroundColor: ACCENT } });

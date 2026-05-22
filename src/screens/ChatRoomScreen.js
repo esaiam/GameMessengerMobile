@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { View, Alert, TouchableOpacity } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createAudioPlayer, setIsAudioActiveAsync } from 'expo-audio';
 import { Audio } from 'expo-av';
@@ -9,13 +10,15 @@ import { AriaChatContainer } from '../components/chat/AriaChatContainer';
 import { AriaClearHistoryHeaderButton } from '../components/ChatRoomHeader';
 import { supabase } from '../lib/supabase';
 import {
-  ARIA_API_URL,
   ARIA_CONTACT,
   ARIA_MESSAGE_TYPING,
+  ariaDbRoleToApiRole,
+  buildAriaRequestHistory,
+  checkAriaHealth,
   createAriaMessageBaseRow,
+  fetchAriaPendingMessages,
   getAriaSeedMessages,
-  isAriaPersistableMessage,
-} from '../lib/aria';
+  postAriaMessage } from '../lib/aria';
 import { V } from '../theme';
 import { setAudioModeAsync } from '../utils/audioMode';
 import { usePresence } from '../hooks/usePresence';
@@ -30,6 +33,7 @@ function ariaMessagesFromDbRows(rows, nickname) {
     const baseRow = createAriaMessageBaseRow();
     const created_at = row.created_at || new Date().toISOString();
     const isUser = row.role === 'user';
+    const aria_api_role = ariaDbRoleToApiRole(row.role);
     return {
       ...baseRow,
       id: `aria-db-${row.id}`,
@@ -38,25 +42,8 @@ function ariaMessagesFromDbRows(rows, nickname) {
       created_at,
       read_at: created_at,
       message_type: 'text',
-    };
+      aria_api_role };
   });
-}
-
-function buildAriaRequestHistory(messages, opts = {}) {
-  const filtered = messages.filter(isAriaPersistableMessage);
-  const mapped = filtered.slice(-20).map((m) => ({
-    role: m.player_name === ARIA_CONTACT.display_name ? 'aria' : 'user',
-    text: typeof m.text === 'string' ? m.text : '',
-  }));
-  if (opts.lastUserTextOverride) {
-    for (let i = mapped.length - 1; i >= 0; i -= 1) {
-      if (mapped[i].role === 'user') {
-        mapped[i] = { ...mapped[i], text: opts.lastUserTextOverride };
-        break;
-      }
-    }
-  }
-  return mapped;
 }
 
 export default function ChatRoomScreen({ route, navigation }) {
@@ -83,8 +70,7 @@ export default function ChatRoomScreen({ route, navigation }) {
       playsInSilentMode: true,
       interruptionMode: 'mixWithOthers',
       allowsRecording: false,
-      shouldRouteThroughEarpiece: false,
-    });
+      shouldRouteThroughEarpiece: false });
     ariaReplyModeReadyRef.current = true;
   }, []);
 
@@ -99,8 +85,7 @@ export default function ChatRoomScreen({ route, navigation }) {
       try {
         ariaReplyPlayerRef.current = createAudioPlayer(ARIA_MESSAGE_RECEIVED_MP3, {
           downloadFirst: true,
-          keepAudioSessionActive: false,
-        });
+          keepAudioSessionActive: false });
       } catch {
         ariaReplyPlayerRef.current = null;
       }
@@ -275,8 +260,8 @@ export default function ChatRoomScreen({ route, navigation }) {
           created_at: now,
           read_at: now,
           message_type: 'text',
-          ...(aria_voice_message ? { aria_voice_message: true } : {}),
-        };
+          aria_api_role: 'user',
+          ...(aria_voice_message ? { aria_voice_message: true } : {}) };
         const typingRow = {
           ...baseRow,
           id: typingId,
@@ -285,8 +270,7 @@ export default function ChatRoomScreen({ route, navigation }) {
           created_at: now,
           read_at: null,
           message_type: ARIA_MESSAGE_TYPING,
-          isTyping: true,
-        };
+          isTyping: true };
         setAriaMessagesForChat((prev) => [...prev, userRow, typingRow]);
       }
 
@@ -303,38 +287,15 @@ export default function ChatRoomScreen({ route, navigation }) {
             await supabase.from('aria_messages').insert({
               user_id,
               role: 'user',
-              text: trimmed,
-            });
+              text: trimmed });
           } catch {
             /* не блокируем отправку */
           }
 
-          const res = await fetch(`${ARIA_API_URL}/message`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              user_id,
-              text: trimmed,
-              platform: 'vault',
-              history,
-            }),
-          });
-
-          let json = {};
-          try {
-            json = await res.json();
-          } catch {
-            json = {};
-          }
-          if (!res.ok) throw new Error(`http_${res.status}`);
-
-          const replyRaw = json?.reply;
-          const reply =
-            typeof replyRaw === 'string' && replyRaw.length > 0
-              ? replyRaw
-              : typeof json?.message === 'string' && json.message.length > 0
-                ? json.message
-                : '';
+          const { reply, attachment } = await postAriaMessage({
+            userId: user_id,
+            text: trimmed,
+            history });
 
           const aiNow = new Date().toISOString();
           const replyText = reply || '—';
@@ -342,11 +303,10 @@ export default function ChatRoomScreen({ route, navigation }) {
             const { error: ariaInsertError } = await supabase.from('aria_messages').insert({
               user_id,
               role: 'aria',
-              text: replyText,
-            });
-            if (ariaInsertError) console.warn('[Aria] insert aria error:', ariaInsertError);
+              text: replyText });
+            if (__DEV__ && ariaInsertError) console.warn('[Aria] insert aria error:', ariaInsertError);
           } catch (e) {
-            console.warn('[Aria] insert aria catch:', e);
+            if (__DEV__) console.warn('[Aria] insert aria catch:', e);
           }
 
           setAriaMessagesForChat((prev) => [
@@ -359,8 +319,8 @@ export default function ChatRoomScreen({ route, navigation }) {
               created_at: aiNow,
               read_at: aiNow,
               message_type: 'text',
-            },
-          ]);
+              aria_api_role: 'aria',
+              ...(attachment ? { aria_attachment: attachment } : {}) }]);
           void playAriaReplySound();
         } catch {
           const errNow = new Date().toISOString();
@@ -373,9 +333,7 @@ export default function ChatRoomScreen({ route, navigation }) {
               text: 'Aria недоступна',
               created_at: errNow,
               read_at: errNow,
-              message_type: 'text',
-            },
-          ]);
+              message_type: 'text' }]);
         }
       })();
     },
@@ -402,9 +360,7 @@ export default function ChatRoomScreen({ route, navigation }) {
               }
             } catch {}
             setAriaMessages(getAriaSeedMessages());
-          },
-        },
-      ]
+          } }]
     );
   }, []);
 
@@ -417,8 +373,7 @@ export default function ChatRoomScreen({ route, navigation }) {
     roomId,
     nickname,
     targetName: headerTitle !== 'Чат' ? headerTitle : null,
-    skip: !roomId || !nickname || isAriaChat,
-  });
+    skip: !roomId || !nickname || isAriaChat });
   const [ariaOnline, setAriaOnline] = useState(null);
   const [frostedHeaderH, setFrostedHeaderH] = useState(0);
   const [listPaddingTop, setListPaddingTop] = useState(insets.top + 75);
@@ -433,8 +388,7 @@ export default function ChatRoomScreen({ route, navigation }) {
         ? {
             headerRight: (
               <AriaClearHistoryHeaderButton onPress={handleAriaClearHistory} />
-            ),
-          }
+            ) }
         : roomId
           ? {
               headerRight: (
@@ -444,16 +398,13 @@ export default function ChatRoomScreen({ route, navigation }) {
                     width: '100%',
                     height: '100%',
                     justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
+                    alignItems: 'center' }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Phone size={20} color={V.textPrimary} strokeWidth={1.5} />
                 </TouchableOpacity>
-              ),
-            }
-          : {}),
-    }),
+              ) }
+          : {}) }),
     [headerTitle, contactOnline, navigation, isAriaChat, ariaOnline, handleAriaClearHistory, roomId]
   );
 
@@ -467,25 +418,12 @@ export default function ChatRoomScreen({ route, navigation }) {
     if (!isAriaChat) return;
     let cancelled = false;
     const ac = new AbortController();
-    const timeoutId = setTimeout(() => ac.abort(), 3000);
+    const timeoutId = setTimeout(() => ac.abort(), 8000);
     setAriaOnline(null);
     (async () => {
-      try {
-        const res = await fetch(`${ARIA_API_URL}/health`, { signal: ac.signal });
-        clearTimeout(timeoutId);
-        if (cancelled) return;
-        let json = {};
-        try {
-          json = await res.json();
-        } catch {
-          json = {};
-        }
-        const ok = res.ok && json?.status === 'ok';
-        setAriaOnline(ok);
-      } catch {
-        clearTimeout(timeoutId);
-        if (!cancelled) setAriaOnline(false);
-      }
+      const ok = await checkAriaHealth(ac.signal);
+      clearTimeout(timeoutId);
+      if (!cancelled) setAriaOnline(ok);
     })();
     return () => {
       cancelled = true;
@@ -495,6 +433,68 @@ export default function ChatRoomScreen({ route, navigation }) {
       } catch {}
     };
   }, [isAriaChat]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAriaChat) return;
+      let cancelled = false;
+
+      const loadPending = async () => {
+        try {
+          const { data: auth, error: authErr } = await supabase.auth.getUser();
+          if (authErr) return;
+          const user_id = auth?.user?.id;
+          if (!user_id || cancelled) return;
+
+          const texts = await fetchAriaPendingMessages(user_id);
+          if (cancelled || texts.length === 0) return;
+
+          setAriaMessagesForChat((prev) => {
+            const known = new Set(
+              prev
+                .filter((m) => m.player_name === ARIA_CONTACT.display_name)
+                .map((m) => (typeof m.text === 'string' ? m.text.trim() : ''))
+            );
+            const baseRow = createAriaMessageBaseRow();
+            const additions = texts
+              .filter((t) => t && !known.has(t))
+              .map((text, i) => {
+                const now = new Date().toISOString();
+                return {
+                  ...baseRow,
+                  id: `aria-pending-${Date.now()}-${i}`,
+                  player_name: ARIA_CONTACT.display_name,
+                  text,
+                  created_at: now,
+                  read_at: now,
+                  message_type: 'text',
+                  aria_api_role: 'aria' };
+              });
+            if (additions.length === 0) return prev;
+            return [...prev, ...additions];
+          });
+
+          for (const text of texts) {
+            try {
+              await supabase.from('aria_messages').insert({
+                user_id,
+                role: 'aria',
+                text });
+            } catch {
+              /* не блокируем UI */
+            }
+          }
+        } catch {
+          /* сеть / API недоступны */
+        }
+      };
+
+      void loadPending();
+      return () => {
+        cancelled = true;
+      };
+    }, [isAriaChat, ariaResolvedNickname, nickname, setAriaMessagesForChat])
+  );
 
   return (
     <View style={[tw`flex-1`, { backgroundColor: V.bgApp }]}>

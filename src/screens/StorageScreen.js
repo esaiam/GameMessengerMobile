@@ -5,8 +5,7 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  Alert,
-} from 'react-native';
+  Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import tw from 'twrnc';
 import { V } from '../theme';
@@ -16,8 +15,7 @@ import { useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
 import {
   getCacheSizeInfo,
   listCacheEntriesSorted,
-  manualClearCache,
-} from '../storage/CacheManager';
+  manualClearCache } from '../storage/CacheManager';
 
 function formatBytes(n) {
   if (typeof n !== 'number' || !Number.isFinite(n)) return '0';
@@ -34,8 +32,7 @@ function formatTs(ts) {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
-      minute: '2-digit',
-    });
+      minute: '2-digit' });
   } catch {
     return '—';
   }
@@ -91,9 +88,7 @@ export default function StorageScreen({ navigation }) {
             } finally {
               setClearing(false);
             }
-          },
-        },
-      ]
+          } }]
     );
   };
 
@@ -101,8 +96,7 @@ export default function StorageScreen({ navigation }) {
     <View
       style={[
         tw`py-2 border-b`,
-        { borderBottomWidth: 0.5, borderBottomColor: V.border },
-      ]}
+        { borderBottomWidth: 0.5, borderBottomColor: V.border }]}
     >
       <Text style={[tw`text-[11px]`, { color: V.textMuted }]} numberOfLines={2}>
         {item.uri}
@@ -117,7 +111,7 @@ export default function StorageScreen({ navigation }) {
 
   return (
     <TabBackground>
-      <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
+      <View style={[tw`flex-1`, {backgroundColor: 'transparent'}]}>
         <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -126,8 +120,7 @@ export default function StorageScreen({ navigation }) {
               justifyContent: 'center',
               flexDirection: 'row',
               alignItems: 'center',
-              alignSelf: 'flex-start',
-            }}
+              alignSelf: 'flex-start' }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <ArrowLeft size={18} color={V.textSecondary} strokeWidth={1.5} />
@@ -161,9 +154,7 @@ export default function StorageScreen({ navigation }) {
                     backgroundColor: V.bgSurface,
                     borderWidth: 0.5,
                     borderColor: V.border,
-                    opacity: clearing ? 0.6 : 1,
-                  },
-                ]}
+                    opacity: clearing ? 0.6 : 1 }]}
               >
                 {clearing ? (
                   <ActivityIndicator color={V.accentSage} />

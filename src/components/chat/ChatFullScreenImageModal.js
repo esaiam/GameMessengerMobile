@@ -16,8 +16,7 @@ export default function ChatFullScreenImageModal({ uiReady, uri, onClose }) {
         <TouchableOpacity
           style={[
             tw`absolute top-12 right-4 rounded-full p-2`,
-            { backgroundColor: 'rgba(0,0,0,0.5)' },
-          ]}
+            { backgroundColor: 'rgba(0,0,0,0.5)' }]}
           onPress={onClose}
         >
           <X size={18} color={V.textPrimary} strokeWidth={1.5} />

@@ -92,7 +92,7 @@ export async function loadCacheMetadata() {
     }
     return { files: { ...parsed.files } };
   } catch (e) {
-    console.warn('[CacheManager] loadCacheMetadata failed:', e?.message || e);
+    if (__DEV__) console.warn('[CacheManager] loadCacheMetadata failed:', e?.message || e);
     return { files: {} };
   }
 }
@@ -100,11 +100,10 @@ export async function loadCacheMetadata() {
 export async function saveCacheMetadata(metadata) {
   try {
     const payload = JSON.stringify({
-      files: metadata?.files && typeof metadata.files === 'object' ? metadata.files : {},
-    });
+      files: metadata?.files && typeof metadata.files === 'object' ? metadata.files : {} });
     await AsyncStorage.setItem(VAULT_CACHE_METADATA_KEY, payload);
   } catch (e) {
-    console.warn('[CacheManager] saveCacheMetadata failed:', e?.message || e);
+    if (__DEV__) console.warn('[CacheManager] saveCacheMetadata failed:', e?.message || e);
   }
 }
 
@@ -119,8 +118,7 @@ export async function recordFileAccess(fileUri, size) {
     meta.files[uri] = {
       created: prev?.created ?? now,
       lastAccessed: now,
-      size: sz > 0 ? sz : prev?.size ?? 0,
-    };
+      size: sz > 0 ? sz : prev?.size ?? 0 };
     await saveCacheMetadata(meta);
   });
 }
@@ -158,7 +156,7 @@ function deleteCacheFilePhysical(uri) {
     f.delete();
     return { freed: sz, ok: true };
   } catch (e) {
-    console.warn('[CacheManager] physical delete failed:', n, e?.message || e);
+    if (__DEV__) console.warn('[CacheManager] physical delete failed:', n, e?.message || e);
     return { freed: 0, ok: false };
   }
 }
@@ -212,8 +210,7 @@ async function pruneMetadataFiles(meta, mode, /** @type Set<string> */ removedAc
   const entries = Object.entries(files).map(([uri, e]) => ({
     uri,
     lastAccessed: typeof e?.lastAccessed === 'number' ? e.lastAccessed : 0,
-    created: typeof e?.created === 'number' ? e.created : 0,
-  }));
+    created: typeof e?.created === 'number' ? e.created : 0 }));
 
   if (mode === 'manual') {
     entries.sort((a, b) => a.lastAccessed - b.lastAccessed);
@@ -273,8 +270,7 @@ export async function getCacheSizeInfo() {
     return {
       usedMB,
       limitMB: VAULT_CACHE_LIMIT_MB,
-      percentUsed: Math.min(100, VAULT_CACHE_LIMIT_BYTES > 0 ? (used / VAULT_CACHE_LIMIT_BYTES) * 100 : 0),
-    };
+      percentUsed: Math.min(100, VAULT_CACHE_LIMIT_BYTES > 0 ? (used / VAULT_CACHE_LIMIT_BYTES) * 100 : 0) };
   } catch {
     return { usedMB: 0, limitMB: VAULT_CACHE_LIMIT_MB, percentUsed: 0 };
   }
@@ -288,7 +284,6 @@ export async function listCacheEntriesSorted() {
       uri,
       created: meta?.created ?? 0,
       lastAccessed: meta?.lastAccessed ?? 0,
-      size: meta?.size ?? 0,
-    }))
+      size: meta?.size ?? 0 }))
     .sort((a, b) => b.lastAccessed - a.lastAccessed);
 }

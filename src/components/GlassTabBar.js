@@ -6,8 +6,7 @@ import {
   StyleSheet,
   Animated,
   Easing,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import SafeBlurView from './SafeBlurView';
 import { BottomTabBarHeightCallbackContext } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,15 +62,12 @@ export default function GlassTabBar({ state, descriptors, navigation, insets: in
       Animated.timing(s, {
         toValue: 0.75,
         duration: 100,
-        useNativeDriver: true,
-      }),
+        useNativeDriver: true }),
       Animated.spring(s, {
         toValue: 1,
         friction: 3,
         tension: 200,
-        useNativeDriver: true,
-      }),
-    ]);
+        useNativeDriver: true })]);
 
     runIconAnimByKeyRef[routeKey] = anim;
     anim.start();
@@ -127,21 +123,17 @@ export default function GlassTabBar({ state, descriptors, navigation, insets: in
         toValue: COMPRESS_SCALE,
         duration: T_COMPRESS,
         easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
+        useNativeDriver: true }),
       Animated.timing(translateX, {
         toValue: leftTo,
         duration: T_MOVE,
         easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: true,
-      }),
+        useNativeDriver: true }),
       Animated.timing(scale, {
         toValue: 1,
         duration: T_EXPAND,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]);
+        useNativeDriver: true })]);
 
     runAnimRef.current = anim;
     anim.start(({ finished }) => {
@@ -169,8 +161,7 @@ export default function GlassTabBar({ state, descriptors, navigation, insets: in
         paddingHorizontal: tabBarHorizontalPad,
         paddingBottom: bottomPad + TAB_BAR_LAYOUT.floatBottom,
         paddingTop: TAB_BAR_LAYOUT.topPad,
-        backgroundColor: 'transparent',
-      }}
+        backgroundColor: 'transparent' }}
     >
       <SafeBlurView
         intensity={20}
@@ -186,9 +177,7 @@ export default function GlassTabBar({ state, descriptors, navigation, insets: in
               styles.highlight,
               {
                 backgroundColor: highlightBg,
-                transform: [{ translateX }, { scale }],
-              },
-            ]}
+                transform: [{ translateX }, { scale }] }]}
           />
           {state.routes.map((route, index) => {
             const { options } = descriptors[route.key];
@@ -203,8 +192,7 @@ export default function GlassTabBar({ state, descriptors, navigation, insets: in
               const event = navigation.emit({
                 type: 'tabPress',
                 target: route.key,
-                canPreventDefault: true,
-              });
+                canPreventDefault: true });
               if (!isFocused && !event.defaultPrevented) {
                 navigation.navigate(route.name);
               }
@@ -213,16 +201,14 @@ export default function GlassTabBar({ state, descriptors, navigation, insets: in
             const onLongPress = () => {
               navigation.emit({
                 type: 'tabLongPress',
-                target: route.key,
-              });
+                target: route.key });
             };
 
             const icon =
               options.tabBarIcon?.({
                 focused: isFocused,
                 color,
-                size: TAB_BAR_LAYOUT.iconSize,
-              }) ?? null;
+                size: TAB_BAR_LAYOUT.iconSize }) ?? null;
 
             return (
               <TouchableOpacity
@@ -260,21 +246,18 @@ const styles = StyleSheet.create({
     borderRadius: TAB_BAR_CAPSULE_RADIUS,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: V.border,
-  },
+    borderColor: V.border },
   glassTint: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: V.bgElevated,
-    opacity: 0.22,
-  },
+    opacity: 0.22 },
   row: {
     position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: TAB_BAR_LAYOUT.rowPaddingV,
-    paddingHorizontal: TAB_BAR_LAYOUT.rowPaddingH,
-  },
+    paddingHorizontal: TAB_BAR_LAYOUT.rowPaddingH },
   highlight: {
     position: 'absolute',
     left: 0,
@@ -282,12 +265,9 @@ const styles = StyleSheet.create({
     height: HIGHLIGHT_SIZE,
     borderRadius: HIGHLIGHT_SIZE / 2,
     top: TAB_BAR_LAYOUT.rowPaddingV + TAB_BAR_LAYOUT.iconSize / 2 - HIGHLIGHT_SIZE / 2,
-    zIndex: 0,
-  },
+    zIndex: 0 },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1,
-  },
-});
+    zIndex: 1 } });

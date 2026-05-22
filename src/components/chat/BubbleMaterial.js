@@ -10,16 +10,14 @@ const BubbleMaterial = React.memo(function BubbleMaterial({
   selectionMode,
   onPress,
   onLongPress,
-  children,
-}) {
+  children }) {
   const hasHandlers = !!onPress || !!onLongPress;
   return (
     <View
       collapsable={false}
       style={{
         maxWidth: bubbleMaxW,
-        alignSelf,
-      }}
+        alignSelf }}
     >
       <View
         collapsable={false}
@@ -28,9 +26,7 @@ const BubbleMaterial = React.memo(function BubbleMaterial({
           {
             overflow: 'hidden',
             borderWidth: StyleSheet.hairlineWidth * 1.5,
-            borderColor: V.border,
-          },
-        ]}
+            borderColor: V.border }]}
       >
         <View
           pointerEvents="none"
@@ -48,10 +44,8 @@ const BubbleMaterial = React.memo(function BubbleMaterial({
                 paddingVertical: 8,
                 backgroundColor: 'transparent',
                 opacity: pressed && !selectionMode ? 0.88 : 1,
-                zIndex: 2,
-              },
-              isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
-            ]}
+                zIndex: 2 },
+              isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold }]}
           >
             {children}
           </Pressable>
@@ -63,10 +57,8 @@ const BubbleMaterial = React.memo(function BubbleMaterial({
                 paddingHorizontal: 10,
                 paddingVertical: 8,
                 backgroundColor: 'transparent',
-                zIndex: 2,
-              },
-              isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
-            ]}
+                zIndex: 2 },
+              isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold }]}
           >
             {children}
           </View>

@@ -2,13 +2,13 @@ import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { View, Text, Pressable, Platform, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import Animated, {
+
   Easing,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withTiming,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 
 const MOCK_STATE = {
   mood: 0.6, // bipolar -1..1
@@ -91,8 +91,7 @@ function buildSegments({
   val,
   posC,
   negC,
-  size,
-}) {
+  size }) {
   const step = ARC_TOTAL_DEG / SEGMENTS;
   const halfGap = GAP_DEG / 2;
   const cx = size / 2;
@@ -111,8 +110,7 @@ function buildSegments({
       const t = fill > 1 ? i / (fill - 1) : 0;
       segs.push({
         d: segPath(a1, a2, rI, rO, cx, cy),
-        fill: active ? lerpColor(posC[0], posC[1], t) : INACTIVE_FILL,
-      });
+        fill: active ? lerpColor(posC[0], posC[1], t) : INACTIVE_FILL });
     }
     return segs;
   }
@@ -139,8 +137,7 @@ function buildSegments({
 
     segs.push({
       d: segPath(a1, a2, rI, rO, cx, cy),
-      fill,
-    });
+      fill });
   }
   return segs;
 }
@@ -153,8 +150,7 @@ function Gauge({
   negEmoji,
   posC,
   negC,
-  emojiFontSize,
-}) {
+  emojiFontSize }) {
   const emoji = !bipolar || clampBipolar(val) >= 0 ? posEmoji : negEmoji || posEmoji;
   const segments = useMemo(
     () =>
@@ -163,8 +159,7 @@ function Gauge({
         val,
         posC,
         negC,
-        size,
-      }),
+        size }),
     [bipolar, val, posC, negC, size]
   );
 
@@ -180,8 +175,7 @@ function Gauge({
           style={[
             styles.emoji,
             { fontSize: emojiFontSize },
-            Platform.OS === 'android' ? { includeFontPadding: false } : null,
-          ]}
+            Platform.OS === 'android' ? { includeFontPadding: false } : null]}
         >
           {emoji}
         </Text>
@@ -199,8 +193,7 @@ export default function AriaStateGauges({ state, onHeightChange }) {
     hurt: clamp01(s?.hurt ?? 0),
     mood: clampBipolar(s?.mood ?? 0),
     energy: clamp01(s?.energy ?? 0),
-    trust: clampBipolar(s?.trust ?? 0),
-  };
+    trust: clampBipolar(s?.trust ?? 0) };
 
   const [expanded, setExpanded] = useState(false);
   const open = useSharedValue(0);
@@ -237,27 +230,22 @@ export default function AriaStateGauges({ state, onHeightChange }) {
   }, [open, openTarget, sideM2, sideM1, sideP1, sideP2, onHeightChange]);
 
   const zoneStyle = useAnimatedStyle(() => ({
-    height: interpolate(open.value, [0, 1], [ZONE_H_COLLAPSED, ZONE_H_EXPANDED]),
-  }));
+    height: interpolate(open.value, [0, 1], [ZONE_H_COLLAPSED, ZONE_H_EXPANDED]) }));
 
   const bgStyle = useAnimatedStyle(() => ({
     opacity: interpolate(open.value, [0, 1], [0, 1]),
     transform: [{ scale: interpolate(open.value, [0, 1], [0, 1]) }],
-    borderRadius: interpolate(open.value, [0, 1], [999, 0]),
-  }));
+    borderRadius: interpolate(open.value, [0, 1], [999, 0]) }));
 
   const centerScaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(open.value, [0, 1], [CENTER_SIZE_COLLAPSED / CENTER_SIZE_EXPANDED, 1]) }],
-  }));
+    transform: [{ scale: interpolate(open.value, [0, 1], [CENTER_SIZE_COLLAPSED / CENTER_SIZE_EXPANDED, 1]) }] }));
 
   function SideGauge({ pos, v, children }) {
     const animStyle = useAnimatedStyle(() => ({
       opacity: v.value,
       transform: [
         { translateX: interpolate(v.value, [0, 1], [0, pos * ITEM_W]) },
-        { scale: interpolate(v.value, [0, 1], [0.3, 1]) },
-      ],
-    }));
+        { scale: interpolate(v.value, [0, 1], [0.3, 1]) }] }));
     return <Animated.View style={[styles.sideSlot, animStyle]}>{children}</Animated.View>;
   }
 
@@ -343,30 +331,25 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'visible',
-  },
+    overflow: 'visible' },
   bg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.65)' },
   row: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    pointerEvents: 'box-none',
-  },
+    pointerEvents: 'box-none' },
   sideSlot: {
     position: 'absolute',
     left: '50%',
     marginLeft: -ITEM_W / 2,
     width: ITEM_W,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   centerPress: {
     position: 'relative',
-    zIndex: 2,
-  },
+    zIndex: 2 },
   emojiWrap: {
     position: 'absolute',
     left: 0,
@@ -374,12 +357,10 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   emoji: {
     lineHeight: 18,
     fontWeight: '400',
-    transform: [{ translateY: -1 }],
-  },
-});
+    transform: [{ translateY: -1 }]
+  } });
 

@@ -33,8 +33,7 @@ export default function TurnTimer({ isMyTurn, isPlaying, onTimeUp }) {
       toValue: 0,
       duration: TURN_DURATION * 1000,
       easing: Easing.linear,
-      useNativeDriver: false,
-    }).start();
+      useNativeDriver: false }).start();
 
     return () => clearInterval(interval);
   }, [isMyTurn, isPlaying]);
@@ -45,14 +44,11 @@ export default function TurnTimer({ isMyTurn, isPlaying, onTimeUp }) {
         Animated.timing(pulseAnim, {
           toValue: 1.3,
           duration: 200,
-          useNativeDriver: true,
-        }),
+          useNativeDriver: true }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
+          useNativeDriver: true })]).start();
     }
   }, [seconds]);
 
@@ -72,7 +68,7 @@ export default function TurnTimer({ isMyTurn, isPlaying, onTimeUp }) {
           </Text>
         </Animated.View>
       </View>
-      <View style={[tw`h-1.5 rounded-full overflow-hidden`, { backgroundColor: V.bgSurface }]}>
+      <View style={[tw`h-1.5 rounded-full overflow-hidden`, {backgroundColor: V.bgSurface}]}>
         <Animated.View
           style={{
             height: '100%',
@@ -80,9 +76,7 @@ export default function TurnTimer({ isMyTurn, isPlaying, onTimeUp }) {
             borderRadius: 999,
             width: widthAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: ['0%', '100%'],
-            }),
-          }}
+              outputRange: ['0%', '100%'] }) }}
         />
       </View>
     </View>

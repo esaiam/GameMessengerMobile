@@ -42,8 +42,7 @@ export const V = {
   /** Нейтральный фон стеклянного элемента (без sage-тинта) */
   glassNeutralBg: 'rgba(255,255,255,0.055)',
 
-  dangerMuted: '#B56B6B',
-};
+  dangerMuted: '#B56B6B' };
 
 /** Низ градиента затемнения ленты над композером (95%, rgb совпадает с `V.bgApp`). */
 export const chatListBottomFadeBottom = 'rgba(13, 15, 20, 0.95)';
@@ -58,8 +57,7 @@ export const TAB_BAR_LAYOUT = {
   topPad: 8,
   rowPaddingH: 8,
   rowPaddingV: 17,
-  iconSize: 22,
-};
+  iconSize: 22 };
 
 /** Высота внутреннего ряда таб-бара: вертикальные отступы + размер иконки */
 export const TAB_BAR_INNER_ROW_H =
@@ -74,16 +72,14 @@ export const TAB_BAR_CAPSULE_RADIUS = TAB_BAR_INNER_ROW_H / 2;
 export const SEARCH_FIELD_LAYOUT = {
   chatsHeight: 44,
   contactsRowHeight: 44,
-  rowPaddingH: 8,
-};
+  rowPaddingH: 8 };
 
 export const SEARCH_CHATS_CAPSULE_RADIUS = SEARCH_FIELD_LAYOUT.chatsHeight / 2;
 export const SEARCH_CONTACTS_CAPSULE_RADIUS = SEARCH_FIELD_LAYOUT.contactsRowHeight / 2;
 
 /** Капсула ввода сообщений (`ChatComposer`) — высота не совпадает с таббаром */
 export const COMPOSER_LAYOUT = {
-  innerHeight: 44,
-};
+  innerHeight: 44 };
 
 export const COMPOSER_CAPSULE_RADIUS = COMPOSER_LAYOUT.innerHeight / 2;
 
@@ -99,5 +95,4 @@ export const boardPalette = {
   checkerDark: '#14171D',
   checkerDarkBorder: '#5A5750',
   handle: '#252A35',
-  handlePressed: '#323848',
-};
+  handlePressed: '#323848' };

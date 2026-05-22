@@ -57,22 +57,22 @@ export function useVoicePlayerResolvedUri(
             try {
               const full = await local.text();
               const preview = full.slice(0, 300);
-              console.warn('[voice] small file preview (attempt ' + attempt + '):', preview);
+              if (__DEV__) console.warn('[voice] small file preview (attempt ' + attempt + '):', preview);
             } catch (readErr: unknown) {
               const msg = readErr instanceof Error ? readErr.message : String(readErr);
-              console.warn('[voice] small file, could not read preview:', msg);
+              if (__DEV__) console.warn('[voice] small file, could not read preview:', msg);
             }
           }
         }
         if (!cancelled) {
           if (fileUri) setResolved(fileUri);
           else {
-            console.warn('[voice] cache file too small after retries, fallback remote URL');
+            if (__DEV__) console.warn('[voice] cache file too small after retries, fallback remote URL');
             setResolved(mediaUrl);
           }
         }
       } catch (e) {
-        console.warn('[voice] cache download failed, fallback remote URL:', e);
+        if (__DEV__) console.warn('[voice] cache download failed, fallback remote URL:', e);
         if (!cancelled) setResolved(mediaUrl);
       }
     })();

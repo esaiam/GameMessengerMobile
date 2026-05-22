@@ -23,8 +23,7 @@ export function voiceCacheExtensionFromUrl(mediaUrl) {
       'ogg',
       'opus',
       '3gp',
-      'amr',
-    ]);
+      'amr']);
     return allowed.has(ext) ? ext : 'm4a';
   } catch {
     return 'm4a';

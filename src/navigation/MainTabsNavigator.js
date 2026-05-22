@@ -22,8 +22,7 @@ const TAB_INACTIVE = V.textMuted;
 const TAB_BAR_STYLE = {
   backgroundColor: 'transparent',
   borderTopWidth: 0,
-  elevation: 0,
-};
+  elevation: 0 };
 
 function hubTabBarStyle(route, hubRouteName) {
   const focusedRoute = getFocusedRouteNameFromRoute(route) ?? hubRouteName;
@@ -43,8 +42,7 @@ function ChatsStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
-        animationDuration: 200,
-      }}
+        animationDuration: 200 }}
     >
       <ChatsStack.Screen name="ChatsList" component={ChatsScreen} />
       <ChatsStack.Screen name="ChatRoom" component={ChatRoomScreen} />
@@ -60,8 +58,7 @@ function ContactsStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
-        animationDuration: 200,
-      }}
+        animationDuration: 200 }}
     >
       <ContactsStack.Screen name="ContactsHome" component={ContactsScreen} />
       <ContactsStack.Screen name="Room" component={GameScreen} />
@@ -99,8 +96,7 @@ export function MainTabs({ route }) {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarActiveTintColor: TAB_ACTIVE,
-        tabBarInactiveTintColor: TAB_INACTIVE,
-      }}
+        tabBarInactiveTintColor: TAB_INACTIVE }}
     >
       <Tabs.Screen
         name="Chats"
@@ -110,8 +106,7 @@ export function MainTabs({ route }) {
           tabBarIcon: ({ color, size }) => (
             <Search color={color} size={size ?? 22} strokeWidth={1.5} />
           ),
-          tabBarStyle: hubTabBarStyle(route, 'ChatsList'),
-        })}
+          tabBarStyle: hubTabBarStyle(route, 'ChatsList') })}
       />
       <Tabs.Screen
         name="Contacts"
@@ -119,8 +114,7 @@ export function MainTabs({ route }) {
         initialParams={{ nickname }}
         options={({ route }) => ({
           tabBarIcon: ({ color }) => <Users color={color} size={22} strokeWidth={1.8} />,
-          tabBarStyle: hubTabBarStyle(route, 'ContactsHome'),
-        })}
+          tabBarStyle: hubTabBarStyle(route, 'ContactsHome') })}
       />
       <Tabs.Screen
         name="Poker"
@@ -130,8 +124,7 @@ export function MainTabs({ route }) {
           tabBarActiveTintColor: V.accentGold,
           tabBarInactiveTintColor: TAB_INACTIVE,
           tabBarIcon: ({ color }) => <Layers color={color} size={22} strokeWidth={1.8} />,
-          tabBarStyle: hubTabBarStyle(route, 'PokerHub'),
-        })}
+          tabBarStyle: hubTabBarStyle(route, 'PokerHub') })}
       />
       <Tabs.Screen
         name="Profile"
@@ -139,8 +132,7 @@ export function MainTabs({ route }) {
         initialParams={{ nickname }}
         options={({ route }) => ({
           tabBarIcon: ({ color }) => <User color={color} size={22} strokeWidth={1.8} />,
-          tabBarStyle: hubTabBarStyle(route, 'ProfileHome'),
-        })}
+          tabBarStyle: hubTabBarStyle(route, 'ProfileHome') })}
       />
     </Tabs.Navigator>
   );

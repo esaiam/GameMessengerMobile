@@ -15,8 +15,7 @@ export default function ChatMessagesLoadingOverlay({ visible }) {
         bottom: 0,
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 10,
-      }}
+        zIndex: 10 }}
     >
       <ActivityIndicator size="small" color={V.accentSage} />
     </View>

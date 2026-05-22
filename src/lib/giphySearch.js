@@ -35,11 +35,9 @@ export function mapGiphySearchResponse(json, page) {
         thumbUrl: thumb?.url || '',
         fullUrl: send?.url || thumb?.url || '',
         width: Number(send?.width || thumb?.width || 0),
-        height: Number(send?.height || thumb?.height || 0),
-      };
+        height: Number(send?.height || thumb?.height || 0) };
     }),    page,
-    hasMore: offset + items.length < total,
-  };
+    hasMore: offset + items.length < total };
 }
 
 /**
@@ -55,6 +53,22 @@ export async function searchGiphyDirect(query, page, apiKey) {
   const offset = (page - 1) * PER_PAGE;
   const res = await fetch(
     `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(q)}&limit=${PER_PAGE}&offset=${offset}&rating=g&lang=ru`,
+  );
+  if (!res.ok) {
+    throw new Error(`Giphy: ${res.status}`);
+  }
+  const json = await res.json();
+  return mapGiphySearchResponse(json, page);
+}
+
+/**
+ * @param {number} page
+ * @param {string} apiKey
+ */
+export async function fetchGiphyTrendingDirect(page, apiKey) {
+  const offset = (page - 1) * PER_PAGE;
+  const res = await fetch(
+    `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(apiKey)}&limit=${PER_PAGE}&offset=${offset}&rating=g`,
   );
   if (!res.ok) {
     throw new Error(`Giphy: ${res.status}`);

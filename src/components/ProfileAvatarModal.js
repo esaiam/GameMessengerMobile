@@ -7,8 +7,7 @@ import {
   TouchableOpacity,
   Animated,
   Alert,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import tw from 'twrnc';
@@ -33,8 +32,7 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
         toValue: 0,
         useNativeDriver: true,
         tension: 68,
-        friction: 12,
-      }).start();
+        friction: 12 }).start();
     }
   }, [visible, slideAnim]);
 
@@ -43,8 +41,7 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.9,
-    };
+      quality: 0.9 };
     try {
       const result = fromCamera
         ? await ImagePicker.launchCameraAsync(options)
@@ -74,9 +71,7 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
             styles.sheet,
             {
               paddingBottom: Math.max(insets.bottom, 12),
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+              transform: [{ translateY: slideAnim }] }]}
         >
           <SafeBlurView
             intensity={20}
@@ -91,15 +86,13 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
                 borderColor: V.border,
                 paddingHorizontal: 16,
                 paddingTop: 20,
-                paddingBottom: 16,
-              },
-            ]}
+                paddingBottom: 16
+              }]}
           >
             <Text
               style={[
                 tw`text-center mb-5`,
-                { color: V.textPrimary, fontSize: 15, fontWeight: '500' },
-              ]}
+                { color: V.textPrimary, fontSize: 15, fontWeight: '500' }]}
             >
               Фото профиля
             </Text>
@@ -109,7 +102,7 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
             </View>
 
             <TouchableOpacity
-              style={[tw`flex-row items-center`, ROW_PAD, DIVIDER]}
+              style={[tw`flex-row items-center`, ROW_PAD, DIVIDER, { }]}
               onPress={() => pick(true)}
               activeOpacity={0.7}
             >
@@ -120,7 +113,7 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[tw`flex-row items-center`, ROW_PAD, DIVIDER]}
+              style={[tw`flex-row items-center`, ROW_PAD, DIVIDER, { }]}
               onPress={() => pick(false)}
               activeOpacity={0.7}
             >
@@ -132,7 +125,7 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
 
             {!!avatarUri && (
               <TouchableOpacity
-                style={[tw`flex-row items-center`, ROW_PAD]}
+                style={[tw`flex-row items-center`, ROW_PAD, { }]}
                 onPress={handleRemove}
                 activeOpacity={0.7}
               >
@@ -156,13 +149,9 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.6)' },
   sheet: {
-    width: '100%',
-  },
-});
+    width: '100%' } });

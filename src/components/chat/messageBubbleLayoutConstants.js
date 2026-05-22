@@ -13,3 +13,8 @@ export const TS_TEXT_SIZE = 11;
 export const META_RESERVE_PX_INCOMING = 48;
 export const META_RESERVE_PX_OUTGOING = 88;
 export const META_RESERVE_PX_EPHEMERAL_EXTRA = 40;
+
+/** Видеокружок в ленте: высота блока (круг + полоса времени поверх низа). */
+export const VIDEO_FEED_TIME_OVERLAP_PX = 18;
+export const VIDEO_FEED_CIRCLE_IDLE = 200 + VIDEO_FEED_TIME_OVERLAP_PX;
+export const VIDEO_FEED_CIRCLE_ACTIVE = Math.round(VIDEO_FEED_CIRCLE_IDLE * (280 / 200));

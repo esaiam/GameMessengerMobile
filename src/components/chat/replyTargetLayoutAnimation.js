@@ -20,14 +20,10 @@ export function configureReplyTargetLayoutAnimation() {
     duration: REPLY_TARGET_ANIM_MS,
     create: {
       type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
+      property: LayoutAnimation.Properties.opacity },
     update: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-    },
+      type: LayoutAnimation.Types.easeInEaseOut },
     delete: {
       type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-  });
+      property: LayoutAnimation.Properties.opacity } });
 }

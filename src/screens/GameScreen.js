@@ -10,8 +10,7 @@ import {
   Keyboard,
   Platform,
   useWindowDimensions,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import tw from 'twrnc';
@@ -29,8 +28,7 @@ import {
   rollDice,
   diceToMoves,
   getAllValidMoves,
-  shouldAutoEndTurn,
-} from '../utils/gameLogic';
+  shouldAutoEndTurn } from '../utils/gameLogic';
 import { playDiceRollSound, preloadDiceSound, unloadDiceSound } from '../utils/diceSound';
 import { useBoardAnimation } from '../hooks/useBoardAnimation';
 import { useGameSession } from '../hooks/useGameSession';
@@ -47,8 +45,11 @@ const HANDLE_FROST_TINT_OPACITY = 0.28;
 export default function GameScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { width: windowW, height: windowH } = useWindowDimensions();
-  const isTablet = windowW >= 768;
-  const isWideTablet = isTablet && windowW > windowH;
+  const shortestSide = Math.min(windowW, windowH);
+  const isTabletLayout = shortestSide >= 540;
+  const isLandscape = windowW > windowH;
+  /** На планшете нарды только в портрете; в альбоме — только чат */
+  const showBackgammonBoard = !isTabletLayout || !isLandscape;
 
   const roomId = route.params?.roomId;
   const selfPlay = route.params?.selfPlay === true;
@@ -92,8 +93,7 @@ export default function GameScreen({ route, navigation }) {
     playerNumber: sessionPlayerNumber,
     opponentOnline,
     syncGameState,
-    newGame,
-  } = useGameSession({
+    newGame } = useGameSession({
     roomId,
     nickname,
     selfPlay,
@@ -113,8 +113,7 @@ export default function GameScreen({ route, navigation }) {
     setSwipeEnd,
     pendingRollRef,
     navigation,
-    setKbVisible,
-  });
+    setKbVisible });
 
   const backgammonGame = useBackgammonGame({
     selfPlay,
@@ -130,13 +129,11 @@ export default function GameScreen({ route, navigation }) {
     setShowAnimDice,
     setAnimDice,
     setSwipeStart,
-    setSwipeEnd,
-  });
+    setSwipeEnd });
   backgammonSettersRef.current = {
     setSelectedPoint: backgammonGame.setSelectedPoint,
     setHighlightedMoves: backgammonGame.setHighlightedMoves,
-    setSandboxUiDice: backgammonGame.setSandboxUiDice,
-  };
+    setSandboxUiDice: backgammonGame.setSandboxUiDice };
   const {
     selectedPoint,
     highlightedMoves,
@@ -146,8 +143,7 @@ export default function GameScreen({ route, navigation }) {
     handlePointPress,
     handleBarPress,
     handleBearOffPress,
-    handleEndTurn,
-  } = backgammonGame;
+    handleEndTurn } = backgammonGame;
 
   useEffect(() => {
     if (sessionPlayerNumber !== undefined && sessionPlayerNumber !== null) {
@@ -247,8 +243,7 @@ export default function GameScreen({ route, navigation }) {
     diceAnimating,
     showAnimDice,
     playerNumber,
-    pointH,
-  ]);
+    pointH]);
 
   // Fallback: when synced state receives new dice (legacy), replay 3D throw locally
   useEffect(() => {
@@ -356,7 +351,7 @@ export default function GameScreen({ route, navigation }) {
     chatInputTopYRef,
     pauseJsForDiceThrow,
     computeMaxSlide,
-  } = useBoardAnimation({
+    runCloseSequence } = useBoardAnimation({
     showAnimDice,
     showAnimDiceRef,
     diceAnimatingRef,
@@ -368,9 +363,19 @@ export default function GameScreen({ route, navigation }) {
     setBoardMounted,
     setBoardContentActive,
     kbVisible,
-    frostedHeaderH,
-  });
+    frostedHeaderH });
   pauseJsForDiceThrowRef.current = pauseJsForDiceThrow;
+
+  useEffect(() => {
+    const t = setTimeout(() => computeMaxSlide(), 80);
+    return () => clearTimeout(t);
+  }, [windowW, windowH, computeMaxSlide]);
+
+  useEffect(() => {
+    if (!showBackgammonBoard && boardContentActive) {
+      runCloseSequence();
+    }
+  }, [showBackgammonBoard, boardContentActive, runCloseSequence]);
 
   useEffect(() => {
     // Migrate legacy keys on first run
@@ -453,8 +458,7 @@ export default function GameScreen({ route, navigation }) {
         const myRoll = [die1, die2];
         const nextRolls = {
           ...(gs.preStartRolls || { 1: null, 2: null }),
-          [gs.currentPlayer]: myRoll,
-        };
+          [gs.currentPlayer]: myRoll };
         const r1 = nextRolls[1];
         const r2 = nextRolls[2];
         const p1 = r1 ? r1[0] + r1[1] : null;
@@ -464,8 +468,7 @@ export default function GameScreen({ route, navigation }) {
           preStartRolls: nextRolls,
           dice: [],
           remainingMoves: [],
-          headMovesThisTurn: 0,
-        };
+          headMovesThisTurn: 0 };
         setUiDice(myRoll);
         if (p1 == null || p2 == null) {
           newState.currentPlayer = gs.currentPlayer === 1 ? 2 : 1;
@@ -481,8 +484,7 @@ export default function GameScreen({ route, navigation }) {
             ...newState,
             preStartRolls: { 1: null, 2: null },
             currentPlayer: 1,
-            turnPhase: 'preroll',
-          };
+            turnPhase: 'preroll' };
           setGameState(newState);
           await syncGameState(newState);
           setShowAnimDice(false);
@@ -493,8 +495,7 @@ export default function GameScreen({ route, navigation }) {
         newState = {
           ...newState,
           currentPlayer: starter,
-          turnPhase: 'roll',
-        };
+          turnPhase: 'roll' };
         setGameState(newState);
         await syncGameState(newState);
         setShowAnimDice(false);
@@ -512,8 +513,7 @@ export default function GameScreen({ route, navigation }) {
         remainingMoves: moves,
         turnPhase: 'move',
         // gameStarted is controlled only by "New game" button
-        headMovesThisTurn: 0,
-      };
+        headMovesThisTurn: 0 };
 
       if (getAllValidMoves(newState).length === 0) {
         const opponent = playerNumber === 1 ? 2 : 1;
@@ -524,8 +524,7 @@ export default function GameScreen({ route, navigation }) {
           remainingMoves: [],
           turnPhase: 'roll',
           headMovesThisTurn: 0,
-          isFirstMove: { ...(newState.isFirstMove || { 1: true, 2: true }), [playerNumber]: false },
-        };
+          isFirstMove: { ...(newState.isFirstMove || { 1: true, 2: true }), [playerNumber]: false } };
         setGameState(autoEndState);
         await syncGameState(autoEndState);
         setShowAnimDice(false);
@@ -598,8 +597,7 @@ export default function GameScreen({ route, navigation }) {
           dice,
           startPos: { x: swipe.startX, y: swipe.startY },
           endPos: { x: swipe.endX, y: swipe.endY },
-          phase: gameState.turnPhase,
-        };
+          phase: gameState.turnPhase };
         lastLocalRollEventIdRef.current = rollEvent.id;
 
         // Update local state immediately (so subsequent syncs keep the field)
@@ -627,6 +625,7 @@ export default function GameScreen({ route, navigation }) {
     (gameState.remainingMoves.length === 0 || shouldAutoEndTurn(gameState));
 
   const showFingerHint =
+    showBackgammonBoard &&
     swipeHintLoaded &&
     !swipeHintSeen &&
     !gameStarted &&
@@ -634,13 +633,12 @@ export default function GameScreen({ route, navigation }) {
     boardMounted &&
     !showAnimDice;
 
-  const BOARD_MAX_W = isTablet ? 720 : undefined;
+  const BOARD_MAX_W = isTabletLayout ? 720 : undefined;
   const [boardColW, setBoardColW] = useState(0);
   const fullStripW = useMemo(() => {
     if (boardColW > 0) return boardColW;
-    if (isWideTablet) return Math.max(360, Math.floor((windowW || 0) * 0.58));
     return windowW || Dimensions.get('window').width;
-  }, [boardColW, isWideTablet, windowW]);
+  }, [boardColW, windowW]);
   const narrowStripW = useMemo(() => Math.max(48, Math.floor(fullStripW / 5)), [fullStripW]);
 
   const animatedHandleH = useMemo(
@@ -659,8 +657,7 @@ export default function GameScreen({ route, navigation }) {
       handleWidthAnim.interpolate({
         inputRange: [0, 1],
         outputRange: [narrowStripW, fullStripW],
-        extrapolate: 'clamp',
-      }),
+        extrapolate: 'clamp' }),
     [handleWidthAnim, narrowStripW, fullStripW]
   );
 
@@ -669,8 +666,7 @@ export default function GameScreen({ route, navigation }) {
       handleStretchAnim.interpolate({
         inputRange: [0, 1],
         outputRange: [narrowStripW, Math.max(36, Math.floor(narrowStripW * HANDLE_NARROW_RATIO))],
-        extrapolate: 'clamp',
-      }),
+        extrapolate: 'clamp' }),
     [handleStretchAnim, narrowStripW]
   );
 
@@ -749,15 +745,9 @@ export default function GameScreen({ route, navigation }) {
       style={[tw`flex-1`, { backgroundColor: V.bgApp }]}
     >
       {/* Body: доска → ручка → чат */}
-      <View
-        style={[
-          tw`flex-1`,
-          isWideTablet ? tw`flex-row` : null,
-          !isWideTablet ? { position: 'relative' } : null,
-        ]}
-      >
+      <View style={[tw`flex-1`, { position: 'relative' }]}>
         {/* Board column */}
-        {!kbVisible && !emojiPickerVisible && (
+        {showBackgammonBoard && !kbVisible && !emojiPickerVisible && (
           <View
             ref={boardColRef}
             onLayout={(e) => {
@@ -771,27 +761,19 @@ export default function GameScreen({ route, navigation }) {
               });
             }}
             pointerEvents="box-none"
-            style={[
-              isWideTablet ? { width: Math.max(360, Math.floor(windowW * 0.58)) } : null,
-              isWideTablet ? { paddingTop: insets.top } : null,
-              !isWideTablet
-                ? {
-                    position: 'absolute',
-                    top: boardTopOffset,
-                    left: 0,
-                    right: 0,
-                    zIndex: 10,
-                    elevation: 10,
-                  }
-                : null,
-            ]}
+            style={{
+              position: 'absolute',
+              top: boardTopOffset,
+              left: 0,
+              right: 0,
+              zIndex: 10,
+              elevation: 10 }}
           >
             <Animated.View
               pointerEvents="box-none"
               style={{
                 width: stripWidthAnim,
-                alignSelf: 'center',
-              }}
+                alignSelf: 'center' }}
             >
             <Animated.View
               style={{ height: boardDropAnim, overflow: 'hidden' }}
@@ -821,13 +803,12 @@ export default function GameScreen({ route, navigation }) {
                         style={[
                           tw`px-3 py-1.5 rounded-[10px]`,
                           { backgroundColor: V.bgElevated, borderWidth: 0.5, borderColor: V.border },
-                          (!selfPlay && !opponentOnline) && { opacity: 0.45 },
-                        ]}
+                          (!selfPlay && !opponentOnline) && { opacity: 0.45 }]}
                       >
                         <Text style={[tw`text-[10px] font-medium`, { color: V.textSecondary }]}>Новая игра</Text>
                       </TouchableOpacity>
                     }
-                    enableLayoutAnimations={!kbTransitioning && !isWideTablet}
+                    enableLayoutAnimations={!kbTransitioning && !isTabletLayout}
                     maxBoardWidth={BOARD_MAX_W}
                     diceOverlay={
                       showAnimDice && (
@@ -857,8 +838,7 @@ export default function GameScreen({ route, navigation }) {
                             <View
                               style={[
                                 tw`mb-2 px-3 py-1 rounded-[10px]`,
-                                { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border },
-                              ]}
+                                { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border }]}
                             >
                               <Text style={[tw`text-[10px]`, { color: V.textSecondary }]}>
                                 Песочница
@@ -922,8 +902,7 @@ export default function GameScreen({ route, navigation }) {
                         <TouchableOpacity
                           style={[
                             tw`rounded-[10px] px-4 py-2`,
-                            { backgroundColor: V.bgElevated, borderWidth: 0.5, borderColor: V.border },
-                          ]}
+                            { backgroundColor: V.bgElevated, borderWidth: 0.5, borderColor: V.border }]}
                           onPress={handleEndTurn}
                         >
                           <Text style={[tw`text-[10px] font-medium`, { color: V.textSecondary }]}>Завершить ход</Text>
@@ -940,17 +919,14 @@ export default function GameScreen({ route, navigation }) {
               {...slidePan.panHandlers}
               style={[
                 tw`items-center justify-center`,
-                {
-                  height: animatedHandleH,
+                {height: animatedHandleH,
                   overflow: 'hidden',
                   borderWidth: StyleSheet.hairlineWidth,
                   borderColor: V.border,
                   borderTopLeftRadius: bottomR,
                   borderTopRightRadius: bottomR,
                   borderBottomLeftRadius: bottomR,
-                  borderBottomRightRadius: bottomR,
-                },
-              ]}
+                  borderBottomRightRadius: bottomR}]}
               accessibilityLabel="Потяни вниз, чтобы открыть доску"
             >
               <SafeBlurView
@@ -964,8 +940,7 @@ export default function GameScreen({ route, navigation }) {
                 pointerEvents="none"
                 style={[
                   StyleSheet.absoluteFillObject,
-                  { backgroundColor: V.bgElevated, opacity: HANDLE_FROST_TINT_OPACITY },
-                ]}
+                  { backgroundColor: V.bgElevated, opacity: HANDLE_FROST_TINT_OPACITY }]}
               />
               <Animated.View
                 pointerEvents="none"
@@ -973,20 +948,16 @@ export default function GameScreen({ route, navigation }) {
                   width: handleStretchAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: [THUMB_W_MAX, THUMB_W_MIN],
-                    extrapolate: 'clamp',
-                  }),
+                    extrapolate: 'clamp' }),
                   height: handleStretchAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: [THUMB_H_LINE, THUMB_W_MIN],
-                    extrapolate: 'clamp',
-                  }),
+                    extrapolate: 'clamp' }),
                   borderRadius: handleStretchAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: [9999, THUMB_W_MIN / 2],
-                    extrapolate: 'clamp',
-                  }),
-                  overflow: 'hidden',
-                }}
+                    extrapolate: 'clamp' }),
+                  overflow: 'hidden' }}
               >
                 <SafeBlurView
                   intensity={Platform.OS === 'ios' ? 18 : 14}
@@ -999,8 +970,7 @@ export default function GameScreen({ route, navigation }) {
                   pointerEvents="none"
                   style={[
                     StyleSheet.absoluteFillObject,
-                    { backgroundColor: V.textPrimary, opacity: 0.22 },
-                  ]}
+                    { backgroundColor: V.textPrimary, opacity: 0.22 }]}
                 />
               </Animated.View>
             </Animated.View>
@@ -1012,9 +982,7 @@ export default function GameScreen({ route, navigation }) {
         <View
           style={[
             tw`flex-1`,
-            { zIndex: isWideTablet ? 20 : 0, elevation: isWideTablet ? 20 : 0, backgroundColor: V.bgApp },
-            isWideTablet ? { minWidth: 320 } : null,
-          ]}
+            { backgroundColor: V.bgApp }]}
         >
           <RoomChatContainer
             roomId={roomId}
@@ -1034,8 +1002,7 @@ export default function GameScreen({ route, navigation }) {
                       peerName: opponentName,
                       contactOnline: selfPlay ? true : opponentOnline,
                       roomId,
-                      nickname,
-                    })
+                      nickname })
                 : undefined,
               headerRight: (
                 <TouchableOpacity
@@ -1044,17 +1011,14 @@ export default function GameScreen({ route, navigation }) {
                     width: '100%',
                     height: '100%',
                     justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
+                    alignItems: 'center' }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Phone size={20} color={V.textPrimary} strokeWidth={1.5} />
                 </TouchableOpacity>
-              ),
-            }}
+              ) }}
             onEmojiPickerChange={(visible) => setEmojiPickerVisible(visible)}
             onInputBarTopY={(y) => {
-              if (isWideTablet) return;
               if (kbVisible) return;
               if (kbTransitioning) return;
               if (emojiPickerVisible) return;

@@ -139,8 +139,7 @@ export function createInitialGameState() {
     gameStarted: false,
     preStartRolls: { 1: null, 2: null }, // each player rolls 1 die to decide who starts
     headMovesThisTurn: 0,
-    isFirstMove: { 1: true, 2: true },
-  };
+    isFirstMove: { 1: true, 2: true } };
 }
 
 /** Восстанавливает gameOver/winner/mars из позиции (в БД эти поля не храним). */
@@ -186,8 +185,7 @@ export function stripTerminalMetaForDb(state) {
     ...state,
     gameOver: false,
     winner: null,
-    mars: false,
-  };
+    mars: false };
 }
 
 export function rollDice() {
@@ -404,8 +402,7 @@ export function getMoveOptionsForSelection(gameState, selectedFrom) {
           kind: 'combo',
           dice: [d1, d2],
           via: m1.to,
-          sequence: [m1, m2],
-        };
+          sequence: [m1, m2] };
         const key = `${opt.from}->${opt.to}|combo|${d1},${d2}|via:${opt.via}`;
         if (dedupe.has(key)) continue;
         dedupe.add(key);

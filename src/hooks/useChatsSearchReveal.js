@@ -2,15 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
-  PanResponder,
-} from 'react-native';
+  PanResponder } from 'react-native';
 import { SEARCH_FIELD_LAYOUT } from '../theme';
 
 const SEARCH_HIDE_THRESHOLD_PX = 12;
 const SEARCH_HIDE_GAP_PX = 8;
 
 /** Отступ под полем поиска до списка (используется в ChatsScreen для paddingTop FlatList). */
-export const CHATS_SEARCH_BOTTOM_SPACING_PX = 16;
+export const CHATS_SEARCH_BOTTOM_SPACING_PX = 20;
 
 export function useChatsSearchReveal(q, searchFocused) {
   const SEARCH_FIELD_H = SEARCH_FIELD_LAYOUT.chatsHeight;
@@ -39,8 +38,7 @@ export function useChatsSearchReveal(q, searchFocused) {
         toValue: shown ? 1 : 0,
         duration: 190,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+        useNativeDriver: true }).start();
     },
     [q, searchFocused, searchReveal]
   );
@@ -149,8 +147,7 @@ export function useChatsSearchReveal(q, searchFocused) {
           gestureLastDyRef.current = 0;
           accumDyRef.current = 0;
           lastDirRef.current = 0;
-        },
-      }),
+        } }),
     [onVirtualScrollDy]
   );
 
@@ -158,8 +155,7 @@ export function useChatsSearchReveal(q, searchFocused) {
     () =>
       searchReveal.interpolate({
         inputRange: [0, 1],
-        outputRange: [-(SEARCH_FIELD_H + SEARCH_HIDE_GAP_PX), 0],
-      }),
+        outputRange: [-(SEARCH_FIELD_H + SEARCH_HIDE_GAP_PX), 0] }),
     [searchReveal, SEARCH_FIELD_H]
   );
 
@@ -167,8 +163,7 @@ export function useChatsSearchReveal(q, searchFocused) {
     () =>
       searchReveal.interpolate({
         inputRange: [0, 1],
-        outputRange: [0, 1],
-      }),
+        outputRange: [0, 1] }),
     [searchReveal]
   );
 
@@ -176,8 +171,7 @@ export function useChatsSearchReveal(q, searchFocused) {
     () =>
       searchReveal.interpolate({
         inputRange: [0, 1],
-        outputRange: [1, 0],
-      }),
+        outputRange: [1, 0] }),
     [searchReveal]
   );
 
@@ -185,8 +179,7 @@ export function useChatsSearchReveal(q, searchFocused) {
     () =>
       searchReveal.interpolate({
         inputRange: [0, 1],
-        outputRange: [-(SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX), 0],
-      }),
+        outputRange: [-(SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX), 0] }),
     [searchReveal, SEARCH_FIELD_H]
   );
 
@@ -201,6 +194,5 @@ export function useChatsSearchReveal(q, searchFocused) {
     iconOpacity,
     listTranslateY,
     setListViewportH,
-    setListContentH,
-  };
+    setListContentH };
 }

@@ -7,8 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
-} from 'react-native';
+  Alert } from 'react-native';
 import tw from 'twrnc';
 import { V } from '../theme';
 import { supabase } from '../lib/supabase';
@@ -34,8 +33,7 @@ export default function RecoverPasswordScreen() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       Alert.alert('Готово', 'Пароль обновлён. Можно пользоваться приложением.', [
-        { text: 'Ок', onPress: () => clearPasswordRecoveryFlow() },
-      ]);
+        { text: 'Ок', onPress: () => clearPasswordRecoveryFlow() }]);
     } catch (e) {
       Alert.alert('Ошибка', e?.message || 'Не удалось сменить пароль');
     } finally {
@@ -77,9 +75,7 @@ export default function RecoverPasswordScreen() {
                 backgroundColor: V.bgSurface,
                 color: V.textPrimary,
                 borderWidth: 0.5,
-                borderColor: V.border,
-              },
-            ]}
+                borderColor: V.border }]}
             placeholder="••••••••"
             placeholderTextColor={V.textGhost}
             value={password}
@@ -101,9 +97,7 @@ export default function RecoverPasswordScreen() {
                 backgroundColor: V.bgSurface,
                 color: V.textPrimary,
                 borderWidth: 0.5,
-                borderColor: V.border,
-              },
-            ]}
+                borderColor: V.border }]}
             placeholder="••••••••"
             placeholderTextColor={V.textGhost}
             value={confirmPassword}
@@ -121,9 +115,7 @@ export default function RecoverPasswordScreen() {
               backgroundColor: V.btnPrimaryBg,
               borderWidth: 0.5,
               borderColor: V.accentSage,
-              opacity: busy ? 0.6 : 1,
-            },
-          ]}
+              opacity: busy ? 0.6 : 1 }]}
           onPress={onSave}
           disabled={busy}
         >

@@ -1,4 +1,9 @@
 -- =============================================
+-- ⚠️ LEGACY — НЕ ПРИМЕНЯТЬ НА PROD VAULT MESSENGER
+-- =============================================
+-- Открытый RLS (USING true) и anon storage — только для пустого dev-проекта «как в 2024».
+-- Prod: supabase/migrations/* + scripts/20260418_profiles_invite_codes_rls_rpc.sql
+--
 -- Supabase Setup (v2) for Vault Messenger / Backgammon
 -- Target: clean Supabase project (run once in SQL Editor)
 --

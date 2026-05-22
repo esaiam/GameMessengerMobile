@@ -12,9 +12,7 @@ export default function ChatReplyPreview({ replyMsg }) {
         {
           backgroundColor: 'rgba(37,42,53,0.5)',
           borderLeftWidth: 2,
-          borderLeftColor: V.accentSage,
-        },
-      ]}
+          borderLeftColor: V.accentSage }]}
     >
       <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]} numberOfLines={1}>
         {replyMsg.player_name}

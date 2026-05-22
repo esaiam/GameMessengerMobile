@@ -1,6 +1,6 @@
 /**
- * Список значений для hidden_for при «удалить у всех»: не использовать user1_id || player1_name —
- * иначе при наличии UUID ники отбрасываются, а фильтрация в приложении идёт по строковому nickname.
+ * Список значений для hidden_for при «удалить у всех».
+ * Prod rooms: только user1_id / user2_id (handle); player_name из снимка сообщений — на случай legacy.
  *
  * @param {Record<string, unknown> | null | undefined} room
  * @param {string} nickname
@@ -18,8 +18,6 @@ export function buildHiddenForEveryone(room, nickname, opts = {}) {
   if (room && typeof room === 'object') {
     add(room.user1_id);
     add(room.user2_id);
-    add(room.player1_name);
-    add(room.player2_name);
   }
 
   add(nickname);

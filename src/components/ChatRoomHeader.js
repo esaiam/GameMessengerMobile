@@ -7,15 +7,14 @@ import {
   Animated,
   Platform,
   StyleSheet,
-  Easing,
-} from 'react-native';
+  Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import tw from 'twrnc';
 import SafeBlurView from './SafeBlurView';
 import { UserAvatar } from './UserAvatar';
 import { ArrowLeft, X, Copy, Forward, Trash2 } from '../icons/lucideIcons';
 import { V } from '../theme';
-import { ARIA_API_URL } from '../lib/aria';
+import { fetchAriaState } from '../lib/aria';
 import { supabase } from '../lib/supabase';
 
 const HEADER_BLUR_INTENSITY_IOS = 100;
@@ -38,40 +37,6 @@ const HEADER_RIGHT_EDGE_INSET = 16;
 const MODE_ANIM_MS = 320;
 /** Для rotateY у иконок действий и морфа трубка ↔ корзина */
 const HEADER_ICON_PERSPECTIVE = 480;
-
-/**
- * @param {string} userId
- * @returns {Promise<{ mood: number; hurt: number; boredom: number; energy: number; trust: number } | null>}
- */
-async function fetchAriaState(userId) {
-  if (!userId || typeof userId !== 'string') return null;
-  try {
-    const res = await fetch(`${ARIA_API_URL}/state?user_id=${encodeURIComponent(userId)}`);
-    if (!res.ok) return null;
-    let json = {};
-    try {
-      json = await res.json();
-    } catch {
-      return null;
-    }
-    const to01 = (v) => {
-      const n = Number(v);
-      if (!Number.isFinite(n)) return 0;
-      const x = n > 1 ? n / 100 : n;
-      return Math.max(0, Math.min(1, x));
-    };
-    const clampBipolar = (v) => Math.max(-1, Math.min(1, Number.isFinite(v) ? v : 0));
-    return {
-      mood: clampBipolar(json?.mood),
-      hurt: to01(json?.hurt),
-      boredom: to01(json?.boredom),
-      energy: to01(json?.energy),
-      trust: clampBipolar(json?.trust),
-    };
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Текст статуса Aria под именем (по mood из ariaState; ariaState === null → «онлайн» при доступности).
@@ -131,8 +96,7 @@ export default function ChatRoomHeader({
   /** Вызывается при обновлении состояния Aria из fetch (для `AriaStateGauges` снаружи) */
   onAriaStateChange,
   /** Тап по аватару/имени в обычном режиме (не Aria, не выделение) */
-  onHeaderPress,
-}) {
+  onHeaderPress }) {
   const insets = useSafeAreaInsets();
   const [ariaState, setAriaState] = useState(null);
   const modeAnim = useRef(new Animated.Value(selectionMode ? 1 : 0)).current;
@@ -166,8 +130,7 @@ export default function ChatRoomHeader({
       toValue: selectionMode ? 1 : 0,
       duration: MODE_ANIM_MS,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
+      useNativeDriver: true }).start();
   }, [selectionMode, modeAnim]);
 
   const arrowOpacity = modeAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
@@ -182,8 +145,7 @@ export default function ChatRoomHeader({
   /** Флип вокруг вертикальной оси: к выделению 90°→0°, обратно симметрично */
   const actionFlipY = modeAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['90deg', '0deg'],
-  });
+    outputRange: ['90deg', '0deg'] });
 
   const phoneOpacity = modeAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
   const phoneRotateY = modeAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-90deg'] });
@@ -214,8 +176,7 @@ export default function ChatRoomHeader({
       : null;
 
   const iconFlipStyle = {
-    transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: actionFlipY }],
-  };
+    transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: actionFlipY }] };
 
   return (
     <View collapsable={false} style={{ overflow: 'visible' }}>
@@ -223,8 +184,7 @@ export default function ChatRoomHeader({
         style={{
           overflow: 'visible',
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: V.border,
-        }}
+          borderBottomColor: V.border }}
       >
         <SafeBlurView
           intensity={Platform.OS === 'ios' ? HEADER_BLUR_INTENSITY_IOS : HEADER_BLUR_INTENSITY_ANDROID}
@@ -238,9 +198,7 @@ export default function ChatRoomHeader({
             StyleSheet.absoluteFillObject,
             {
               backgroundColor: V.bgElevated,
-              opacity: HEADER_FROST_TINT_OPACITY,
-            },
-          ]}
+              opacity: HEADER_FROST_TINT_OPACITY }]}
         />
         <View
           style={[
@@ -253,9 +211,7 @@ export default function ChatRoomHeader({
               paddingBottom: 8,
               /* flex-start: слот справа и блок аватар+текст начинаются сверху — трубка в линию с аватаром */
               alignItems: 'flex-start',
-              overflow: 'visible',
-            },
-          ]}
+              overflow: 'visible'}]}
         >
         <TouchableOpacity
           onPress={onLeftPress}
@@ -268,23 +224,20 @@ export default function ChatRoomHeader({
             alignItems: 'center',
             justifyContent: 'center',
             marginLeft: -10,
-            marginRight: 1,
-          }}
+            marginRight: 1 }}
         >
           <View
             style={{
               width: ICON_SELECTION_ACTION + 8,
               height: ICON_SELECTION_ACTION + 8,
               alignItems: 'center',
-              justifyContent: 'center',
-            }}
+              justifyContent: 'center' }}
           >
             <Animated.View
               style={{
                 position: 'absolute',
                 opacity: arrowOpacity,
-                transform: [{ rotateZ: arrowRotateZ }],
-              }}
+                transform: [{ rotateZ: arrowRotateZ }] }}
             >
               <ArrowLeft size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
             </Animated.View>
@@ -292,8 +245,7 @@ export default function ChatRoomHeader({
               style={{
                 position: 'absolute',
                 opacity: xOpacity,
-                transform: [{ rotateZ: xRotateZ }],
-              }}
+                transform: [{ rotateZ: xRotateZ }] }}
             >
               <X size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
             </Animated.View>
@@ -306,8 +258,7 @@ export default function ChatRoomHeader({
               opacity: normalBlockOpacity,
               flexDirection: 'row',
               alignItems: 'flex-start',
-              pointerEvents: selectionMode ? 'none' : 'auto',
-            }}
+              pointerEvents: selectionMode ? 'none' : 'auto' }}
           >
             <TouchableOpacity
               onPress={!isAriaHeader && !selectionMode && onHeaderPress ? onHeaderPress : undefined}
@@ -335,8 +286,7 @@ export default function ChatRoomHeader({
                 flex: 1,
                 marginLeft: 8,
                 minWidth: 0,
-                justifyContent: 'flex-start',
-              }}
+                justifyContent: 'flex-start' }}
             >
               <Text
                 style={[
@@ -345,10 +295,9 @@ export default function ChatRoomHeader({
                     fontWeight: '500',
                     /* было 22; −⅓ «лишка» над кеглем (22−16)/3 ≈ 2 → 20 — плотнее к статусу */
                     lineHeight: 20,
-                    color: V.textPrimary,
+                    color: V.textPrimary
                   },
-                  Platform.OS === 'android' ? { includeFontPadding: false } : null,
-                ]}
+                  Platform.OS === 'android' ? { includeFontPadding: false } : null]}
                 numberOfLines={1}
               >
                 {title || 'Чат'}
@@ -362,8 +311,7 @@ export default function ChatRoomHeader({
                         alignItems: 'center',
                         marginTop: (2 * 2) / 3,
                         minWidth: 0,
-                        alignSelf: 'stretch',
-                      }}
+                        alignSelf: 'stretch' }}
                     >
                       <View
                         style={{
@@ -371,8 +319,7 @@ export default function ChatRoomHeader({
                           height: 6,
                           borderRadius: 3,
                           backgroundColor: ariaOnline === true ? V.accentSage : V.textMuted,
-                          marginRight: 6,
-                        }}
+                          marginRight: 6 }}
                       />
                       <Text
                         style={[
@@ -381,10 +328,9 @@ export default function ChatRoomHeader({
                             fontSize: 12,
                             fontWeight: '400',
                             lineHeight: 16,
-                            color: ariaOnline === true ? V.accentSage : V.textMuted,
+                            color: ariaOnline === true ? V.accentSage : V.textMuted
                           },
-                          Platform.OS === 'android' ? { includeFontPadding: false } : null,
-                        ]}
+                          Platform.OS === 'android' ? { includeFontPadding: false } : null]}
                         numberOfLines={ariaHeaderStatusText.length > 14 ? 2 : 1}
                       >
                         {ariaHeaderStatusText}
@@ -397,8 +343,7 @@ export default function ChatRoomHeader({
                       flexDirection: 'row',
                       alignItems: 'center',
                       /* было 2; на треть меньше → 2×⅔ */
-                      marginTop: (2 * 2) / 3,
-                    }}
+                      marginTop: (2 * 2) / 3 }}
                   >
                     <View
                       style={{
@@ -406,8 +351,7 @@ export default function ChatRoomHeader({
                         height: 6,
                         borderRadius: 3,
                         backgroundColor: contactOnline ? V.accentSage : V.textMuted,
-                        marginRight: 6,
-                      }}
+                        marginRight: 6 }}
                     />
                     <Text
                       style={[
@@ -415,10 +359,9 @@ export default function ChatRoomHeader({
                           fontSize: 12,
                           fontWeight: '400',
                           lineHeight: 16,
-                          color: contactOnline ? V.accentSage : V.textMuted,
+                          color: contactOnline ? V.accentSage : V.textMuted
                         },
-                        Platform.OS === 'android' ? { includeFontPadding: false } : null,
-                      ]}
+                        Platform.OS === 'android' ? { includeFontPadding: false } : null]}
                     >
                       {contactOnline ? 'в сети' : 'не в сети'}
                     </Text>
@@ -439,8 +382,7 @@ export default function ChatRoomHeader({
               bottom: 0,
               flexDirection: 'row',
               alignItems: 'center',
-              pointerEvents: selectionMode ? 'auto' : 'none',
-            }}
+              pointerEvents: selectionMode ? 'auto' : 'none' }}
           >
             <Text
               style={[
@@ -450,10 +392,9 @@ export default function ChatRoomHeader({
                   marginLeft: 4,
                   minWidth: 24,
                   fontSize: SELECTION_COUNT_FONT,
-                  lineHeight: SELECTION_COUNT_LINE_HEIGHT,
+                  lineHeight: SELECTION_COUNT_LINE_HEIGHT
                 },
-                Platform.OS === 'android' ? { includeFontPadding: false } : null,
-              ]}
+                Platform.OS === 'android' ? { includeFontPadding: false } : null]}
             >
               {selectedCount}
             </Text>
@@ -476,8 +417,7 @@ export default function ChatRoomHeader({
                 paddingVertical: 6,
                 paddingHorizontal: 8,
                 marginLeft: SELECTION_ACTION_GAP,
-                opacity: actionsDisabled ? 0.35 : 1,
-              }}
+                opacity: actionsDisabled ? 0.35 : 1 }}
             >
               <Animated.View style={iconFlipStyle}>
                 <Forward size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
@@ -492,8 +432,7 @@ export default function ChatRoomHeader({
                   paddingVertical: 6,
                   paddingHorizontal: 8,
                   marginLeft: SELECTION_ACTION_GAP,
-                  opacity: actionsDisabled ? 0.35 : 1,
-                }}
+                  opacity: actionsDisabled ? 0.35 : 1 }}
               >
                 <Animated.View style={iconFlipStyle}>
                   <Trash2 size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
@@ -509,8 +448,7 @@ export default function ChatRoomHeader({
               alignItems: 'flex-start',
               alignSelf: 'flex-start',
               marginLeft: 4,
-              overflow: 'visible',
-            }}
+              overflow: 'visible' }}
           >
             {headerRight ? (
               <View
@@ -519,8 +457,7 @@ export default function ChatRoomHeader({
                   height: AVATAR_SIZE,
                   justifyContent: 'center',
                   alignItems: 'center',
-                  overflow: 'visible',
-                }}
+                  overflow: 'visible' }}
               >
                 <Animated.View
                   style={{
@@ -531,8 +468,7 @@ export default function ChatRoomHeader({
                     alignItems: 'center',
                     opacity: phoneOpacity,
                     transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: phoneRotateY }],
-                    pointerEvents: selectionMode ? 'none' : 'auto',
-                  }}
+                    pointerEvents: selectionMode ? 'none' : 'auto' }}
                 >
                   {headerRight}
                 </Animated.View>
@@ -545,8 +481,7 @@ export default function ChatRoomHeader({
                     alignItems: 'center',
                     opacity: trashSlotOpacity,
                     transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: trashMorphRotateY }],
-                    pointerEvents: selectionMode ? 'auto' : 'none',
-                  }}
+                    pointerEvents: selectionMode ? 'auto' : 'none' }}
                 >
                   <TouchableOpacity
                     onPress={onDelete}
@@ -557,8 +492,7 @@ export default function ChatRoomHeader({
                       height: '100%',
                       justifyContent: 'center',
                       alignItems: 'center',
-                      opacity: actionsDisabled ? 0.35 : 1,
-                    }}
+                      opacity: actionsDisabled ? 0.35 : 1 }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Trash2 size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
@@ -576,8 +510,7 @@ export default function ChatRoomHeader({
                   alignItems: 'center',
                   opacity: phoneOpacity,
                   transform: [{ perspective: HEADER_ICON_PERSPECTIVE }, { rotateY: phoneRotateY }],
-                  pointerEvents: selectionMode ? 'none' : 'auto',
-                }}
+                  pointerEvents: selectionMode ? 'none' : 'auto' }}
               >
                 {headerRightTrailing}
               </Animated.View>

@@ -3,6 +3,13 @@ import { Alert } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { buildHiddenForEveryone } from './buildHiddenForEveryone';
 
+/** `aria-db-{uuid}` → uuid в `aria_messages`. */
+function ariaDbRowId(messageId) {
+  if (typeof messageId !== 'string' || !messageId.startsWith('aria-db-')) return null;
+  const raw = messageId.slice('aria-db-'.length);
+  return raw.length > 0 ? raw : null;
+}
+
 /**
  * Реакции на сообщение и удаление (у меня / у всех через hidden_for), плюс закрытие модалки подтверждения.
  */
@@ -12,12 +19,12 @@ export default function useChatMessageMutations({
   nickname,
   peerName,
   roomId,
+  isAriaChat = false,
   popMessage,
   setDeletingIds,
   setDeleteConfirmVisible,
   setSelectedMessage,
-  chatSyncRef,
-}) {
+  chatSyncRef }) {
   const toggleReaction = useCallback(
     async (messageId, emoji) => {
       const msg = messages.find((m) => m.id === messageId);
@@ -39,8 +46,43 @@ export default function useChatMessageMutations({
     [messages, nickname],
   );
 
+  const deleteAriaMessage = useCallback(
+    async (messageId) => {
+      const msg = messages.find((m) => m.id === messageId);
+      if (!msg) return;
+      setDeletingIds((prev) => new Set(prev).add(messageId));
+      await popMessage(messageId, { duration: 200, toScale: 0.55 });
+
+      const dbId = ariaDbRowId(messageId);
+      if (dbId) {
+        const { error } = await supabase.from('aria_messages').delete().eq('id', dbId);
+        if (error) {
+          Alert.alert('Не удалось удалить', error.message);
+          setDeletingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(messageId);
+            return next;
+          });
+          return;
+        }
+      }
+
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(messageId);
+        return next;
+      });
+    },
+    [messages, popMessage, setMessages, setDeletingIds],
+  );
+
   const deleteMessageForMe = useCallback(
     async (messageId) => {
+      if (isAriaChat) {
+        await deleteAriaMessage(messageId);
+        return;
+      }
       const msg = messages.find((m) => m.id === messageId);
       if (!msg) return;
       setDeletingIds((prev) => new Set(prev).add(messageId));
@@ -53,7 +95,7 @@ export default function useChatMessageMutations({
       if (error) {
         Alert.alert(
           'Не удалось скрыть сообщение',
-          `${error.message}\n\nНужны политика RLS на UPDATE (scripts/fix-messages-rls-update-delete.sql) и колонка hidden_for (scripts/fix-messages-hidden.sql).`,
+          error.message || 'Не удалось скрыть сообщение',
         );
         setDeletingIds((prev) => {
           const next = new Set(prev);
@@ -69,7 +111,7 @@ export default function useChatMessageMutations({
         return next;
       });
     },
-    [messages, nickname, popMessage, setMessages, setDeletingIds],
+    [isAriaChat, deleteAriaMessage, messages, nickname, popMessage, setMessages, setDeletingIds],
   );
 
   const closeDeleteConfirm = useCallback(() => {
@@ -79,12 +121,16 @@ export default function useChatMessageMutations({
 
   const deleteMessageForAll = useCallback(
     async (messageId) => {
+      if (isAriaChat) {
+        await deleteAriaMessage(messageId);
+        return;
+      }
       setDeletingIds((prev) => new Set(prev).add(messageId));
       await popMessage(messageId, { duration: 200, toScale: 0.55 });
 
       const { data: room, error: roomErr } = await supabase
         .from('rooms')
-        .select('*')
+        .select('id, user1_id, user2_id')
         .eq('id', roomId)
         .maybeSingle();
 
@@ -93,8 +139,7 @@ export default function useChatMessageMutations({
         explicitPeer || messages.find((m) => m.player_name !== nickname)?.player_name || null;
       const hiddenForAll = buildHiddenForEveryone(room, nickname, {
         peerName: inferredPeer,
-        messagesSnapshot: messages,
-      });
+        messagesSnapshot: messages });
 
       if (roomErr) {
         Alert.alert('Не удалось удалить у всех', roomErr.message);
@@ -114,7 +159,7 @@ export default function useChatMessageMutations({
       if (error) {
         Alert.alert(
           'Не удалось удалить у всех',
-          `${error.message}\n\nНужна политика RLS на UPDATE (scripts/fix-messages-rls-update-delete.sql) и колонка hidden_for (scripts/fix-messages-hidden.sql).`,
+          error.message || 'Не удалось удалить у всех',
         );
         setDeletingIds((prev) => {
           const next = new Set(prev);
@@ -132,13 +177,12 @@ export default function useChatMessageMutations({
       });
       chatSyncRef?.current?.hideMessage?.(messageId);
     },
-    [messages, nickname, peerName, popMessage, roomId, setMessages, setDeletingIds, chatSyncRef],
+    [isAriaChat, deleteAriaMessage, messages, nickname, peerName, popMessage, roomId, setMessages, setDeletingIds, chatSyncRef],
   );
 
   return {
     toggleReaction,
     deleteMessageForMe,
     deleteMessageForAll,
-    closeDeleteConfirm,
-  };
+    closeDeleteConfirm };
 }

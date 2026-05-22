@@ -34,6 +34,8 @@ import {
   Users,
   Dices,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   Paperclip,
   Lock,
@@ -47,7 +49,8 @@ import {
   Video,
   Sparkles,
   EllipsisVertical,
-} from 'lucide-react-native/icons';
+  FileText,
+  Pencil } from 'lucide-react-native/icons';
 
 /** В lucide-react-native нет `Unlock` — это `LockOpen` */
 const Unlock = LockOpen;
@@ -92,6 +95,8 @@ export {
   Users,
   Dices,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   CompassRose,
   Paperclip,
@@ -106,4 +111,5 @@ export {
   Video,
   Sparkles,
   EllipsisVertical,
-};
+  FileText,
+  Pencil };

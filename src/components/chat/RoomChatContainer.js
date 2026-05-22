@@ -16,8 +16,7 @@ export function RoomChatContainer({
   onTopOverlayHeight,
   onEmojiPickerChange,
   onInputBarTopY,
-  onInputBarHeight,
-}) {
+  onInputBarHeight }) {
   return (
     <Chat
       roomId={roomId}

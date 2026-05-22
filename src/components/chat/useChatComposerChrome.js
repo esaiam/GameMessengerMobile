@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { Keyboard, Animated } from 'react-native';
+import { Keyboard, Animated, Platform } from 'react-native';
 import {
   useSharedValue,
   useAnimatedStyle,
@@ -7,11 +7,17 @@ import {
   withTiming,
   Easing,
   runOnJS,
-  cancelAnimation,
-} from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation, useKeyboardHandler } from 'react-native-keyboard-controller';
-import { REPLY_TARGET_PREVIEW_H, EMOJI_PICKER_PANEL_H } from './chatComposerConstants';
+import {
+  REPLY_TARGET_PREVIEW_H,
+  EMOJI_GIF_EXPANDED_VISIBLE_H } from './chatComposerConstants';
 import { REPLY_TARGET_ANIM_MS } from './replyTargetLayoutAnimation';
+import {
+  estimateKeyboardHeight,
+  resolveKeyboardPanelHeight,
+  saveCachedKeyboardHeight,
+  clampKeyboardHeight } from '../../lib/keyboardHeightCache';
 
 /**
  * Клавиатура: `keyboardHeightLib` (UI thread) — сдвиг overlay-композера и нижний inset ленты.
@@ -25,22 +31,73 @@ export default function useChatComposerChrome({
   showEmojiPicker,
   setShowEmojiPicker,
   setText,
-}) {
+  emojiPanelGifSearchFocused = false }) {
   // 0 → -keyboardHeight (отрицательное когда открыта)
   const { height: keyboardHeightLib } = useReanimatedKeyboardAnimation();
   const replyTargetProgress = useSharedValue(0);
   const emojiPanelHeightShared = useSharedValue(0);
   /** Непрозрачность контента эмодзи: 1 — виден, 0 — мгновенно прячется при старте анимации клавиатуры */
   const emojiContentOpacityShared = useSharedValue(1);
-  /** Последняя реальная высота системной клавиатуры; fallback = EMOJI_PICKER_PANEL_H */
-  const storedKeyboardHeightShared = useSharedValue(EMOJI_PICKER_PANEL_H);
+  /** Высота панели эмодзи ≈ soft-keyboard (кэш / эвристика / live). */
+  const storedKeyboardHeightShared = useSharedValue(estimateKeyboardHeight());
+  const emojiPanelGifSearchFocusedShared = useSharedValue(false);
+  const lastPersistedKbHRef = useRef(0);
+
+  const applyStoredKeyboardHeight = useCallback((h) => {
+    const clamped = clampKeyboardHeight(h);
+    if (clamped == null) return;
+    storedKeyboardHeightShared.value = clamped;
+  }, [storedKeyboardHeightShared]);
+
+  const persistKeyboardHeight = useCallback((h) => {
+    const clamped = clampKeyboardHeight(h);
+    if (clamped == null) return;
+    if (Math.abs(clamped - lastPersistedKbHRef.current) < 4) return;
+    lastPersistedKbHRef.current = clamped;
+    applyStoredKeyboardHeight(clamped);
+    saveCachedKeyboardHeight(clamped);
+  }, [applyStoredKeyboardHeight]);
+
+  useEffect(() => {
+    emojiPanelGifSearchFocusedShared.value = emojiPanelGifSearchFocused;
+  }, [emojiPanelGifSearchFocused, emojiPanelGifSearchFocusedShared]);
+
+  useEffect(() => {
+    let cancelled = false;
+    resolveKeyboardPanelHeight().then((h) => {
+      if (!cancelled) applyStoredKeyboardHeight(h);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyStoredKeyboardHeight]);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(showEvt, (e) => {
+      const h = e?.endCoordinates?.height;
+      if (typeof h === 'number' && h > 100) persistKeyboardHeight(h);
+    });
+    return () => sub.remove();
+  }, [persistKeyboardHeight]);
 
   useAnimatedReaction(
     () => keyboardHeightLib.value,
-    (current) => {
+    (current, previous) => {
       const h = -current;
+      const prevH = previous != null ? -previous : 0;
       if (h > 100) {
-        storedKeyboardHeightShared.value = h;
+        const clamped = Math.min(520, Math.max(200, Math.round(h)));
+        storedKeyboardHeightShared.value = clamped;
+      }
+      // После закрытия клавиатуры при открытой панели эмодзи — вернуть слот к kbStored.
+      if (
+        h < 50 &&
+        prevH > 100 &&
+        !emojiPanelGifSearchFocusedShared.value &&
+        emojiPanelHeightShared.value > 0
+      ) {
+        emojiPanelHeightShared.value = storedKeyboardHeightShared.value;
       }
     },
   );
@@ -48,21 +105,18 @@ export default function useChatComposerChrome({
   // Высота панели убывает синхронно с ростом клавиатуры → капсула не двигается
   const emojiPanelAnimatedStyle = useAnimatedStyle(() => ({
     height: Math.max(0, emojiPanelHeightShared.value + keyboardHeightLib.value),
-    overflow: 'hidden',
-  }));
+    overflow: 'hidden' }));
 
   // Контент (сетка эмодзи) — исчезает как только клавиатура начинает выезжать поверх; слот остаётся
   const emojiContentAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: emojiContentOpacityShared.value,
-  }));
+    opacity: emojiContentOpacityShared.value }));
 
   const replyTargetAnimatedStyle = useAnimatedStyle(() => {
     const p = replyTargetProgress.value;
     return {
       height: REPLY_TARGET_PREVIEW_H * p,
       opacity: p,
-      transform: [{ translateY: (1 - p) * REPLY_TARGET_PREVIEW_H }],
-    };
+      transform: [{ translateY: (1 - p) * REPLY_TARGET_PREVIEW_H }] };
   });
 
   const emojiWobbleRotate = useRef(new Animated.Value(0)).current;
@@ -86,8 +140,7 @@ export default function useChatComposerChrome({
       Animated.timing(emojiWobbleRotate, { toValue: 12, duration: 100, useNativeDriver: true }),
       Animated.timing(emojiWobbleRotate, { toValue: -7, duration: 90, useNativeDriver: true }),
       Animated.timing(emojiWobbleRotate, { toValue: 7, duration: 70, useNativeDriver: true }),
-      Animated.timing(emojiWobbleRotate, { toValue: 0, duration: 90, useNativeDriver: true }),
-    ]).start();
+      Animated.timing(emojiWobbleRotate, { toValue: 0, duration: 90, useNativeDriver: true })]).start();
   }, [emojiWobbleRotate]);
 
   useEffect(() => {
@@ -100,8 +153,7 @@ export default function useChatComposerChrome({
       setVisibleReplyTo(replyTo);
       replyTargetProgress.value = withTiming(1, {
         duration: REPLY_TARGET_ANIM_MS,
-        easing: Easing.out(Easing.cubic),
-      });
+        easing: Easing.out(Easing.cubic) });
       return;
     }
 
@@ -109,8 +161,7 @@ export default function useChatComposerChrome({
       0,
       {
         duration: REPLY_TARGET_ANIM_MS,
-        easing: Easing.in(Easing.cubic),
-      },
+        easing: Easing.in(Easing.cubic) },
       (finished) => {
         if (finished) runOnJS(setVisibleReplyTo)(null);
       },
@@ -123,18 +174,30 @@ export default function useChatComposerChrome({
   useKeyboardHandler({
     onStart: (e) => {
       'worklet';
-      if (e.height > 0 && emojiPanelHeightShared.value > 0) {
+      if (e.height > 0 && emojiPanelGifSearchFocusedShared.value && emojiPanelHeightShared.value > 0) {
+        emojiContentOpacityShared.value = 1;
+        emojiPanelHeightShared.value = EMOJI_GIF_EXPANDED_VISIBLE_H + e.height;
+        return;
+      }
+      if (
+        e.height > 0 &&
+        emojiPanelHeightShared.value > 0 &&
+        !emojiPanelGifSearchFocusedShared.value
+      ) {
         emojiContentOpacityShared.value = 0;
       }
     },
     onEnd: (e) => {
       'worklet';
-      if (e.height > 0 && emojiPanelHeightShared.value > 0) {
+      if (
+        e.height > 0 &&
+        emojiPanelHeightShared.value > 0 &&
+        !emojiPanelGifSearchFocusedShared.value
+      ) {
         emojiPanelHeightShared.value = 0;
         runOnJS(setShowEmojiPicker)(false);
       }
-    },
-  }, []);
+    } }, [setShowEmojiPicker]);
 
   useEffect(() => {
     if (showEmojiPicker) {
@@ -146,19 +209,27 @@ export default function useChatComposerChrome({
         openedFromKeyboardRef.current = false;
         return;
       }
-      emojiPanelHeightShared.value = withTiming(storedKeyboardHeightShared.value, {
+      const kbH = storedKeyboardHeightShared.value;
+      emojiPanelHeightShared.value = withTiming(kbH, {
         duration: 280,
-        easing: Easing.out(Easing.cubic),
-      });
+        easing: Easing.out(Easing.cubic) });
       return;
     }
     const instant = skipEmojiPanelCloseAnimationRef.current;
     skipEmojiPanelCloseAnimationRef.current = false;
     emojiPanelHeightShared.value = withTiming(0, {
       duration: instant ? 0 : 280,
-      easing: Easing.out(Easing.cubic),
-    });
+      easing: Easing.out(Easing.cubic) });
   }, [showEmojiPicker]);
+
+  /** Только при входе в режим поиска GIF — не трогаем высоту при выходе (blur / вкладка). */
+  useEffect(() => {
+    if (!showEmojiPicker || !emojiPanelGifSearchFocused) return;
+    const openKb = Math.max(0, -keyboardHeightLib.value);
+    emojiPanelHeightShared.value = withTiming(EMOJI_GIF_EXPANDED_VISIBLE_H + openKb, {
+      duration: 280,
+      easing: Easing.out(Easing.cubic) });
+  }, [showEmojiPicker, emojiPanelGifSearchFocused, keyboardHeightLib]);
 
   const toggleEmojiPicker = useCallback(() => {
     if (showEmojiPicker) {
@@ -180,6 +251,41 @@ export default function useChatComposerChrome({
     setText((prev) => prev + emoji);
   }, [setText]);
 
+  /** До анимации клавиатуры — панель растёт вверх, контент не гасится. */
+  const prepareEmojiPanelGifSearch = useCallback(() => {
+    emojiPanelGifSearchFocusedShared.value = true;
+    emojiContentOpacityShared.value = 1;
+    skipEmojiPanelCloseAnimationRef.current = true;
+    cancelAnimation(emojiPanelHeightShared);
+    const openKb = Math.max(0, -keyboardHeightLib.value);
+    emojiPanelHeightShared.value = EMOJI_GIF_EXPANDED_VISIBLE_H + openKb;
+  }, [keyboardHeightLib]);
+
+  /** Выход с вкладки GIF → эмодзи: всегда полный слот kbH, клавиатуру гасим. */
+  const exitGifTabLayout = useCallback(() => {
+    emojiPanelGifSearchFocusedShared.value = false;
+    if (!showEmojiPicker) return;
+    Keyboard.dismiss();
+    cancelAnimation(emojiPanelHeightShared);
+    const kbH = storedKeyboardHeightShared.value;
+    emojiPanelHeightShared.value = withTiming(kbH, {
+      duration: 280,
+      easing: Easing.out(Easing.cubic) });
+  }, [showEmojiPicker]);
+
+  const releaseEmojiPanelGifSearch = useCallback(() => {
+    emojiPanelGifSearchFocusedShared.value = false;
+    if (!showEmojiPicker) return;
+    Keyboard.dismiss();
+    cancelAnimation(emojiPanelHeightShared);
+    const kbH = storedKeyboardHeightShared.value;
+    const openKb = Math.max(0, -keyboardHeightLib.value);
+    const targetH = openKb > 50 ? kbH + openKb : kbH;
+    emojiPanelHeightShared.value = withTiming(targetH, {
+      duration: 280,
+      easing: Easing.out(Easing.cubic) });
+  }, [showEmojiPicker, keyboardHeightLib]);
+
   return {
     keyboardHeightLib,
     emojiPanelHeightShared,
@@ -190,5 +296,7 @@ export default function useChatComposerChrome({
     collapseEmojiForKeyboard,
     toggleEmojiPicker,
     insertEmoji,
-  };
+    prepareEmojiPanelGifSearch,
+    releaseEmojiPanelGifSearch,
+    exitGifTabLayout };
 }

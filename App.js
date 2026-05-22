@@ -2,6 +2,7 @@ import 'react-native-get-random-values';
 import { ready as libsodiumReady } from 'react-native-libsodium';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, Linking, AppState } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -16,8 +17,7 @@ import { V } from './src/theme';
 import {
   VAULT_PENDING_INVITE_KEY,
   parsePendingInvite,
-  serializePendingInvite,
-} from './src/utils/inviteRedeem';
+  serializePendingInvite } from './src/utils/inviteRedeem';
 import { registerPushToken } from './src/lib/notifications';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { RootNavigationTree } from './src/navigation/RootNavigationTree';
@@ -46,8 +46,7 @@ function AppNavigationRoot() {
     profileStatus,
     profileHandle,
     inviteCheckDone,
-    passwordRecoveryPending,
-  } = useAuthGate();
+    passwordRecoveryPending } = useAuthGate();
 
   useEffect(() => {
     const uid = session?.user?.id;
@@ -60,6 +59,12 @@ function AppNavigationRoot() {
     pushTokenRegisteredForUserRef.current = uid;
     registerPushToken(uid).catch(() => {});
   }, [session?.user?.id, profileHandle]);
+
+  useEffect(() => {
+    if (bootstrapped) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [bootstrapped]);
 
   if (!bootstrapped) {
     return <BootstrapSplash />;
@@ -141,8 +146,7 @@ function PermissionBanner() {
         paddingHorizontal: 12,
         backgroundColor: V.bgSurface,
         borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: V.border,
-      }}
+        borderBottomColor: V.border }}
     >
       <Text style={{ color: V.textSecondary, fontSize: 12, fontWeight: '400' }}>{message}</Text>
     </Pressable>
@@ -150,6 +154,7 @@ function PermissionBanner() {
 }
 
 export default function App() {
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -169,7 +174,7 @@ export default function App() {
           serializePendingInvite(VAULT_DEEPLINK_PENDING_EMAIL, code)
         );
       } catch (e) {
-        console.warn('[Vault] initial invite URL:', e?.message || e);
+        if (__DEV__) console.warn('[Vault] initial invite URL:', e?.message || e);
       }
     })();
     return () => {
@@ -179,18 +184,23 @@ export default function App() {
 
   useEffect(() => {
     libsodiumReady
-      .then(() => console.log('[Vault] libsodium ready'))
+      .then(() => {
+        if (__DEV__) console.log('[Vault] libsodium ready');
+      })
       .catch((e) => console.error('[Vault] libsodium init failed:', e));
   }, []);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'background') {
-        cleanupCache().catch((e) => console.warn('[Vault] cleanupCache:', e?.message || e));
+        cleanupCache().catch((e) => {
+          if (__DEV__) console.warn('[Vault] cleanupCache:', e?.message || e);
+        });
       }
     });
     return () => sub.remove();
   }, []);
+
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

@@ -13,7 +13,7 @@
         "APP_VARIANT": "development",
         "EXPO_PUBLIC_SUPABASE_URL": "https://nqssqplizwsukowggzxd.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_-4i09Wf62DwN4tx_XvrdxA_RhsG7X-q",
-        "EXPO_PUBLIC_ARIA_API_URL": "http://192.168.1.101:8000"
+        "EXPO_PUBLIC_ARIA_API_URL": "http://192.168.1.100:8001"
       }
     },
     "production": {

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { Audio, type AVPlaybackStatus } from 'expo-av';
 import { Play, Pause } from '../../icons/lucideIcons';
 
+
 const ACCENT = '#5A9E9A';
 const ACCENT_DIM = 'rgba(90,158,154,0.3)';
 const TIMER_COLOR = 'rgba(255,255,255,0.5)';
@@ -133,9 +134,7 @@ export default function AudioMessage({ uri, waveformData }: AudioMessageProps) {
                 {
                   height: Math.min(WAVE_H, Math.max(4, h)),
                   marginRight: i === bars.length - 1 ? 0 : BAR_GAP,
-                  backgroundColor: i < playedCount ? ACCENT : ACCENT_DIM,
-                },
-              ]}
+                  backgroundColor: i < playedCount ? ACCENT : ACCENT_DIM }]}
             />
           ))}
         </View>
@@ -156,8 +155,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.05)',
     paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
+    paddingHorizontal: 12 },
   playHit: {
     width: 36,
     height: 36,
@@ -165,22 +163,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 4,
     borderRadius: 18,
-    backgroundColor: 'rgba(90,158,154,0.15)',
-  },
+    backgroundColor: 'rgba(90,158,154,0.15)' },
   waveWrap: {
     flex: 1,
     minWidth: 0,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   waveRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    height: WAVE_H,
-  },
+    height: WAVE_H },
   bar: {
     width: BAR_W,
-    borderRadius: BAR_RADIUS,
-  },
+    borderRadius: BAR_RADIUS },
   timer: {
     marginLeft: 8,
     minWidth: 36,
@@ -188,6 +182,5 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: TIMER_COLOR,
     textAlign: 'right',
-    fontVariant: Platform.OS === 'ios' ? ['tabular-nums'] : undefined,
-  },
-});
+    fontVariant: Platform.OS === 'ios' ? ['tabular-nums'] : undefined
+  } });

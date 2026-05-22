@@ -55,8 +55,8 @@ module.exports = function appConfig() {
     const androidForDev = { ...android, package: 'com.vault.messenger.dev' };
     delete androidForDev.googleServicesFile;
 
-    return withTabletSupport({
-      expo: {
+    return {
+      expo: withTabletSupport({
         ...base,
         name: 'Vault (разработка)',
         android: androidForDev,
@@ -64,17 +64,17 @@ module.exports = function appConfig() {
           ...ios,
           bundleIdentifier: 'com.vault.messenger.dev',
         },
-      },
-    });
+      }),
+    };
   }
 
-  return withTabletSupport({
-    expo: {
+  return {
+    expo: withTabletSupport({
       ...base,
       ios: {
         ...ios,
         bundleIdentifier: ios.bundleIdentifier ?? 'com.vault.messenger',
       },
-    },
-  });
+    }),
+  };
 };

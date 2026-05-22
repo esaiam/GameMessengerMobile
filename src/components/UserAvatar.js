@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Image, TouchableOpacity } from 'react-native';
 import tw from 'twrnc';
 
+
 const BG = '#1A2E2E';
 const FG = '#5A9E9A';
 
@@ -31,8 +32,7 @@ export function UserAvatar({ name, uri, size = 56, onPress, style }) {
       style={[
         tw`items-center justify-center`,
         { width: size, height: size, borderRadius: size / 2, backgroundColor: BG },
-        style,
-      ]}
+        style]}
     >
       <Text style={{ color: FG, fontSize, fontWeight: '500' }}>{getInitials(name)}</Text>
     </View>

@@ -1,10 +1,33 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Image } from 'react-native';
+import {
+  getChatWallpaperEnabled,
+  subscribeProfileSettings } from '../../lib/profileSettings';
 
 /** Фон чата: полный экран (cover), затемняющий слой поверх обоев */
 const CHAT_ROOM_WALLPAPER = require('../../../assets/chat-room-wallpaper.jpg');
 
 export default function ChatRoomWallpaper() {
+  const [enabled, setEnabled] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getChatWallpaperEnabled().then((v) => {
+      if (!cancelled) setEnabled(v);
+    });
+    const unsub = subscribeProfileSettings(() => {
+      getChatWallpaperEnabled().then((v) => {
+        if (!cancelled) setEnabled(v);
+      });
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
+
+  if (!enabled) return null;
+
   return (
     <>
       <Image
@@ -18,8 +41,7 @@ export default function ChatRoomWallpaper() {
           bottom: 0,
           width: '100%',
           height: '100%',
-          zIndex: 0,
-        }}
+          zIndex: 0 }}
         resizeMode="cover"
       />
       <View
@@ -31,8 +53,7 @@ export default function ChatRoomWallpaper() {
           right: 0,
           bottom: 0,
           zIndex: 0,
-          backgroundColor: 'rgba(0,0,0,0.65)',
-        }}
+          backgroundColor: 'rgba(0,0,0,0.65)' }}
       />
     </>
   );

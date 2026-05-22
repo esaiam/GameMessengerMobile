@@ -27,8 +27,7 @@ export default function useMessageRowAnimations(messages) {
       return new Promise((resolve) => {
         Animated.parallel([
           Animated.timing(opacity, { toValue: 0, duration, useNativeDriver: true }),
-          Animated.timing(scale, { toValue: toScale, duration, useNativeDriver: true }),
-        ]).start(({ finished }) => resolve(!!finished));
+          Animated.timing(scale, { toValue: toScale, duration, useNativeDriver: true })]).start(({ finished }) => resolve(!!finished));
       });
     },
     [ensureMessageAnims],

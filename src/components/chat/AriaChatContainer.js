@@ -15,8 +15,7 @@ export function AriaChatContainer({
   sendToAria,
   listPaddingTop,
   chatRoomHeader,
-  onTopOverlayHeight,
-}) {
+  onTopOverlayHeight }) {
   return (
     <Chat
       roomId={roomId}

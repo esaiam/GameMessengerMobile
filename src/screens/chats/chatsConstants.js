@@ -1,7 +1,11 @@
 import { ARIA_CONTACT, ARIA_ROOM_ID } from '../../lib/aria';
 
-/** Интервал опроса списка комнат на вкладке «Чаты» (экран в фокусе и приложение active). */
-export const CHATS_LIST_POLL_MS = 20000;
+/**
+ * Интервал фонового опроса списка комнат.
+ * Realtime (postgres_changes) покрывает новые сообщения мгновенно.
+ * Polling нужен только как fallback (reconnect, gap sync).
+ */
+export const CHATS_LIST_POLL_MS = 60000;
 
 /** Строка Aria в списке чатов (не из `rooms`). */
 export const ARIA_CHAT_LIST_ITEM = {
@@ -13,6 +17,4 @@ export const ARIA_CHAT_LIST_ITEM = {
     id: 'aria-chats-preview',
     text: 'Привет. Я здесь.',
     message_type: 'text',
-    created_at: null,
-  },
-};
+    created_at: null } };

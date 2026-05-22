@@ -11,8 +11,10 @@
     "video:fix-one": "node scripts/process-chat-videos.mjs --url",
     "video:fix-latest": "node scripts/process-chat-videos.mjs --latest 20",
     "verify:env": "node scripts/verify-env-consistency.mjs",
+    "db:migrate:apply": "powershell -ExecutionPolicy Bypass -File scripts/apply-supabase-migrations.ps1",
     "knockout-compass": "node scripts/knockout-compass-bg.mjs",
-    "tint-compass": "node scripts/tint-compass-to-board.mjs"
+    "tint-compass": "node scripts/tint-compass-to-board.mjs",
+    "postinstall": "node scripts/patch-libsodium-windows.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.1.0",
@@ -20,7 +22,6 @@
     "@react-navigation/native": "^7.2.2",
     "@react-navigation/native-stack": "^7.14.10",
     "@shopify/flash-list": "^2.3.1",
-    "@shopify/react-native-skia": "^2.4.14",
     "@supabase/supabase-js": "^2.49.4",
     "babel-preset-expo": "~54.0.10",
     "crypto-js": "^4.2.0",
@@ -40,6 +41,7 @@
     "expo-location": "~19.0.8",
     "expo-notifications": "~0.32.17",
     "expo-secure-store": "~15.0.8",
+    "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-video": "~3.0.16",
     "expo-video-thumbnails": "~10.0.8",

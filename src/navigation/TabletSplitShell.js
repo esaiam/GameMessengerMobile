@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { NavigationContext } from '@react-navigation/native';
 import { V } from '../theme';
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
@@ -23,8 +23,7 @@ function DetailBackground() {
 const SCREEN_MAP = {
   Room: GameScreen,
   ChatRoom: ChatRoomScreen,
-  ContactProfile: ContactProfileScreen,
-};
+  ContactProfile: ContactProfileScreen };
 
 /**
  * Fake navigation для экранов в detail-панели.
@@ -55,8 +54,7 @@ function useFakeNavigation(pushDetail, popDetail) {
       getId: () => 'split-detail',
       reset: () => {},
       replace: () => {},
-      emit: () => ({ defaultPrevented: false }),
-    }),
+      emit: () => ({ defaultPrevented: false }) }),
     [pushDetail, popDetail]
   );
 }
@@ -66,13 +64,14 @@ function useFakeNavigation(pushDetail, popDetail) {
  * Читает currentDetail из SplitDetailContext и рендерит соответствующий экран.
  * Поддерживает мини-стек: Room → ContactProfile → назад → Room.
  */
-function DetailPanel() {
+function DetailPanel({ detailStyle }) {
   const { currentDetail, pushDetail, popDetail } = useSplitDetail();
   const fakeNavigation = useFakeNavigation(pushDetail, popDetail);
+  const panelStyle = detailStyle ? [styles.detail, detailStyle] : styles.detail;
 
   if (!currentDetail) {
     return (
-      <View style={[styles.detail, styles.detailCenter]}>
+      <View style={[panelStyle, styles.detailCenter]}>
         <DetailBackground />
         <Text style={styles.placeholder}>Выберите чат</Text>
       </View>
@@ -87,11 +86,10 @@ function DetailPanel() {
   const fakeRoute = {
     key: screenKey,
     name: currentDetail.type,
-    params: currentDetail.params,
-  };
+    params: currentDetail.params };
 
   return (
-    <View style={styles.detail}>
+    <View style={panelStyle}>
       <NavigationContext.Provider value={fakeNavigation}>
         <Screen
           key={screenKey}
@@ -107,7 +105,7 @@ function DetailPanel() {
  * Структурная оболочка split-режима.
  *
  * На телефоне (width < SPLIT_BREAKPOINT): children как есть — ноль изменений.
- * На планшете: [Master flex:1 | Detail flex:2].
+ * На планшете: [Master | Detail]. В портрете — 45% / 55%, в альбоме — 1:2.
  *
  * Предоставляет SplitDetailContext вниз по дереву.
  * ChatsScreen и ContactsScreen читают его, чтобы открывать экраны
@@ -115,6 +113,8 @@ function DetailPanel() {
  */
 export function TabletSplitShell({ children }) {
   const isSplit = useIsSplitLayout();
+  const { height, width: windowW } = useWindowDimensions();
+  const isTabletPortraitSplit = isSplit && height > windowW;
 
   // Управляем стеком detail-панели здесь, чтобы можно было передать в контекст
   const [stack, setStack] = useState([]);
@@ -154,8 +154,10 @@ export function TabletSplitShell({ children }) {
   return (
     <SplitDetailContext.Provider value={contextValue}>
       <View style={styles.root}>
-        <View style={styles.master}>{children}</View>
-        <DetailPanel />
+        <View style={[styles.master, isTabletPortraitSplit && styles.masterPortrait, { }]}>
+          {children}
+        </View>
+        <DetailPanel detailStyle={isTabletPortraitSplit ? styles.detailPortrait : null} />
       </View>
     </SplitDetailContext.Provider>
   );
@@ -165,31 +167,32 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: V.bgApp,
-  },
+    backgroundColor: V.bgApp },
   master: {
     flex: 1,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: V.border,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
+  masterPortrait: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: '45%',
+    maxWidth: '45%' },
   detail: {
     flex: 2,
     backgroundColor: V.bgApp,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
+  detailPortrait: {
+    flex: 1 },
   detailCenter: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   ring: {
     position: 'absolute',
     borderWidth: 1,
-    borderColor: V.accentSage,
-  },
+    borderColor: V.accentSage },
   placeholder: {
     color: V.textGhost,
     fontSize: 15,
-    fontWeight: '400',
-  },
-});
+    fontWeight: '400'
+  } });

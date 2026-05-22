@@ -13,8 +13,7 @@ export default function ChatListFooter({
   selectionMode,
   selectedCount,
   onExitSelection,
-  onBatchDeleteForMe,
-}) {
+  onBatchDeleteForMe }) {
   const needsTopSpacer =
     chatRoomHeader != null && typeof listPaddingTop === 'number' && listPaddingTop > 0;
   const showLegacySelectionBar = selectionMode && chatRoomHeader == null;
@@ -26,8 +25,7 @@ export default function ChatListFooter({
         <View
           style={[
             tw`flex-row items-center justify-between px-4 py-2.5 mb-1`,
-            { backgroundColor: V.bgSurface, borderBottomWidth: 0.5, borderBottomColor: V.border },
-          ]}
+            { backgroundColor: V.bgSurface, borderBottomWidth: 0.5, borderBottomColor: V.border }]}
         >
           <TouchableOpacity onPress={onExitSelection}>
             <Text style={[tw`text-[14px]`, { color: V.accentSage }]}>Отмена</Text>

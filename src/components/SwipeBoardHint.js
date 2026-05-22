@@ -36,26 +36,20 @@ export default function SwipeBoardHint({ visible, boardWidth = W, boardHeight, o
           Animated.timing(opacity, {
             toValue: 0.92,
             duration: 180,
-            useNativeDriver: true,
-          }),
+            useNativeDriver: true }),
           Animated.timing(tx, {
             toValue: startX,
             duration: 0,
-            useNativeDriver: true,
-          }),
-        ]),
+            useNativeDriver: true })]),
         Animated.timing(tx, {
           toValue: endX,
           duration: dur,
-          useNativeDriver: true,
-        }),
+          useNativeDriver: true }),
         Animated.timing(opacity, {
           toValue: 0,
           duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.delay(350),
-      ]);
+          useNativeDriver: true }),
+        Animated.delay(350)]);
 
     const master = Animated.sequence([oneCycle(), oneCycle(), oneCycle()]);
     masterRef.current = master;
@@ -75,8 +69,7 @@ export default function SwipeBoardHint({ visible, boardWidth = W, boardHeight, o
       pointerEvents="none"
       style={[
         StyleSheet.absoluteFill,
-        { width: boardWidth, height: boardHeight },
-      ]}
+        { width: boardWidth, height: boardHeight }]}
     >
       <Animated.View
         style={{
@@ -89,8 +82,7 @@ export default function SwipeBoardHint({ visible, boardWidth = W, boardHeight, o
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.35,
           shadowRadius: 3,
-          elevation: 4,
-        }}
+          elevation: 4 }}
       >
         <Hand size={52} color="#FFFEF5" strokeWidth={1.8} />
       </Animated.View>

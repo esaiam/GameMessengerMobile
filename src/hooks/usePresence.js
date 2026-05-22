@@ -15,8 +15,7 @@ export function usePresence({ roomId, nickname, targetName, skip }) {
     }
 
     const ch = supabase.channel(`presence-room-${roomId}`, {
-      config: { presence: { key: nickname } },
-    });
+      config: { presence: { key: nickname } } });
 
     const recompute = () => {
       const st = typeof ch.presenceState === 'function' ? ch.presenceState() : {};

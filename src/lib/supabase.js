@@ -36,12 +36,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storageKey: VAULT_AUTH_KEY,
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false,
-  },
+    detectSessionInUrl: false },
   realtime: {
-    params: { eventsPerSecond: 10 },
-  },
-});
+    params: { eventsPerSecond: 10 } } });
 
 if (__DEV__ && /api\.esaiam\.ru/i.test(SUPABASE_URL)) {
   console.warn(
@@ -56,8 +53,7 @@ if (__DEV__) {
   const restUrl = `${SUPABASE_URL}/rest/v1/profiles?select=id&limit=1`;
   const hdr = {
     apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  };
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
   console.log('[Vault][dev] SUPABASE_URL =', SUPABASE_URL);
 
   fetch(healthUrl, { method: 'GET', headers: hdr })

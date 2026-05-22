@@ -3,8 +3,7 @@ import { VAULT_AUTH_KEY } from './vaultAuthStorageKey';
 
 const LEGACY_AUTH_KEYS = [
   'sb-api-auth-token',
-  'sb-nqssqplizwsukowggzxd-auth-token',
-];
+  'sb-nqssqplizwsukowggzxd-auth-token'];
 
 /**
  * Переносит JSON сессии из старых ключей @supabase/supabase-js в VAULT_AUTH_KEY до загрузки клиента.
@@ -24,6 +23,6 @@ export async function runAuthStorageMigration() {
       return;
     }
   } catch (e) {
-    console.warn('[Vault] auth storage migration:', e?.message || e);
+    if (__DEV__) console.warn('[Vault] auth storage migration:', e?.message || e);
   }
 }

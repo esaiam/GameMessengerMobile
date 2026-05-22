@@ -17,8 +17,7 @@ function formatDurSec(totalSec: number): string {
 
 function WaveBars({
   heights,
-  progress,
-}: {
+  progress }: {
   heights: readonly number[];
   progress: number;
 }) {
@@ -37,8 +36,7 @@ function WaveBars({
               height: Math.min(WAVE_MAX_H, Math.max(3, h * 0.45)),
               marginRight: i === n - 1 ? 0 : BAR_GAP,
               borderRadius: 2,
-              backgroundColor: i < playedEnd ? '#FFFFFF' : WAVE_UNPLAYED,
-            }}
+              backgroundColor: i < playedEnd ? '#FFFFFF' : WAVE_UNPLAYED }}
           />
         ))}
       </View>
@@ -72,8 +70,7 @@ export default function VoiceMessagePlayer({
   duration,
   idleDurationSec,
   onPlay,
-  isRecordingVoice,
-}: VoiceMessagePlayerProps) {
+  isRecordingVoice }: VoiceMessagePlayerProps) {
   const onPress = useCallback(() => {
     if (isRecordingVoice) return;
     onPlay(resolvedUri, messageId);
@@ -104,8 +101,7 @@ export default function VoiceMessagePlayer({
               borderTopColor: 'transparent',
               borderBottomColor: 'transparent',
               borderLeftColor: '#FFFFFF',
-              marginLeft: 3,
-            }}
+              marginLeft: 3 }}
           />
         )}
       </TouchableOpacity>
@@ -124,8 +120,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: VOICE_BUBBLE_WIDTH,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   playHit: {
     width: 44,
     height: 44,
@@ -133,30 +128,25 @@ const styles = StyleSheet.create({
     marginRight: 12,
     backgroundColor: V.accentSage,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   rightCol: {
     flex: 1,
     flexDirection: 'column',
     justifyContent: 'center',
-    minWidth: 0,
-  },
+    minWidth: 0 },
   waveWrap: {
     height: WAVE_MAX_H,
     justifyContent: 'center',
     minWidth: 0,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   waveRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: WAVE_MAX_H,
-  },
+    height: WAVE_MAX_H },
   timer: {
     marginTop: 1,
     fontSize: 12,
     fontWeight: '400',
     color: 'rgba(255,255,255,0.5)',
-    fontVariant: Platform.OS === 'ios' ? ['tabular-nums'] : undefined,
-  },
-});
+    fontVariant: Platform.OS === 'ios' ? ['tabular-nums'] : undefined
+  } });

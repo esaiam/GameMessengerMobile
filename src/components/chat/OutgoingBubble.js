@@ -7,33 +7,27 @@ const BUBBLE_EDGE_SOFT = 'rgba(110, 195, 185, 0.07)';
 
 const outgoingBubbleStyles = StyleSheet.create({
   outer: {
-    alignSelf: 'flex-end',
-  },
+    alignSelf: 'flex-end' },
   inner: {
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth * 1.5,
-    borderColor: BUBBLE_EDGE_SOFT,
-  },
+    borderColor: BUBBLE_EDGE_SOFT },
   gloss: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.04)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.04)' },
   shade: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     height: '38%',
-    backgroundColor: 'rgba(0,0,0,0.03)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.03)' },
   pressable: {
     minWidth: 60,
     paddingHorizontal: 10,
     paddingVertical: 8,
     backgroundColor: 'transparent',
-    zIndex: 2,
-  },
-});
+    zIndex: 2 } });
 
 function OutgoingBubble({
   message,
@@ -44,8 +38,7 @@ function OutgoingBubble({
   selectionMode,
   onPress,
   onLongPress,
-  children,
-}) {
+  children }) {
   const hasHandlers = !!onPress || !!onLongPress;
   return (
     <View
@@ -66,8 +59,7 @@ function OutgoingBubble({
               outgoingBubbleStyles.pressable,
               { opacity: pressed && !selectionMode ? 0.88 : 1 },
               isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
-              isSelected && { borderWidth: 2, borderColor: V.accentSage },
-            ]}
+              isSelected && { borderWidth: 2, borderColor: V.accentSage }]}
           >
             {children}
           </Pressable>
@@ -76,8 +68,7 @@ function OutgoingBubble({
             style={[
               outgoingBubbleStyles.pressable,
               isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
-              isSelected && { borderWidth: 2, borderColor: V.accentSage },
-            ]}
+              isSelected && { borderWidth: 2, borderColor: V.accentSage }]}
           >
             {children}
           </View>

@@ -15,7 +15,9 @@ export default function ChatMessageContextMenuHost({
   selectedMessage,
   onReplyToMessage,
   onRequestDeleteConfirm,
-}) {
+  onOpenImage }) {
+  const canOpenImage =
+    selectedMessage?.message_type === 'image' && !!selectedMessage?.media_url;
   if (!uiReady) return null;
 
   return (
@@ -26,6 +28,13 @@ export default function ChatMessageContextMenuHost({
       onReply={() => {
         if (selectedMessage) onReplyToMessage(selectedMessage);
       }}
+      onOpen={
+        canOpenImage
+          ? () => {
+              onOpenImage?.(selectedMessage.media_url);
+            }
+          : undefined
+      }
       onCopy={async () => {
         if (!selectedMessage) return;
         try {

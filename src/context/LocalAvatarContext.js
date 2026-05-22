@@ -80,8 +80,7 @@ export function LocalAvatarProvider({ children }) {
       loading,
       refreshAvatar,
       savePickedUri,
-      removeAvatar,
-    }),
+      removeAvatar }),
     [avatarUri, loading, refreshAvatar, savePickedUri, removeAvatar]
   );
 

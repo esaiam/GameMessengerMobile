@@ -6,9 +6,7 @@ import {
   TouchableOpacity,
   Platform,
   Animated,
-  ScrollView,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated from 'react-native-reanimated';
 import tw from 'twrnc';
@@ -20,10 +18,10 @@ import {
   Paperclip,
   Smile,
   KeyboardIcon,
-  Sparkles,
-} from '../../icons/lucideIcons';
+  Sparkles } from '../../icons/lucideIcons';
 import AiRewritePanel from './AiRewritePanel';
 import InlineMediaSearchPanel from './InlineMediaSearchPanel';
+import EmojiPickerPanel from './EmojiPickerPanel';
 import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import {
   REPLY_TARGET_PREVIEW_H,
@@ -35,9 +33,7 @@ import {
   INPUT_BAR_FROST_TINT_OPACITY,
   MIC_BUTTON_SIZE,
   MIC_INNER,
-  ON_SAGE_GLYPH,
-  EMOJI_SET,
-} from './chatComposerConstants';
+  ON_SAGE_GLYPH } from './chatComposerConstants';
 
 /**
  * Нижний блок чата: reply-плашка, панель эмодзи, капсула ввода (blur), VoiceRecorder.
@@ -99,7 +95,19 @@ export default function ChatComposer({
   gifInlineHasMore = false,
   onGifInlineSelect,
   onGifInlineLoadMore,
-}) {
+  /** Панель эмодзи: GIF-поиск */
+  emojiPanelGifQuery = '',
+  onEmojiPanelGifQueryChange,
+  emojiPanelGifLoading = false,
+  trendingGifs = [],
+  emojiPanelGifError = null,
+  emojiPanelGifResults = [],
+  emojiPanelGifHasMore = false,
+  onEmojiPanelGifSelect,
+  onEmojiPanelGifLoadMore,
+  onEmojiPanelGifSearchFocus,
+  onEmojiPanelGifSearchBlur,
+  onEmojiPanelGifTabExit }) {
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   return (
@@ -144,9 +152,7 @@ export default function ChatComposer({
                   height: REPLY_TARGET_PREVIEW_H,
                   backgroundColor: V.bgSurface,
                   borderTopWidth: 0.5,
-                  borderTopColor: V.border,
-                },
-              ]}
+                  borderTopColor: V.border}]}
             >
               <View style={[tw`flex-1 pl-2`, { borderLeftWidth: 2, borderLeftColor: V.accentSage }]}>
                 <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]} numberOfLines={1}>
@@ -172,8 +178,7 @@ export default function ChatComposer({
             paddingBottom: Math.max(
               insets.bottom,
               Math.max(insets.bottom, 10) + TAB_BAR_LAYOUT.floatBottom - 8
-            ),
-          }}
+            ) }}
         >
         <View
           ref={capsuleWrapperRef}
@@ -185,8 +190,7 @@ export default function ChatComposer({
             borderColor: 'transparent',
             overflow: 'visible',
             zIndex: 2,
-            elevation: 4,
-          }}
+            elevation: 4 }}
         >
           <SafeBlurView
             intensity={Platform.OS === 'ios' ? INPUT_BAR_BLUR_INTENSITY_IOS : INPUT_BAR_BLUR_INTENSITY_ANDROID}
@@ -201,9 +205,8 @@ export default function ChatComposer({
                 borderColor: V.border,
                 overflow: 'hidden',
                 paddingLeft: TAB_BAR_LAYOUT.rowPaddingH,
-                paddingRight: 0,
-              },
-            ]}
+                paddingRight: 0
+              }]}
           >
             <View
               pointerEvents="none"
@@ -211,9 +214,7 @@ export default function ChatComposer({
                 StyleSheet.absoluteFillObject,
                 {
                   backgroundColor: V.bgElevated,
-                  opacity: INPUT_BAR_FROST_TINT_OPACITY,
-                },
-              ]}
+                  opacity: INPUT_BAR_FROST_TINT_OPACITY }]}
             />
             <LinearGradient
               pointerEvents="none"
@@ -226,8 +227,7 @@ export default function ChatComposer({
                 left: 0,
                 right: 0,
                 height: 10,
-                opacity: 0.12,
-              }}
+                opacity: 0.12 }}
             />
             <LinearGradient
               pointerEvents="none"
@@ -240,8 +240,7 @@ export default function ChatComposer({
                 left: 0,
                 right: 0,
                 height: 12,
-                opacity: 0.1,
-              }}
+                opacity: 0.1 }}
             />
             <SafeBlurView
               pointerEvents="none"
@@ -256,9 +255,7 @@ export default function ChatComposer({
                   right: -3,
                   bottom: -3,
                   borderRadius: COMPOSER_CAPSULE_RADIUS,
-                  opacity: 0.32,
-                },
-              ]}
+                  opacity: 0.32 }]}
             />
             <View
               pointerEvents="none"
@@ -268,9 +265,7 @@ export default function ChatComposer({
                   borderRadius: COMPOSER_CAPSULE_RADIUS,
                   borderWidth: StyleSheet.hairlineWidth,
                   borderColor: V.textPrimary,
-                  opacity: 0.1,
-                },
-              ]}
+                  opacity: 0.1 }]}
             />
             {ariaUnavailable && ariaTextOnly ? (
               <View
@@ -279,15 +274,13 @@ export default function ChatComposer({
                   minHeight: COMPOSER_LAYOUT.innerHeight,
                   justifyContent: 'center',
                   paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-                  paddingHorizontal: 8,
-                }}
+                  paddingHorizontal: 8 }}
               >
                 <Text
                   style={[
                     tw`text-[14px] text-center`,
                     { color: V.textMuted, fontWeight: '400' },
-                    Platform.OS === 'android' ? { includeFontPadding: false } : null,
-                  ]}
+                    Platform.OS === 'android' ? { includeFontPadding: false } : null]}
                 >
                   Aria недоступна. Запусти сервер.
                 </Text>
@@ -300,8 +293,7 @@ export default function ChatComposer({
                     width: COMPOSER_LAYOUT.innerHeight,
                     height: COMPOSER_LAYOUT.innerHeight,
                     alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                    justifyContent: 'center' }}
                   hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
                 >
                   <Animated.View
@@ -310,11 +302,7 @@ export default function ChatComposer({
                         {
                           rotate: emojiWobbleRotate.interpolate({
                             inputRange: [-20, 20],
-                            outputRange: ['-20deg', '20deg'],
-                          }),
-                        },
-                      ],
-                    }}
+                            outputRange: ['-20deg', '20deg'] }) }] }}
                   >
                     {showEmojiPicker ? (
                       <KeyboardIcon size={INPUT_BAR_EMOJI_ICON} color={V.textSecondary} strokeWidth={1.5} />
@@ -334,8 +322,7 @@ export default function ChatComposer({
                       width: COMPOSER_LAYOUT.innerHeight,
                       height: COMPOSER_LAYOUT.innerHeight,
                       alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
+                      justifyContent: 'center' }}
                     hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
                     accessibilityLabel="ИИ-редактор"
                   >
@@ -352,9 +339,7 @@ export default function ChatComposer({
                       backgroundColor: 'transparent',
                       paddingVertical: Platform.OS === 'ios' ? 10 : 8,
                       paddingHorizontal: 6,
-                      minHeight: COMPOSER_LAYOUT.innerHeight,
-                    },
-                  ]}
+                      minHeight: COMPOSER_LAYOUT.innerHeight }]}
                   placeholder={
                     ephemeralSec
                       ? `Сгорит через ${ephemeralSec}с...`
@@ -381,8 +366,7 @@ export default function ChatComposer({
                       width: COMPOSER_LAYOUT.innerHeight - 2,
                       height: COMPOSER_LAYOUT.innerHeight,
                       alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
+                      justifyContent: 'center' }}
                     hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
                   >
                     <Paperclip size={INPUT_BAR_ICON - 2} color={V.textSecondary} strokeWidth={1.5} />
@@ -390,8 +374,7 @@ export default function ChatComposer({
                       <View
                         style={[
                           tw`absolute top-1 right-0.5 w-2 h-2 rounded-full`,
-                          { backgroundColor: V.accentGold },
-                        ]}
+                          {backgroundColor: V.accentGold}]}
                       />
                     )}
                   </TouchableOpacity>
@@ -407,8 +390,7 @@ export default function ChatComposer({
                       width: MIC_BUTTON_SIZE,
                       height: MIC_BUTTON_SIZE,
                       alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
+                      justifyContent: 'center' }}
                     accessibilityLabel="Отправить"
                   >
                     {/* Как VoiceRecorder: «гнездо» + sage-круг + светлый глиф */}
@@ -421,8 +403,7 @@ export default function ChatComposer({
                         justifyContent: 'center',
                         backgroundColor: 'rgba(13, 15, 20, 0.4)',
                         borderWidth: StyleSheet.hairlineWidth,
-                        borderColor: 'rgba(0, 0, 0, 0.45)',
-                      }}
+                        borderColor: 'rgba(0, 0, 0, 0.45)' }}
                     >
                       <View
                         style={{
@@ -439,8 +420,7 @@ export default function ChatComposer({
                           borderTopColor: 'rgba(0, 0, 0, 0.32)',
                           borderLeftColor: 'rgba(0, 0, 0, 0.24)',
                           borderBottomColor: 'rgba(255, 255, 255, 0.12)',
-                          borderRightColor: 'rgba(255, 255, 255, 0.07)',
-                        }}
+                          borderRightColor: 'rgba(255, 255, 255, 0.07)' }}
                       >
                         <Send size={18} color={ON_SAGE_GLYPH} strokeWidth={1.5} />
                       </View>
@@ -482,32 +462,25 @@ export default function ChatComposer({
               borderTopLeftRadius: COMPOSER_CAPSULE_RADIUS,
               borderTopRightRadius: COMPOSER_CAPSULE_RADIUS,
               zIndex: 0,
-              elevation: 0,
-            },
-          ]}
+              elevation: 0 }]}
         >
             <Reanimated.View style={[emojiContentAnimatedStyle, { flex: 1 }]}>
-              <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={tw`flex-row flex-wrap p-2`}
-                keyboardShouldPersistTaps="always"
-                showsVerticalScrollIndicator={false}
-              >
-                {EMOJI_SET.map((emoji, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    onPress={() => insertEmoji(emoji)}
-                    style={{
-                      width: '12.5%',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      paddingVertical: 6,
-                    }}
-                  >
-                    <Text style={tw`text-2xl`}>{emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <EmojiPickerPanel
+                insertEmoji={insertEmoji}
+                ariaTextOnly={ariaTextOnly}
+                gifQuery={emojiPanelGifQuery}
+                onGifQueryChange={onEmojiPanelGifQueryChange}
+                gifLoading={emojiPanelGifLoading}
+                gifError={emojiPanelGifError}
+                gifResults={emojiPanelGifResults}
+                gifHasMore={emojiPanelGifHasMore}
+                trendingGifs={trendingGifs}
+                onGifSelect={onEmojiPanelGifSelect}
+                onGifLoadMore={onEmojiPanelGifLoadMore}
+                onGifSearchFocus={onEmojiPanelGifSearchFocus}
+                onGifSearchBlur={onEmojiPanelGifSearchBlur}
+                onGifTabExit={onEmojiPanelGifTabExit}
+              />
             </Reanimated.View>
         </Reanimated.View>
       ) : null}

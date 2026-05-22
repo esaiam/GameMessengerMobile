@@ -52,6 +52,7 @@ export interface ChatMessageRow {
 export interface ChatFormattedMessageRow extends ChatMessageRow {
   _formattedTime: string;
   _dateLabel: string;
+  _dateKey: string;
   _showDate: boolean;
   _sameDay: boolean;
   _abovePlayerName: string | null;

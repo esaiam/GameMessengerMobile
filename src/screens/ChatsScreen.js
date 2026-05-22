@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   FlatList,
   Platform,
@@ -7,8 +8,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-} from 'react-native';
+  View } from 'react-native';
 import SafeBlurView from '../components/SafeBlurView';
 import tw from 'twrnc';
 import { ARIA_CONTACT, ARIA_ROOM_ID } from '../lib/aria';
@@ -23,10 +23,10 @@ import { clearPreviewCache } from './chats/chatsPreviewCache';
 import { filterChatsRows, buildChatsListData } from './chats/chatsListData';
 import {
   MESSENGER_HEADER_PADDING_HORIZONTAL,
-  useMessengerHeaderLayout,
-} from '../components/MessengerHeaderLayout';
+  useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import { useSplitDetail } from '../context/SplitDetailContext';
+import { isBlocked } from '../lib/blockedContacts';
 
 export default function ChatsScreen({ route, navigation }) {
   const nickname = useNicknameFromRoute(route);
@@ -55,19 +55,17 @@ export default function ChatsScreen({ route, navigation }) {
     iconOpacity,
     listTranslateY,
     setListViewportH,
-    setListContentH,
-  } = useChatsSearchReveal(q, searchFocused);
+    setListContentH } = useChatsSearchReveal(q, searchFocused);
 
   const filtered = useMemo(() => filterChatsRows(rows, q), [q, rows]);
 
   const listData = useMemo(() => buildChatsListData(q, filtered), [q, filtered]);
 
   const renderItem = useCallback(
-    ({ item, index }) => (
+    ({ item }) => (
       <ChatsListRow
         item={item}
-        isFirst={index === 0}
-        onPress={() => {
+        onPress={async () => {
           if (item.isAria) {
             const params = {
               roomId: ARIA_ROOM_ID,
@@ -75,8 +73,7 @@ export default function ChatsScreen({ route, navigation }) {
               contact: ARIA_CONTACT,
               nickname,
               title: ARIA_CONTACT.display_name,
-              peerName: ARIA_CONTACT.display_name,
-            };
+              peerName: ARIA_CONTACT.display_name };
             if (isSplit) {
               setDetailParams({ type: 'ChatRoom', params });
             } else {
@@ -84,13 +81,16 @@ export default function ChatsScreen({ route, navigation }) {
             }
             return;
           }
+          if (await isBlocked(nickname, item.contactName)) {
+            Alert.alert('Контакт заблокирован', 'Диалог скрыт из списка чатов.');
+            return;
+          }
           const params = {
             nickname,
             roomId: item.roomId,
             roomCode: item.roomCode,
             peerName: item.contactName,
-            title: item.contactName,
-          };
+            title: item.contactName };
           if (isSplit) {
             setDetailParams({ type: 'Room', params });
           } else {
@@ -112,9 +112,7 @@ export default function ChatsScreen({ route, navigation }) {
               backgroundColor: 'transparent',
               flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'space-between',
-            },
-          ]}
+              justifyContent: 'space-between' }]}
         >
           <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
             Vault
@@ -136,7 +134,7 @@ export default function ChatsScreen({ route, navigation }) {
           </Animated.View>
         </View>
 
-        <View style={[tw`flex-1`]}>
+        <View style={[tw`flex-1`, {}]}>
           <Animated.View
             pointerEvents={searchPointerEvents}
             style={[
@@ -148,9 +146,7 @@ export default function ChatsScreen({ route, navigation }) {
                 zIndex: 2,
                 elevation: 2,
                 opacity: searchOpacity,
-                transform: [{ translateY: searchTranslateY }],
-              },
-            ]}
+                transform: [{ translateY: searchTranslateY }] }]}
           >
             <View style={{ marginBottom: CHATS_SEARCH_BOTTOM_SPACING_PX }}>
                 <SafeBlurView
@@ -166,9 +162,8 @@ export default function ChatsScreen({ route, navigation }) {
                       paddingHorizontal: SEARCH_FIELD_LAYOUT.rowPaddingH,
                       borderWidth: StyleSheet.hairlineWidth,
                       borderColor: 'rgba(255,255,255,0.13)',
-                      backgroundColor: 'rgba(255,255,255,0.06)',
-                    },
-                  ]}
+                      backgroundColor: 'rgba(255,255,255,0.06)'
+                    }]}
                 >
                   <Search
                     size={14}
@@ -183,9 +178,8 @@ export default function ChatsScreen({ route, navigation }) {
                       {
                         color: V.textPrimary,
                         paddingVertical: 0,
-                        height: SEARCH_FIELD_H,
-                      },
-                    ]}
+                        height: SEARCH_FIELD_H
+                      }]}
                     placeholder="Поиск..."
                     placeholderTextColor={V.textMuted}
                     value={q}
@@ -216,9 +210,7 @@ export default function ChatsScreen({ route, navigation }) {
               tw`flex-1`,
               {
                 transform: [{ translateY: listTranslateY }],
-                paddingHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL,
-              },
-            ]}
+                paddingHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL }]}
             onLayout={(e) => setListViewportH(e.nativeEvent.layout.height)}
           >
             <FlatList
@@ -229,8 +221,7 @@ export default function ChatsScreen({ route, navigation }) {
               scrollEventThrottle={16}
               onContentSizeChange={(_w, h) => setListContentH(h)}
               contentContainerStyle={{
-                paddingTop: SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX,
-              }}
+                paddingTop: SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX }}
               ListEmptyComponent={
                 <View style={tw`py-10`}>
                   {q.trim().length > 0 ? (

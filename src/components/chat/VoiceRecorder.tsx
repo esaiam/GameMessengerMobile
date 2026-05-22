@@ -6,8 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
-  type ViewStyle,
-} from 'react-native';
+  type ViewStyle } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -18,8 +17,7 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import Svg, { Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import {
@@ -29,8 +27,7 @@ import {
   AudioModule,
   useAudioPlayer,
   useAudioPlayerStatus,
-  setIsAudioActiveAsync,
-} from 'expo-audio';
+  setIsAudioActiveAsync } from 'expo-audio';
 import { Mic, Lock, Unlock, SendHorizontal, Trash2, Pause, Play, Video as VideoIcon } from '../../icons/lucideIcons';
 import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import { setAudioModeAsync } from '../../utils/audioMode';
@@ -120,8 +117,7 @@ function WaveformSvg({
   bars,
   w,
   h = 28,
-  fill = V.accentSage,
-}: {
+  fill = V.accentSage }: {
   bars: number[];
   w: number;
   h?: number;
@@ -157,8 +153,7 @@ function VoiceRecorder({
   sendMediaMessage,
   onOpen,
   onVideoRecorded,
-  onVideoSendError,
-}: Props) {
+  onVideoSendError }: Props) {
   const [state, setState] = useState<RS>('IDLE');
   const [dur, setDur] = useState(0);
   const [amps, setAmps] = useState<number[]>([]);
@@ -188,8 +183,7 @@ function VoiceRecorder({
 
   const recorder = useAudioRecorder({
     ...RecordingPresets.HIGH_QUALITY,
-    isMeteringEnabled: true,
-  } as Parameters<typeof useAudioRecorder>[0]);
+    isMeteringEnabled: true } as Parameters<typeof useAudioRecorder>[0]);
   const recStatus = useAudioRecorderState(recorder, 100);
 
   // ── Reanimated shared values ────────────────────────────────────────────────
@@ -223,8 +217,7 @@ function VoiceRecorder({
     // Only morph when user toggles modes in IDLE (recording state forces mic anyway).
     modeMorphSV.value = withTiming(mediaMode === 'video' ? 1 : 0, {
       duration: 220,
-      easing: Easing.out(Easing.cubic),
-    });
+      easing: Easing.out(Easing.cubic) });
   }, [mediaMode, modeMorphSV]);
 
   // ── State machine ───────────────────────────────────────────────────────────
@@ -326,8 +319,7 @@ function VoiceRecorder({
     tySV,
     lockFallSV,
     lockLatchSV,
-    lockGesturesOffSV,
-  ]);
+    lockGesturesOffSV]);
 
   // ── Свечение по краю: узкий диапазон + дольше цикл (слабая пульсация) ─────────
   useEffect(() => {
@@ -377,8 +369,7 @@ function VoiceRecorder({
         playsInSilentMode: true,
         interruptionMode: 'doNotMix',
         allowsRecording: true,
-        shouldRouteThroughEarpiece: false,
-      });
+        shouldRouteThroughEarpiece: false });
       await recorder.prepareToRecordAsync();
       recorder.record();
       ampsRef.current = [];
@@ -427,8 +418,7 @@ function VoiceRecorder({
         playsInSilentMode: true,
         interruptionMode: 'mixWithOthers',
         allowsRecording: false,
-        shouldRouteThroughEarpiece: false,
-      });
+        shouldRouteThroughEarpiece: false });
       const uri = recorder.uri;
       if (uri) onSendAudio(uri, d, buildWaveform40FromAmps(caps, 0, 1));
     } catch (e) {
@@ -447,8 +437,7 @@ function VoiceRecorder({
         playsInSilentMode: true,
         interruptionMode: 'mixWithOthers',
         allowsRecording: false,
-        shouldRouteThroughEarpiece: false,
-      });
+        shouldRouteThroughEarpiece: false });
     } catch (e) {
       console.warn('[VoiceRecorder] doCancel:', e);
     }
@@ -464,8 +453,7 @@ function VoiceRecorder({
         playsInSilentMode: true,
         interruptionMode: 'mixWithOthers',
         allowsRecording: false,
-        shouldRouteThroughEarpiece: false,
-      });
+        shouldRouteThroughEarpiece: false });
       savedUriRef.current = recorder.uri;
     } catch (e) {
       console.warn('[VoiceRecorder] doPause:', e);
@@ -715,8 +703,7 @@ function VoiceRecorder({
     const tx = micDragSV.value * txSV.value;
     const s = pressSV.value * recordLiftSV.value;
     const out: ViewStyle = {
-      transform: [{ translateX: tx }, { scale: s }],
-    };
+      transform: [{ translateX: tx }, { scale: s }] };
     return out;
   });
 
@@ -729,12 +716,10 @@ function VoiceRecorder({
         shadowColor: V.accentSage,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.05 + t * 0.05,
-        shadowRadius: 2 + t * 2,
-      };
+        shadowRadius: 2 + t * 2 };
     }
     return {
-      elevation: 2 + t * 0.8,
-    };
+      elevation: 2 + t * 0.8 };
   });
 
   const lockAboveAnimStyle = useAnimatedStyle(() => {
@@ -742,8 +727,7 @@ function VoiceRecorder({
     const fall = lockFallSV.value;
     return {
       transform: [{ translateY: dy - LOCK_FLOAT_EXTRA + fall }],
-      opacity: Math.max(0.55, 1 - Math.abs(dy) / (LOCK_COMMIT_UP_PX * 1.35)),
-    };
+      opacity: Math.max(0.55, 1 - Math.abs(dy) / (LOCK_COMMIT_UP_PX * 1.35)) };
   });
 
   const lockLockFadeStyle = useAnimatedStyle(() => {
@@ -769,8 +753,7 @@ function VoiceRecorder({
     const sc = interpolate(t, [0, 1], [0.92, 1]);
     return {
       opacity: op,
-      transform: [{ perspective: 480 }, { rotateY: `${rot}deg` }, { scale: sc }],
-    } as ViewStyle;
+      transform: [{ perspective: 480 }, { rotateY: `${rot}deg` }, { scale: sc }] } as ViewStyle;
   });
 
   const micIconVideoAnimStyle = useAnimatedStyle(() => {
@@ -782,8 +765,7 @@ function VoiceRecorder({
     const sc = interpolate(t, [0, 1], [0.92, 1]);
     return {
       opacity: op,
-      transform: [{ perspective: 480 }, { rotateY: `${rot}deg` }, { scale: sc }],
-    } as ViewStyle;
+      transform: [{ perspective: 480 }, { rotateY: `${rot}deg` }, { scale: sc }] } as ViewStyle;
   });
 
   const onVoiceMountLayout = useCallback(
@@ -831,8 +813,7 @@ function VoiceRecorder({
             <View
               style={[
                 styles.micCircle,
-                isMicActive ? styles.micCircleRecording : styles.micCircleIdle,
-              ]}
+                isMicActive ? styles.micCircleRecording : styles.micCircleIdle]}
             >
               {/* Icon morph: Mic ↔ Video (only meaningful in IDLE) */}
               <View style={styles.micIconStack} pointerEvents="none">
@@ -943,7 +924,7 @@ function VoiceRecorder({
 
             {state === 'RECORDING' ? (
               <Text
-                style={[styles.hintText, cancelActive && styles.hintActive]}
+                style={[styles.hintText, cancelActive && styles.hintActive, { }]}
                 numberOfLines={1}
               >
                 {'← Slide to cancel'}
@@ -997,21 +978,17 @@ const styles = StyleSheet.create({
   /** Один контейнер на depth-ring: порядок сиблингов voiceMount → VideoRecorder → mic (видео) */
   voiceRecorderShell: {
     ...StyleSheet.absoluteFillObject,
-    pointerEvents: 'box-none',
-  },
+    pointerEvents: 'box-none' },
   /** Стабильный корень: на весь depth-ring, не перехватывает тапы вне детей */
   voiceMount: {
-    ...StyleSheet.absoluteFillObject,
-  },
+    ...StyleSheet.absoluteFillObject },
   /** Кнопка всегда после VideoRecorder — не прячется под его overlay; z только для видео */
   micAfterVideoLayer: {
     ...StyleSheet.absoluteFillObject,
-    pointerEvents: 'box-none',
-  },
+    pointerEvents: 'box-none' },
   micAfterVideoLayerOnTop: {
     zIndex: MIC_VIDEO_FRONT_Z,
-    elevation: MIC_VIDEO_FRONT_Z,
-  },
+    elevation: MIC_VIDEO_FRONT_Z },
   /** Правый край инпут-бара: margin-right 4px от DEPTH, вертикально по центру ряда */
   micPos: {
     position: 'absolute',
@@ -1022,18 +999,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
-    zIndex: 5,
-  },
+    zIndex: 5 },
   micPosOnTop: {
     zIndex: 50,
-    elevation: 50,
-  },
+    elevation: 50 },
   micAssembly: {
     width: MIC_OUTER,
     height: MIC_OUTER,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   /** Едва заметное свечение по краю (диск чуть больше inner, без «ореола») */
   micEdgeGlow: {
     position: 'absolute',
@@ -1042,8 +1016,7 @@ const styles = StyleSheet.create({
     borderRadius: EDGE_GLOW_SIZE / 2,
     backgroundColor: 'rgba(90,158,154,0.04)',
     borderWidth: 0,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   /** Внешнее кольцо-свечение (под размер MIC_OUTER) */
   micGlowRing: {
     position: 'absolute',
@@ -1052,8 +1025,7 @@ const styles = StyleSheet.create({
     borderRadius: MIC_OUTER / 2,
     borderWidth: 0,
     borderColor: 'transparent',
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   /** «Гнездо»: тёмное кольцо вокруг диска (без внешней тени — иначе кружок снова «выпирает») */
   micInsetWell: {
     width: MIC_OUTER,
@@ -1063,8 +1035,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(13, 15, 20, 0.4)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0, 0, 0, 0.45)',
-  },
+    borderColor: 'rgba(0, 0, 0, 0.45)' },
   micCircle: {
     width: MIC_INNER,
     height: MIC_INNER,
@@ -1072,8 +1043,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 0,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   micCircleIdle: {
     backgroundColor: V.accentSage,
     /** Вдавленная кнопка: тёмный верх/левый край, светлый низ/право (без внешнего «подъёма») */
@@ -1084,8 +1054,7 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(0, 0, 0, 0.32)',
     borderLeftColor: 'rgba(0, 0, 0, 0.24)',
     borderBottomColor: 'rgba(255, 255, 255, 0.12)',
-    borderRightColor: 'rgba(255, 255, 255, 0.07)',
-  },
+    borderRightColor: 'rgba(255, 255, 255, 0.07)' },
   micCircleRecording: {
     backgroundColor: V.accentSage,
     borderTopWidth: 1,
@@ -1095,19 +1064,16 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(0, 0, 0, 0.32)',
     borderLeftColor: 'rgba(0, 0, 0, 0.24)',
     borderBottomColor: 'rgba(255, 255, 255, 0.12)',
-    borderRightColor: 'rgba(255, 255, 255, 0.07)',
-  },
+    borderRightColor: 'rgba(255, 255, 255, 0.07)' },
   micIconStack: {
     width: MIC_ICON_SPEC,
     height: MIC_ICON_SPEC,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   micIconAbs: {
     position: 'absolute',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
 
   /** Active overlay: covers SafeBlurView area exactly */
   overlay: {
@@ -1124,8 +1090,7 @@ const styles = StyleSheet.create({
     minHeight: COMPOSER_LAYOUT.innerHeight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: V.border,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
 
   /** Lock / pause над микрофоном — центр по внешнему кольцу MIC_OUTER */
   lockAbove: {
@@ -1134,8 +1099,7 @@ const styles = StyleSheet.create({
     bottom: COMPOSER_LAYOUT.innerHeight + DEPTH * 2 + 8,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
-  },
+    zIndex: 10 },
   floatingIconCircle: {
     width: FLOAT_ICON_CIRCLE,
     height: FLOAT_ICON_CIRCLE,
@@ -1145,91 +1109,77 @@ const styles = StyleSheet.create({
     borderColor: V.border,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   lockAboveLocked: {
     transform: [{ translateY: -LOCK_FLOAT_EXTRA }],
-    zIndex: 30,
-  },
+    zIndex: 30 },
   lockIconPair: {
     width: 20,
     height: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   lockUnlockAbs: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   pauseAboveBtn: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Recording row content
   timerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingRight: 4,
-  },
+    paddingRight: 4 },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: V.dangerMuted,
-  },
+    backgroundColor: V.dangerMuted },
   timerText: {
     fontSize: 13,
     color: V.textPrimary,
     fontWeight: '500',
-    minWidth: 36,
-  },
+    minWidth: 36 },
   hintText: {
     flex: 1,
     fontSize: 11,
     color: V.textMuted,
     fontWeight: '400',
-    textAlign: 'center',
+    textAlign: 'center'
   },
   hintActive: {
-    color: V.dangerMuted,
+    color: V.dangerMuted
   },
   lockedRow: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 0,
-  },
+    minWidth: 0 },
   lockedCancelBtn: {
     width: COMPOSER_LAYOUT.innerHeight,
     height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   lockedRowSpacer: {
-    flex: 1,
-  },
+    flex: 1 },
   /** Reserves space in the overlay row for the absolutely-positioned mic button */
   micSpacer: {
     width: MIC_OUTER,
-    height: COMPOSER_LAYOUT.innerHeight,
-  },
+    height: COMPOSER_LAYOUT.innerHeight },
 
   // PAUSED state
   iconSlot: {
     width: 40,
     height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   trimStripOuter: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
     paddingVertical: 2,
-    paddingHorizontal: 2,
-  },
+    paddingHorizontal: 2 },
   trimStrip: {
     height: 46,
     borderRadius: 12,
@@ -1237,19 +1187,16 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: V.sageBorder,
     position: 'relative',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   trimWaveLayer: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   trimMaskSide: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    backgroundColor: V.btnPrimaryBg,
-  },
+    backgroundColor: V.btnPrimaryBg },
   trimHandle: {
     position: 'absolute',
     top: (46 - TRIM_HANDLE_H) / 2,
@@ -1259,21 +1206,18 @@ const styles = StyleSheet.create({
     backgroundColor: V.accentSage,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 4,
-  },
+    zIndex: 4 },
   trimHandleGrip: {
     width: 2,
     height: 10,
     borderRadius: 1,
-    backgroundColor: V.textPrimary,
-  },
+    backgroundColor: V.textPrimary },
   trimCenterPillWrap: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 3,
-    pointerEvents: 'box-none',
-  },
+    pointerEvents: 'box-none' },
   trimPillTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1283,23 +1227,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: V.bgElevated,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: V.border,
-  },
+    borderColor: V.border },
   trimPillTime: {
     fontSize: 11,
     fontWeight: '400',
-    color: V.textPrimary,
+    color: V.textPrimary
   },
   trimPillPlayOffset: {
-    marginLeft: 1,
-  },
+    marginLeft: 1 },
   sendSlot: {
     width: MIC_OUTER,
     height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });
 
 interface PausedPreviewBarProps {
   uri: string | null | undefined;
@@ -1369,8 +1309,7 @@ function PausedPreviewBar({ uri, bars, dur, onTrim, onCancel, onSend }: PausedPr
         playsInSilentMode: true,
         interruptionMode: Platform.OS === 'android' ? 'duckOthers' : 'mixWithOthers',
         allowsRecording: false,
-        shouldRouteThroughEarpiece: false,
-      });
+        shouldRouteThroughEarpiece: false });
     } catch {
       /* ignore */
     }

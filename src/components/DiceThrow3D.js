@@ -29,8 +29,7 @@ const DOTS = {
   3: [[-0.4, 0.4], [0, 0], [0.4, -0.4]],
   4: [[-0.4, -0.4], [-0.4, 0.4], [0.4, -0.4], [0.4, 0.4]],
   5: [[-0.4, -0.4], [-0.4, 0.4], [0, 0], [0.4, -0.4], [0.4, 0.4]],
-  6: [[-0.4, -0.4], [-0.4, 0], [-0.4, 0.4], [0.4, -0.4], [0.4, 0], [0.4, 0.4]],
-};
+  6: [[-0.4, -0.4], [-0.4, 0], [-0.4, 0.4], [0.4, -0.4], [0.4, 0], [0.4, 0.4]] };
 
 // Euler that brings target face value to +Z (toward the camera)
 // BoxGeometry material order: +X(3) -X(4) +Y(2) -Y(5) +Z(1) -Z(6)
@@ -40,8 +39,7 @@ const FACE_ROT = {
   3: [0, -Math.PI / 2, 0],
   4: [0, Math.PI / 2, 0],
   5: [-Math.PI / 2, 0, 0],
-  6: [Math.PI, 0, 0],
-};
+  6: [Math.PI, 0, 0] };
 
 // normal, up, value for each cube face
 const FACES = [
@@ -50,8 +48,7 @@ const FACES = [
   { n: [0, 1, 0],  u: [0, 0, -1], v: 2 },
   { n: [0, -1, 0], u: [0, 0, 1],  v: 5 },
   { n: [0, 0, 1],  u: [0, 1, 0],  v: 1 },
-  { n: [0, 0, -1], u: [0, 1, 0],  v: 6 },
-];
+  { n: [0, 0, -1], u: [0, 1, 0],  v: 6 }];
 
 // ─── Joint physics simulation (both dice + inter-die collision) ─
 const COL_DIST = DIE * 0.92; // min center-to-center before collision (slightly less than DIE for rounded corners)
@@ -319,11 +316,9 @@ export default function DiceThrow3D({ dice, startPos, endPos, boardWidth, boardH
         addEventListener() {},
         removeEventListener() {},
         clientWidth: gl.drawingBufferWidth,
-        clientHeight: gl.drawingBufferHeight,
-      },
+        clientHeight: gl.drawingBufferHeight },
       context: gl,
-      alpha: true,
-    });
+      alpha: true });
     renderer.setPixelRatio(1);
     renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
     renderer.setClearColor(0x000000, 0);

@@ -3,48 +3,32 @@ import React, {
   useEffect,
   useRef,
   useCallback,
-  useMemo,
-} from 'react';
+  useMemo } from 'react';
 import {
   View,
-  Text,
-  Platform,
-  Keyboard,
-  FlatList,
   useWindowDimensions,
   Alert,
-  TouchableOpacity,
-} from 'react-native';
+  TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ARIA_CONTACT } from '../lib/aria';
 import { deriveKey } from '../utils/crypto';
 import { getOrCreateKeyPair } from '../utils/VaultKeyStore';
 import { publishMyPublicKey } from '../utils/VaultKeyServer';
 import { useVoicePlayer } from '../hooks/useVoicePlayer';
 import ChatRoomHeader, { ICON_SELECTION_ACTION } from './ChatRoomHeader';
-import ChatMessageContextMenuHost from './chat/ChatMessageContextMenuHost';
+import ChatOverlays from './chat/ChatOverlays';
 import { EphemeralClockContext } from './chat/ephemeralClockContext';
 import { configureReplyTargetLayoutAnimation } from './chat/replyTargetLayoutAnimation';
-import MessageRow from './chat/MessageRow';
-import { createRenderMessageContent } from './chat/createRenderMessageContent';
+import useChatMessageListRender from './chat/useChatMessageListRender';
+import ChatMessageList from './chat/ChatMessageList';
 import ChatComposer from './chat/ChatComposer';
-import ChatAttachMenuModal from './chat/ChatAttachMenuModal';
-import ChatFullScreenImageModal from './chat/ChatFullScreenImageModal';
-import ChatDeleteMessageModal from './chat/ChatDeleteMessageModal';
-import ChatHeaderOverflowMenuModal from './chat/ChatHeaderOverflowMenuModal';
-import ChatClearHistoryConfirmModal from './chat/ChatClearHistoryConfirmModal';
-import ChatUploadOverlay from './chat/ChatUploadOverlay';
-import ChatListFooter from './chat/ChatListFooter';
 import ChatRoomWallpaper from './chat/ChatRoomWallpaper';
-import ChatMessagesLoadingOverlay from './chat/ChatMessagesLoadingOverlay';
 import { createDecryptMsg, decryptMessagesBatch } from './chat/messageDecrypt';
 import {
   filterExpiredMessages,
   filterHiddenForUser,
-  filterHiddenForUserKeepingDeleting,
-} from './chat/messageFilters';
+  filterHiddenForUserKeepingDeleting } from './chat/messageFilters';
 import useMessageRowAnimations from './chat/useMessageRowAnimations';
 import useChatRoomEffects from './chat/useChatRoomEffects';
 import useChatMediaActions from './chat/useChatMediaActions';
@@ -61,26 +45,25 @@ import { getAriaComposerSurfaceProps } from './chat/ariaComposerSurfaceProps';
 import AriaStateGauges from './chat/AriaStateGauges';
 import Reanimated, {
   useSharedValue,
-  useAnimatedStyle,
-} from 'react-native-reanimated';
+  useAnimatedStyle } from 'react-native-reanimated';
 import { V, chatListBottomFadeBottom } from '../theme';
 import {
   MAX_RENDERED_VIDEOS,
-  CHAT_HEADER_TO_LIST_GAP_PX,
-} from './chat/chatViewConstants';
+  CHAT_HEADER_TO_LIST_GAP_PX } from './chat/chatViewConstants';
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
 import { useChatInvertedListScroll } from '../hooks/useChatInvertedListScroll';
 import { EllipsisVertical } from '../icons/lucideIcons';
-import { supabase } from '../lib/supabase';
-import roomMessagesCache from '../utils/roomMessagesCache';
-import { buildHiddenForEveryone } from './chat/buildHiddenForEveryone';
 import usePicInlineSearch from '../hooks/usePicInlineSearch';
 import useGifInlineSearch from '../hooks/useGifInlineSearch';
+import usePanelGifSearch from '../hooks/usePanelGifSearch';
 import { parseActiveInlineMediaQuery } from '../lib/parseInlineTrigger';
-import { parsePicInlineQuery, stripPicInlineTrigger } from '../lib/parsePicInlineQuery';
-import { parseGifInlineQuery, stripGifInlineTrigger } from '../lib/parseGifInlineQuery';
-import { downloadRemoteImageToCache } from '../lib/downloadRemoteImageToCache';
+import { parsePicInlineQuery } from '../lib/parsePicInlineQuery';
+import { parseGifInlineQuery } from '../lib/parseGifInlineQuery';
+import useChatInlineMediaSend from './chat/useChatInlineMediaSend';
+import useChatClearHistory from './chat/useChatClearHistory';
+import useChatInputSettling from './chat/useChatInputSettling';
+import { formatDateKey } from './chat/chatMessageListFormat';
 
 export default function Chat({
   roomId,
@@ -104,26 +87,11 @@ export default function Chat({
   chatRoomHeader,
   onTopOverlayHeight,
   /** GameScreen: true — не трогать JS-таймеры эфемерки (бросок кубиков) */
-  renderPausedRef,
-}) {
+  renderPausedRef }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const inputBarRef = useRef(null);
-  /** Не дергать scrollToOffset (стык клавиатуры / смена высоты композера) — резкие рывки ленты */
-  const keyboardSettlingRef = useRef(false);
-  const keyboardSettleTimerRef = useRef(null);
-  const composerInsetSettlingRef = useRef(false);
-  const composerInsetSettleTimerRef = useRef(null);
   const lastComposerLayoutHRef = useRef(0);
-
-  const armComposerInsetSettling = useCallback(() => {
-    composerInsetSettlingRef.current = true;
-    if (composerInsetSettleTimerRef.current) clearTimeout(composerInsetSettleTimerRef.current);
-    composerInsetSettleTimerRef.current = setTimeout(() => {
-      composerInsetSettlingRef.current = false;
-      composerInsetSettleTimerRef.current = null;
-    }, 320);
-  }, []);
 
   const reportInputBar = useCallback((layoutH) => {
     if (typeof layoutH === 'number' && layoutH > 0) {
@@ -155,16 +123,19 @@ export default function Chat({
 
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiPanelGifQuery, setEmojiPanelGifQuery] = useState('');
+  const [emojiPanelGifSearchFocused, setEmojiPanelGifSearchFocused] = useState(false);
   useEffect(() => { onEmojiPickerChange?.(showEmojiPicker); }, [showEmojiPicker, onEmojiPickerChange]);
   useEffect(() => {
-    armComposerInsetSettling();
-    return () => {
-      if (composerInsetSettleTimerRef.current) clearTimeout(composerInsetSettleTimerRef.current);
-    };
-  }, [showEmojiPicker, armComposerInsetSettling]);
+    if (!showEmojiPicker) {
+      setEmojiPanelGifQuery('');
+      setEmojiPanelGifSearchFocused(false);
+    }
+  }, [showEmojiPicker]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null);
+  const [calendarOverlay, setCalendarOverlay] = useState(null);
   const [uiReady, setUiReady] = useState(false);
   const [headerOverlayH, setHeaderOverlayH] = useState(0);
   const [ariaGaugesH, setAriaGaugesH] = useState(48);
@@ -184,44 +155,13 @@ export default function Chat({
     onTopOverlayHeight?.(headerOverlayH + gaugesH);
   }, [chatRoomHeader, headerOverlayH, isAriaChat, ariaGaugesH, onTopOverlayHeight]);
 
-  useEffect(() => {
-    const settlingPadMs = Platform.OS === 'ios' ? 130 : 150;
-    const armSettling = (ms) => {
-      keyboardSettlingRef.current = true;
-      if (keyboardSettleTimerRef.current) clearTimeout(keyboardSettleTimerRef.current);
-      keyboardSettleTimerRef.current = setTimeout(() => {
-        keyboardSettlingRef.current = false;
-        keyboardSettleTimerRef.current = null;
-      }, ms);
-    };
-    const keyboardAnimMs = (e) =>
-      typeof e.duration === 'number' && e.duration > 0 ? e.duration : 250;
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const subShow = Keyboard.addListener(showEvt, (e) => {
-      armSettling(keyboardAnimMs(e) + settlingPadMs);
-    });
-    const subHide = Keyboard.addListener(hideEvt, (e) => {
-      const base =
-        Platform.OS === 'ios' && typeof e?.duration === 'number' && e.duration > 0
-          ? e.duration
-          : 250;
-      armSettling(base + settlingPadMs);
-    });
-    return () => {
-      subShow.remove();
-      subHide.remove();
-      if (keyboardSettleTimerRef.current) clearTimeout(keyboardSettleTimerRef.current);
-      if (composerInsetSettleTimerRef.current) clearTimeout(composerInsetSettleTimerRef.current);
-    };
-  }, []);
+  const { armComposerInsetSettling, listScrollSuppressRefs } = useChatInputSettling(showEmojiPicker);
 
   const {
     play: handleVoicePlay,
     activeUri: activeVoiceUri,
     status: activePlayerStatus,
-    pause: pauseVoice,
-  } = useVoicePlayer();
+    pause: pauseVoice } = useVoicePlayer();
 
   const [activeVideoId, setActiveVideoId] = useState(null);
   const activatedVideoIds = useRef(new Set());
@@ -239,22 +179,55 @@ export default function Chat({
   const headerMeasured = useSharedValue(0);
   const vaultChatSyncRef = useRef(null);
 
-  const listScrollSuppressRefs = useMemo(
-    () => [keyboardSettlingRef, composerInsetSettlingRef],
-    [],
-  );
-
   const {
     flatListRef,
     stickToBottomRef,
     layoutReadyRef,
     initialScrollDoneRef,
-    onScroll: onListScroll,
-  } = useChatInvertedListScroll(roomId, messages, headerMeasured, listScrollSuppressRefs);
+    onScroll: onListScroll } = useChatInvertedListScroll(roomId, messages, headerMeasured, listScrollSuppressRefs);
 
   const ephemeralClockTick = useChatEphemeralClockTick(messages, renderPausedRef);
 
   const formattedMessages = useChatFormattedMessagesState(messages, roomId);
+
+  const daysWithMessages = useMemo(() => {
+    const set = new Set();
+    for (const m of messages) {
+      const k = formatDateKey(m.created_at);
+      if (k) set.add(k);
+    }
+    return set;
+  }, [messages]);
+
+  const dateKeyToIndexMap = useMemo(() => {
+    const map = new Map();
+    for (let i = 0; i < formattedMessages.length; i++) {
+      const row = formattedMessages[i];
+      if (row._showDate && row._dateKey) map.set(row._dateKey, i);
+    }
+    return map;
+  }, [formattedMessages]);
+
+  const openCalendarFromSeparator = useCallback((anchor, dateKey, _dateLabel) => {
+    setCalendarOverlay({ anchor, dateKey });
+  }, []);
+
+  const handleCalendarDayPress = useCallback((selectedKey) => {
+    if (isAriaChat) {
+      // Заглушка для Арии — просто закрываем
+      setCalendarOverlay(null);
+      return;
+    }
+    const idx = dateKeyToIndexMap.get(selectedKey);
+    setCalendarOverlay(null);
+    if (idx == null) return;
+    setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: idx,
+        animated: true,
+        viewPosition: 0.5 });
+    }, 180);
+  }, [isAriaChat, dateKeyToIndexMap, flatListRef]);
 
   const messagesMap = useMemo(
     () => new Map(messages.map((m) => [m.id, m])),
@@ -291,12 +264,6 @@ export default function Chat({
     return ids;
   }, [formattedMessages, unlockedVideoIds]);
 
-  const rowEnvRef = useRef({});
-  /** Голос/видео плеер — обновляется каждый рендер; renderMessageContent читает .current, чтобы не пересоздавать замыкание на каждый тик статуса. */
-  const playbackEnvRef = useRef({});
-  /** Пропсы строки с частым обновлением — через ref, чтобы renderItem FlatList оставался стабильным между тиками прогресса. */
-  const messageRowLiveRef = useRef({});
-  const fmtLenRef = useRef(0);
   const inputRef = useRef(null);
   const sendInProgressRef = useRef(false);
 
@@ -319,14 +286,16 @@ export default function Chat({
     collapseEmojiForKeyboard,
     toggleEmojiPicker,
     insertEmoji,
-  } = useChatComposerChrome({
+    prepareEmojiPanelGifSearch,
+    releaseEmojiPanelGifSearch,
+    exitGifTabLayout } = useChatComposerChrome({
     replyTo,
     setVisibleReplyTo,
     inputRef,
     showEmojiPicker,
     setShowEmojiPicker,
     setText,
-  });
+    emojiPanelGifSearchFocused });
 
   const reportComposerBaseHeight = useCallback((layoutH) => {
     if (typeof layoutH !== 'number' || layoutH <= 0) return;
@@ -337,8 +306,7 @@ export default function Chat({
   }, [armComposerInsetSettling, composerStackHeightShared]);
 
   const listAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: listOpacity.value,
-  }));
+    opacity: listOpacity.value }));
 
   /**
    * Inverted spacer: baseComposerH + visualEmojiH + kbH = константа при переходе emoji→keyboard.
@@ -354,13 +322,7 @@ export default function Chat({
   });
 
   const composerWrapperAnimatedStyle = useAnimatedStyle(() => ({
-    bottom: -keyboardHeightLib.value,
-  }));
-
-  const ListBottomInsetHeader = useCallback(
-    () => <Reanimated.View collapsable={false} style={listBottomSpacerStyle} />,
-    [listBottomSpacerStyle],
-  );
+    bottom: -keyboardHeightLib.value }));
 
   useEffect(() => {
     if (!isRecordingVoice) return;
@@ -427,8 +389,7 @@ export default function Chat({
     handleMessageLongPress,
     batchDeleteForMe,
     batchCopySelected,
-    batchForwardSelected,
-  } = useChatSelection({
+    batchForwardSelected } = useChatSelection({
     messages,
     setMessages,
     nickname,
@@ -437,8 +398,7 @@ export default function Chat({
     filterExpired,
     formattedMessages,
     decryptMsg,
-    onOpenMessageMenu,
-  });
+    onOpenMessageMenu });
 
   const { fadeAnims, scaleAnims, ensureMessageAnims, popMessage } = useMessageRowAnimations(messages);
 
@@ -446,75 +406,47 @@ export default function Chat({
     optimisticVideoTempIdRef,
     pendingVideoActiveIdMigrationRef,
     handleVideoRecorded,
-    handleVideoSendError,
-  } = useChatOptimisticVideo({
+    handleVideoSendError } = useChatOptimisticVideo({
     roomId,
     nickname,
     setMessages,
     filterHiddenForMeKeepingDeleting,
     filterExpired,
     fadeAnims,
-    scaleAnims,
-  });
+    scaleAnims });
 
   const {
     toggleReaction,
     deleteMessageForMe,
     deleteMessageForAll,
-    closeDeleteConfirm,
-  } = useChatMessageMutations({
+    closeDeleteConfirm } = useChatMessageMutations({
     messages,
     setMessages,
     nickname,
     peerName,
     roomId,
+    isAriaChat,
     popMessage,
     setDeletingIds,
     setDeleteConfirmVisible,
     setSelectedMessage,
+    chatSyncRef: vaultChatSyncRef });
+
+  const { executeClearHistory: executeClearHistoryCore } = useChatClearHistory({
+    roomId,
+    nickname,
+    otherPlayerName,
+    messagesRef,
+    setMessages,
     chatSyncRef: vaultChatSyncRef,
   });
 
   const executeClearHistory = useCallback(
     async (deleteForEveryone) => {
       setClearHistoryConfirmVisible(false);
-      if (!roomId) return;
-      const snapshot = [...messagesRef.current];
-      if (snapshot.length === 0) return;
-      try {
-        let hiddenTarget = null;
-        if (deleteForEveryone) {
-          const { data: room, error: roomErr } = await supabase
-            .from('rooms')
-            .select('*')
-            .eq('id', roomId)
-            .maybeSingle();
-          if (roomErr) throw roomErr;
-          hiddenTarget = buildHiddenForEveryone(room, nickname, {
-            peerName: otherPlayerName,
-            messagesSnapshot: snapshot,
-          });
-        }
-        const results = await Promise.all(
-          snapshot.map((msg) => {
-            const nextHidden = deleteForEveryone
-              ? hiddenTarget
-              : [...new Set([...(msg.hidden_for || []), nickname])];
-            return supabase.from('messages').update({ hidden_for: nextHidden }).eq('id', msg.id);
-          })
-        );
-        const failed = results.find((r) => r.error);
-        if (failed?.error) throw failed.error;
-        setMessages([]);
-        roomMessagesCache.set(roomId, []);
-        if (deleteForEveryone) {
-          vaultChatSyncRef.current?.clearThread?.();
-        }
-      } catch (e) {
-        Alert.alert('Ошибка', e?.message || 'Не удалось очистить переписку');
-      }
+      await executeClearHistoryCore(deleteForEveryone);
     },
-    [roomId, nickname, otherPlayerName, setMessages]
+    [executeClearHistoryCore],
   );
 
   useChatRoomEffects({
@@ -538,8 +470,7 @@ export default function Chat({
     setMessages,
     setMessagesLoading,
     messagesRef,
-    chatSyncRef: vaultChatSyncRef,
-  });
+    chatSyncRef: vaultChatSyncRef });
 
   const {
     uploadMedia,
@@ -547,8 +478,7 @@ export default function Chat({
     pickImageFromGallery,
     takePhoto,
     sendCurrentLocation,
-    handleSendVoice,
-  } = useChatMediaActions({
+    handleSendVoice } = useChatMediaActions({
     roomId,
     nickname,
     legacyCryptoKey,
@@ -560,8 +490,7 @@ export default function Chat({
     decryptMsg,
     setMessages,
     filterHiddenForMeKeepingDeleting,
-    filterExpired,
-  });
+    filterExpired });
 
   const inlineMediaEnabled = !isAriaChat && Boolean(roomId);
   const activeInlineMedia = useMemo(
@@ -569,59 +498,28 @@ export default function Chat({
     [text, inlineMediaEnabled],
   );
   const picInline = usePicInlineSearch(text, {
-    enabled: inlineMediaEnabled && activeInlineMedia?.kind === 'pic',
-  });
+    enabled: inlineMediaEnabled && activeInlineMedia?.kind === 'pic' });
   const gifInline = useGifInlineSearch(text, {
-    enabled: inlineMediaEnabled && activeInlineMedia?.kind === 'gif',
-  });
-
+    enabled: inlineMediaEnabled && activeInlineMedia?.kind === 'gif' });
+  const emojiPanelGif = usePanelGifSearch(emojiPanelGifQuery, {
+    enabled: inlineMediaEnabled && showEmojiPicker });
   useEffect(() => {
     if ((picInline.active || gifInline.active) && showEmojiPicker) {
       setShowEmojiPicker(false);
     }
   }, [picInline.active, gifInline.active, showEmojiPicker]);
 
-  const handlePicInlineSelect = useCallback(
-    async (item) => {
-      if (!item?.fullUrl && !item?.thumbUrl) return;
-      const remoteUrl = item.fullUrl || item.thumbUrl;
-      setUploading(true);
-      try {
-        const localUri = await downloadRemoteImageToCache(remoteUrl, 'jpg');
-        const url = await uploadMedia(localUri, 'images', 'jpg', 'image/jpeg');
-        const caption = stripPicInlineTrigger(text);
-        await sendMediaMessage('image', url, caption ? { text: caption } : {});
-        setText(caption);
-      } catch (e) {
-        const detail = e?.message || String(e);
-        Alert.alert('Ошибка', `Не удалось отправить фото.\n${detail}`);
-        console.warn(e);
-      }
-      setUploading(false);
-    },
-    [text, uploadMedia, sendMediaMessage, setText, setUploading],
-  );
-
-  const handleGifInlineSelect = useCallback(
-    async (item) => {
-      if (!item?.fullUrl && !item?.thumbUrl) return;
-      const remoteUrl = item.fullUrl || item.thumbUrl;
-      setUploading(true);
-      try {
-        const localUri = await downloadRemoteImageToCache(remoteUrl, 'gif');
-        const url = await uploadMedia(localUri, 'images', 'gif', 'image/gif');
-        const caption = stripGifInlineTrigger(text);
-        await sendMediaMessage('image', url, caption ? { text: caption } : {});
-        setText(caption);
-      } catch (e) {
-        const detail = e?.message || String(e);
-        Alert.alert('Ошибка', `Не удалось отправить GIF.\n${detail}`);
-        console.warn(e);
-      }
-      setUploading(false);
-    },
-    [text, uploadMedia, sendMediaMessage, setText, setUploading],
-  );
+  const {
+    handlePicInlineSelect,
+    handleGifInlineSelect,
+    handleEmojiPanelGifSelect,
+  } = useChatInlineMediaSend({
+    text,
+    setText,
+    setUploading,
+    uploadMedia,
+    sendMediaMessage,
+  });
 
   const { sendMessage: sendVaultTextMessage } = useChatSendText({
     text,
@@ -632,8 +530,7 @@ export default function Chat({
     nickname,
     ephemeralSec,
     otherPlayerName,
-    sendInProgressRef,
-  });
+    sendInProgressRef });
 
   const sendMessage = useCallback(async () => {
     const trimmed = text.trim();
@@ -646,8 +543,7 @@ export default function Chat({
         sendToAria,
         sendInProgressRef,
         setText,
-        setReplyTarget,
-      });
+        setReplyTarget });
       return;
     }
     await sendVaultTextMessage();
@@ -663,8 +559,7 @@ export default function Chat({
           nickname,
           setMessages,
           sendToAria,
-          sendInProgressRef,
-        });
+          sendInProgressRef });
         return;
       }
       await handleSendVoice(uri, duration, waveform);
@@ -676,119 +571,41 @@ export default function Chat({
       handleSendVoice,
       ariaControlled,
       nickname,
-      setMessages,
-    ]
+      setMessages]
   );
 
   const onVoiceRecorderOpen = useCallback(() => {
     setActiveVideoId(null);
   }, []);
 
-  /* ── Renderers ── */
-
-  playbackEnvRef.current = {
-    activeVoiceUri,
-    activePlayerStatus,
-    activeVoiceMessageId,
-    activeVideoId,
-    isRecordingVoice,
-  };
-
-  const renderMessageContent = useMemo(
-    () =>
-      createRenderMessageContent({
-        setFullScreenImage,
-        setActiveVoiceMessageId,
-        handleVoicePlay,
-        setActiveVideoId,
-        activatedVideoIdsRef: activatedVideoIds,
-        rowEnvRef,
-        playbackEnvRef,
-      }),
-    [handleVoicePlay, setFullScreenImage, setActiveVoiceMessageId, setActiveVideoId]
-  );
-
-  /** Меняется редко (выбор, мультиселект) — extraData FlatList, MessageRow.memo сравнивает по ссылке. */
-  const listExtraDataStable = useMemo(
-    () => ({ selectionMode, selectedHash, renderableVideoIds, onUnlockVideo, isAriaChat }),
-    [selectionMode, selectedHash, renderableVideoIds, onUnlockVideo, isAriaChat]
-  );
-
-  /** Сигнатура прогресса для активной голосовой строки (expo-av status), без setInterval в MessageRow. */
-  const voiceProgressSig = useMemo(() => {
-    if (!activeVoiceMessageId) return '';
-    return `${activePlayerStatus.playing ? 1 : 0}|${Math.round(activePlayerStatus.currentTime * 20) / 20}|${Math.round(activePlayerStatus.duration * 50) / 50}`;
-  }, [
-    activeVoiceMessageId,
-    activePlayerStatus.playing,
-    activePlayerStatus.currentTime,
-    activePlayerStatus.duration,
-  ]);
-
-  messageRowLiveRef.current = {
-    activeVoiceMessageId,
-    activeVoiceUri,
-    activeVideoId,
-    isRecordingVoice,
-    voiceProgressSig,
-  };
-
-  const onMessagePress = useCallback((event, item) => {
-    rowEnvRef.current.handleMessagePress(event, item);
-  }, []);
-
-  const onMessageLongPress = useCallback((event, item) => {
-    rowEnvRef.current.handleMessageLongPress(event, item);
-  }, []);
-
-  const renderItem = useCallback(
-    ({ item, index }) => {
-      const live = messageRowLiveRef.current;
-      const voicePlaybackSig =
-        ((item.message_type === 'voice' ||
-          item.message_type === 'audio' ||
-          (item.aria_voice_message === true && item.audio_uri)) &&
-          item.id === live.activeVoiceMessageId)
-          ? live.voiceProgressSig
-          : '';
-      return (
-        <MessageRow
-          item={item}
-          index={index}
-          listExtra={listExtraDataStable}
-          activeVoiceMessageId={live.activeVoiceMessageId}
-          activeVoiceUri={live.activeVoiceUri}
-          activeVideoId={live.activeVideoId}
-          isRecordingVoice={live.isRecordingVoice}
-          voicePlaybackSig={voicePlaybackSig}
-          fmtLenRef={fmtLenRef}
-          rowEnvRef={rowEnvRef}
-          onMessagePress={onMessagePress}
-          onMessageLongPress={onMessageLongPress}
-        />
-      );
-    },
-    [listExtraDataStable, onMessagePress, onMessageLongPress]
-  );
-
-  /** MessageRow держит стабильные onPress/onLongPress; актуальные хендлеры и данные — через ref без лишних перерисовок списка. */
-  fmtLenRef.current = formattedMessages.length;
-  rowEnvRef.current = {
+  const { renderItem, listExtraDataStable } = useChatMessageListRender({
+    formattedMessages,
     nickname,
     windowWidth,
     selectedIds,
     getReplyMessage,
     ensureMessageAnims,
-    renderMessageContent,
     setFullScreenImage,
     handleMessagePress,
     handleMessageLongPress,
     toggleReaction,
     setActiveVideoId,
+    setActiveVoiceMessageId,
+    activatedVideoIds,
     replyToMessage,
     isAriaChat,
-    ariaPeerName: ARIA_CONTACT.display_name,
-  };
+    openCalendarFromSeparator,
+    handleVoicePlay,
+    activeVoiceUri,
+    activePlayerStatus,
+    activeVoiceMessageId,
+    activeVideoId,
+    isRecordingVoice,
+    selectionMode,
+    selectedHash,
+    renderableVideoIds,
+    onUnlockVideo,
+  });
 
   const listFooterPaddingTop =
     chatRoomHeader != null &&
@@ -817,27 +634,6 @@ export default function Chat({
     );
   }, [isAriaChat, roomId, chatRoomHeader?.headerRight]);
 
-  const listFooterComponent = useMemo(
-    () => (
-      <ChatListFooter
-        chatRoomHeader={chatRoomHeader}
-        listPaddingTop={listFooterPaddingTop}
-        selectionMode={selectionMode}
-        selectedCount={selectedIds.size}
-        onExitSelection={exitSelectionMode}
-        onBatchDeleteForMe={batchDeleteForMe}
-      />
-    ),
-    [
-      chatRoomHeader,
-      listFooterPaddingTop,
-      selectionMode,
-      selectedIds.size,
-      exitSelectionMode,
-      batchDeleteForMe,
-    ],
-  );
-
   return (
     <EphemeralClockContext.Provider value={ephemeralClockTick}>
     <Reanimated.View
@@ -845,57 +641,37 @@ export default function Chat({
         tw`flex-1`,
         {
           backgroundColor: V.bgApp,
-          overflow: chatRoomHeader ? 'visible' : 'hidden',
-        },
-      ]}
+          overflow: chatRoomHeader ? 'visible' : 'hidden'}]}
     >
       <ChatRoomWallpaper />
-      {/* Upload overlay */}
-      <ChatUploadOverlay visible={uploading} />
-
-      <ChatFullScreenImageModal
+      <ChatOverlays
         uiReady={uiReady}
-        uri={fullScreenImage}
-        onClose={() => setFullScreenImage(null)}
-      />
-
-      <ChatMessageContextMenuHost
-        uiReady={uiReady}
-        visible={menuVisible}
-        onClose={() => setMenuVisible(false)}
-        position={menuPosition}
+        uploading={uploading}
+        fullScreenImage={fullScreenImage}
+        onCloseFullScreenImage={() => setFullScreenImage(null)}
+        calendarOverlay={calendarOverlay}
+        daysWithMessages={daysWithMessages}
+        onCalendarDayPress={handleCalendarDayPress}
+        onCloseCalendar={() => setCalendarOverlay(null)}
+        menuVisible={menuVisible}
+        menuPosition={menuPosition}
         selectedMessage={selectedMessage}
+        onCloseMenu={() => setMenuVisible(false)}
         onReplyToMessage={setReplyTarget}
         onRequestDeleteConfirm={() => setDeleteConfirmVisible(true)}
-      />
-
-      <ChatDeleteMessageModal
-        uiReady={uiReady}
-        visible={deleteConfirmVisible}
-        onClose={closeDeleteConfirm}
-        messageId={selectedMessage?.id ?? null}
+        onOpenImage={(uri) => setFullScreenImage(uri)}
+        deleteConfirmVisible={deleteConfirmVisible}
+        onCloseDeleteConfirm={closeDeleteConfirm}
         onDeleteForMe={deleteMessageForMe}
         onDeleteForAll={deleteMessageForAll}
-      />
-
-      <ChatHeaderOverflowMenuModal
-        uiReady={uiReady}
-        visible={overflowMenuVisible}
-        onClose={() => setOverflowMenuVisible(false)}
+        overflowMenuVisible={overflowMenuVisible}
+        onCloseOverflowMenu={() => setOverflowMenuVisible(false)}
         onClearHistory={() => setClearHistoryConfirmVisible(true)}
-      />
-
-      <ChatClearHistoryConfirmModal
-        uiReady={uiReady}
-        visible={clearHistoryConfirmVisible}
-        onClose={() => setClearHistoryConfirmVisible(false)}
-        onConfirm={executeClearHistory}
-      />
-
-      <ChatAttachMenuModal
-        uiReady={uiReady}
-        visible={showAttachMenu}
-        onClose={() => setShowAttachMenu(false)}
+        clearHistoryConfirmVisible={clearHistoryConfirmVisible}
+        onCloseClearHistoryConfirm={() => setClearHistoryConfirmVisible(false)}
+        onConfirmClearHistory={executeClearHistory}
+        showAttachMenu={showAttachMenu}
+        onCloseAttachMenu={() => setShowAttachMenu(false)}
         takePhoto={takePhoto}
         pickImageFromGallery={pickImageFromGallery}
         sendCurrentLocation={sendCurrentLocation}
@@ -904,67 +680,35 @@ export default function Chat({
       />
 
       <View style={{ flex: 1, position: 'relative' }}>
-        <View style={{ flex: 1 }}>
-          <ChatMessagesLoadingOverlay visible={messagesLoading} />
-          <Reanimated.View style={[tw`flex-1`, listAnimatedStyle]}>
-            <FlatList
-              ref={flatListRef}
-              data={formattedMessages}
-              inverted
-              keyExtractor={(item) =>
-                item.clientRowKey != null && item.clientRowKey !== ''
-                  ? String(item.clientRowKey)
-                  : String(item.id)
-              }
-              renderItem={renderItem}
-              extraData={listExtraDataStable}
-              initialNumToRender={20}
-              maxToRenderPerBatch={10}
-              windowSize={10}
-              onScroll={onListScroll}
-              scrollEventThrottle={32}
-              decelerationRate={Platform.OS === 'ios' ? 0.992 : 'fast'}
-              style={[
-                tw`flex-1`,
-                chatRoomHeader ? { backgroundColor: 'transparent' } : null,
-                { zIndex: 1 },
-              ]}
-              removeClippedSubviews={Platform.OS === 'android'}
-              ListHeaderComponent={ListBottomInsetHeader}
-              ListFooterComponent={listFooterComponent}
-              contentContainerStyle={[
-                tw`pt-1`,
-                chatRoomHeader && typeof listPaddingTop === 'number' && listPaddingTop > 0 ? null : tw`pb-2`,
-              ]}
-              onContentSizeChange={() => {
-                if (!layoutReadyRef.current) {
-                  layoutReadyRef.current = true;
-                  initialScrollDoneRef.current = true;
-                }
-              }}
-              ListEmptyComponent={
-                messagesLoading ? null : (
-                  <Text style={[tw`text-center py-6 text-[13px]`, { color: V.textMuted }]}>
-                    Начни общение!
-                  </Text>
-                )
-              }
-            />
-          </Reanimated.View>
-        </View>
+        <ChatMessageList
+          flatListRef={flatListRef}
+          formattedMessages={formattedMessages}
+          renderItem={renderItem}
+          listExtraDataStable={listExtraDataStable}
+          listAnimatedStyle={listAnimatedStyle}
+          listBottomSpacerStyle={listBottomSpacerStyle}
+          onListScroll={onListScroll}
+          layoutReadyRef={layoutReadyRef}
+          initialScrollDoneRef={initialScrollDoneRef}
+          messagesLoading={messagesLoading}
+          chatRoomHeader={chatRoomHeader}
+          listPaddingTop={listPaddingTop}
+          listFooterPaddingTop={listFooterPaddingTop}
+          selectionMode={selectionMode}
+          selectedIds={selectedIds}
+          exitSelectionMode={exitSelectionMode}
+          batchDeleteForMe={batchDeleteForMe}
+        />
 
         <Reanimated.View
           pointerEvents="box-none"
           style={[
-            {
-              position: 'absolute',
+            {position: 'absolute',
               left: 0,
               right: 0,
               zIndex: 2,
-              elevation: 2,
-            },
-            composerWrapperAnimatedStyle,
-          ]}
+              elevation: 2},
+            composerWrapperAnimatedStyle]}
         >
           <LinearGradient
             pointerEvents="none"
@@ -977,8 +721,7 @@ export default function Chat({
               left: 0,
               right: 0,
               bottom: 0,
-              height: 80,
-            }}
+              height: 80 }}
           />
           <ChatComposer
             inputBarRef={inputBarRef}
@@ -1026,6 +769,27 @@ export default function Chat({
             gifInlineHasMore={gifInline.hasMore}
             onGifInlineSelect={handleGifInlineSelect}
             onGifInlineLoadMore={gifInline.loadMore}
+            emojiPanelGifQuery={emojiPanelGifQuery}
+            onEmojiPanelGifQueryChange={setEmojiPanelGifQuery}
+            emojiPanelGifLoading={emojiPanelGif.loading}
+            trendingGifs={emojiPanelGif.trendingResults}
+            emojiPanelGifError={emojiPanelGif.error}
+            emojiPanelGifResults={emojiPanelGif.results}
+            emojiPanelGifHasMore={emojiPanelGif.hasMore}
+            onEmojiPanelGifSelect={handleEmojiPanelGifSelect}
+            onEmojiPanelGifLoadMore={emojiPanelGif.loadMore}
+            onEmojiPanelGifSearchFocus={() => {
+              setEmojiPanelGifSearchFocused(true);
+              prepareEmojiPanelGifSearch();
+            }}
+            onEmojiPanelGifSearchBlur={() => {
+              setEmojiPanelGifSearchFocused(false);
+              releaseEmojiPanelGifSearch();
+            }}
+            onEmojiPanelGifTabExit={() => {
+              setEmojiPanelGifSearchFocused(false);
+              exitGifTabLayout();
+            }}
             {...ariaComposerSurfaceProps}
           />
         </Reanimated.View>
@@ -1041,8 +805,7 @@ export default function Chat({
               left: 0,
               right: 0,
               zIndex: 50,
-              elevation: 50,
-            }}
+              elevation: 50 }}
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;
               if (h > 0) {
@@ -1079,8 +842,7 @@ export default function Chat({
                 left: 0,
                 right: 0,
                 zIndex: 49,
-                elevation: 49,
-              }}
+                elevation: 49 }}
             >
               <AriaStateGauges state={ariaState} onHeightChange={setAriaGaugesH} />
             </View>

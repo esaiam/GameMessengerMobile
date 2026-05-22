@@ -41,8 +41,7 @@ export function useSplitDetail() {
       currentDetail: null,
       setDetailParams: () => {},
       pushDetail: () => {},
-      popDetail: () => {},
-    };
+      popDetail: () => {} };
   }
   return ctx;
 }

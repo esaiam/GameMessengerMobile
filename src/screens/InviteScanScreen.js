@@ -23,8 +23,7 @@ export default function InviteScanScreen({ navigation }) {
       navigation.navigate({
         name: 'Auth',
         params: { scannedCode: code },
-        merge: true,
-      });
+        merge: true });
       navigation.goBack();
     },
     [navigation]
@@ -71,8 +70,7 @@ export default function InviteScanScreen({ navigation }) {
           onPress={askPermission}
           style={[
             tw`rounded-[10px] py-3.5 items-center`,
-            { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.accentSage },
-          ]}
+            { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.accentSage }]}
         >
           <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>Разрешить камеру</Text>
         </TouchableOpacity>
@@ -95,16 +93,13 @@ export default function InviteScanScreen({ navigation }) {
           {
             paddingTop: insets.top + 8,
             paddingHorizontal: 16,
-            paddingBottom: insets.bottom + 12,
-          },
-        ]}
+            paddingBottom: insets.bottom + 12 }]}
       >
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={[
             tw`self-start flex-row items-center py-2 px-3 rounded-[10px]`,
-            { backgroundColor: 'rgba(13,15,20,0.65)' },
-          ]}
+            { backgroundColor: 'rgba(13,15,20,0.65)' }]}
         >
           <ArrowLeft size={18} color={V.textPrimary} strokeWidth={1.5} />
           <Text style={[tw`text-[14px] font-medium ml-2`, { color: V.textPrimary }]}>Назад</Text>
@@ -113,8 +108,7 @@ export default function InviteScanScreen({ navigation }) {
         <View
           style={[
             tw`rounded-[12px] px-3 py-3`,
-            { backgroundColor: 'rgba(13,15,20,0.75)' },
-          ]}
+            { backgroundColor: 'rgba(13,15,20,0.75)' }]}
         >
           <Text style={[tw`text-[12px] text-center`, { color: V.textSecondary, lineHeight: 18 }]}>
             Наведи на QR приглашения. Поддерживается ссылка vaultmessenger://invite?code=… или просто код.
@@ -129,5 +123,4 @@ export default function InviteScanScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: V.bgApp },
-});
+  fill: { flex: 1, backgroundColor: V.bgApp } });

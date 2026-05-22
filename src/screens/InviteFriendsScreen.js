@@ -6,8 +6,7 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
-  Share,
-} from 'react-native';
+  Share } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import tw from 'twrnc';
 import * as Clipboard from 'expo-clipboard';
@@ -41,8 +40,7 @@ function buildInviteShareMessage(code, expiresAtIso) {
   const until = formatExpires(expiresAtIso);
   const parts = [
     'Привет! Приглашаю в Vault Messenger (нарды и чаты).',
-    `Код приглашения: ${code}`,
-  ];
+    `Код приглашения: ${code}`];
   if (link) parts.push(`Ссылка для приложения: ${link}`);
   parts.push(
     'Как зарегистрироваться: установи приложение → экран входа → «Регистрация» → введи код вручную или отсканируй QR с экрана «Приглашения» у того, кто пригласил.',
@@ -104,8 +102,7 @@ export default function InviteFriendsScreen({ navigation }) {
     try {
       await Share.share({
         title: 'Приглашение Vault Messenger',
-        message: buildInviteShareMessage(s, expiresAtIso),
-      });
+        message: buildInviteShareMessage(s, expiresAtIso) });
     } catch (e) {
       if (e?.name === 'AbortError') return;
       Alert.alert('Ошибка', e?.message || 'Не удалось открыть меню «Поделиться».');
@@ -114,8 +111,7 @@ export default function InviteFriendsScreen({ navigation }) {
 
   const createInvite = async () => {
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { session } } = await supabase.auth.getSession();
     const uid = session?.user?.id;
     if (!uid) {
       Alert.alert('Сессия', 'Войдите в аккаунт, чтобы создать приглашение.');
@@ -135,8 +131,7 @@ export default function InviteFriendsScreen({ navigation }) {
           code,
           created_by: uid,
           max_uses: 1,
-          expires_at: expiresAt,
-        });
+          expires_at: expiresAt });
         if (!error) {
           await loadCodes();
           try {
@@ -167,8 +162,7 @@ export default function InviteFriendsScreen({ navigation }) {
       <View
         style={[
           tw`flex-row items-center py-3 px-3 rounded-[12px]`,
-          { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border },
-        ]}
+          { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border }]}
       >
         <View style={tw`flex-1 mr-2`}>
           <Text style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]}>
@@ -183,8 +177,7 @@ export default function InviteFriendsScreen({ navigation }) {
             onPress={() => copyCode(item.code)}
             style={[
               tw`rounded-[10px] px-3 py-2 flex-row items-center`,
-              { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.accentSage },
-            ]}
+              { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.accentSage }]}
             accessibilityLabel="Скопировать код"
           >
             <Copy size={16} color={V.accentSage} strokeWidth={1.5} />
@@ -194,8 +187,7 @@ export default function InviteFriendsScreen({ navigation }) {
             onPress={() => shareInvite(item.code, item.expires_at)}
             style={[
               tw`rounded-[10px] px-3 py-2 flex-row items-center mt-2`,
-              { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.border },
-            ]}
+              { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.border }]}
             accessibilityLabel="Отправить приглашение"
           >
             <Forward size={16} color={V.textSecondary} strokeWidth={1.5} />
@@ -209,7 +201,7 @@ export default function InviteFriendsScreen({ navigation }) {
 
   return (
     <TabBackground>
-      <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
+      <View style={[tw`flex-1`, {backgroundColor: 'transparent'}]}>
         <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -239,9 +231,7 @@ export default function InviteFriendsScreen({ navigation }) {
               backgroundColor: V.btnPrimaryBg,
               borderWidth: 0.5,
               borderColor: V.accentSage,
-              opacity: creating ? 0.6 : 1,
-            },
-          ]}
+              opacity: creating ? 0.6 : 1 }]}
         >
           {creating ? (
             <ActivityIndicator color={V.accentSage} />

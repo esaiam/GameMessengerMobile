@@ -11,8 +11,7 @@ export default function ChatDeleteMessageModal({
   onClose,
   messageId,
   onDeleteForMe,
-  onDeleteForAll,
-}) {
+  onDeleteForAll }) {
   if (!uiReady) return null;
 
   return (
@@ -30,9 +29,7 @@ export default function ChatDeleteMessageModal({
             {
               backgroundColor: V.bgElevated,
               borderWidth: StyleSheet.hairlineWidth,
-              borderColor: V.border,
-            },
-          ]}
+              borderColor: V.border }]}
         >
           <View style={tw`px-5 pt-5 pb-2`}>
             <Text style={[tw`text-[16px]`, { color: V.textPrimary, fontWeight: '500' }]}>
@@ -52,8 +49,7 @@ export default function ChatDeleteMessageModal({
             }}
             style={({ pressed }) => [
               tw`flex-row items-center px-5 py-3.5`,
-              pressed && { backgroundColor: V.hoverBg },
-            ]}
+              pressed && { backgroundColor: V.hoverBg }]}
           >
             <Check size={20} color={V.accentSage} strokeWidth={1.5} />
             <Text style={[tw`text-[15px] ml-3 flex-1`, { color: V.textPrimary, fontWeight: '400' }]}>
@@ -71,8 +67,7 @@ export default function ChatDeleteMessageModal({
             }}
             style={({ pressed }) => [
               tw`flex-row items-center px-5 py-3.5`,
-              pressed && { backgroundColor: V.hoverBg },
-            ]}
+              pressed && { backgroundColor: V.hoverBg }]}
           >
             <Users size={20} color="#E05A5A" strokeWidth={1.5} />
             <Text style={[tw`text-[15px] ml-3 flex-1`, { color: '#E05A5A', fontWeight: '400' }]}>
@@ -85,8 +80,7 @@ export default function ChatDeleteMessageModal({
             onPress={onClose}
             style={({ pressed }) => [
               tw`items-center py-3.5 mb-1 mx-3 rounded-[10px]`,
-              pressed && { backgroundColor: V.hoverBg },
-            ]}
+              pressed && { backgroundColor: V.hoverBg }]}
           >
             <Text style={[tw`text-[15px]`, { color: V.textSecondary, fontWeight: '400' }]}>
               Отмена

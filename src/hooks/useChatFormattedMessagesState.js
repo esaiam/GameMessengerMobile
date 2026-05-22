@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   buildFormattedMessagesCached,
-  prependFormattedWhenTailAppended,
-} from '../components/chat/chatMessageListFormat';
+  prependFormattedWhenTailAppended } from '../components/chat/chatMessageListFormat';
 
 /**
  * Кэшированное форматирование ленты + инкрементальный append хвоста.

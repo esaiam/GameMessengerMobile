@@ -7,21 +7,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
-} from 'react-native';
+  Alert } from 'react-native';
 import tw from 'twrnc';
 import { Dices } from '../icons/lucideIcons';
 import { V } from '../theme';
-import { supabase } from '../lib/supabase';
 import { useAuthGate, NICKNAME_STORAGE_KEY } from '../context/AuthGateContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const HANDLE_MAX = 32;
-const HANDLE_RE = /^[a-z0-9_]+$/;
-
-function sanitizeSlug(raw) {
-  return raw.toLowerCase().replace(/[^a-z0-9_]/g, '');
-}
+import {
+  HANDLE_MAX,
+  sanitizeHandleSlug,
+  validateHandleFormat,
+  saveNewProfileHandle } from '../lib/handleProfile';
 
 export default function PickHandleScreen() {
   const { session, refreshProfile } = useAuthGate();
@@ -29,8 +25,7 @@ export default function PickHandleScreen() {
   const [busy, setBusy] = useState(false);
 
   const onChangeSlug = (t) => {
-    const s = sanitizeSlug(t).slice(0, HANDLE_MAX);
-    setSlug(s);
+    setSlug(sanitizeHandleSlug(t));
   };
 
   const save = async () => {
@@ -38,49 +33,29 @@ export default function PickHandleScreen() {
       Alert.alert('Ошибка', 'Нет сессии. Войдите снова.');
       return;
     }
-    if (slug.length < 1) {
-      Alert.alert('Внимание', 'Введите handle (латиница, цифры, _).');
-      return;
-    }
-    if (!HANDLE_RE.test(slug)) {
-      Alert.alert('Внимание', 'Только a–z, 0–9 и подчёркивание.');
+
+    const check = validateHandleFormat(slug);
+    if (!check.ok) {
+      Alert.alert(check.title, check.message);
       return;
     }
 
     setBusy(true);
     try {
-      const { data: taken, error: selErr } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('handle', slug)
-        .maybeSingle();
-      if (selErr) throw selErr;
-      if (taken) {
+      const result = await saveNewProfileHandle(session.user.id, slug);
+      if (result === 'taken') {
         Alert.alert('Занято', 'Этот @handle уже выбран. Придумай другой.');
         return;
       }
-
-      const { error: insErr } = await supabase.from('profiles').insert({
-        id: session.user.id,
-        handle: slug,
-      });
-      if (insErr) {
-        if (insErr.code === '23505') {
-          if (String(insErr.details || '').includes('(id)')) {
-            await refreshProfile();
-            return;
-          }
-          Alert.alert('Занято', 'Этот @handle уже занят.');
-          return;
-        }
-        throw insErr;
+      if (result === 'already_has_profile') {
+        await refreshProfile();
+        return;
       }
 
       await AsyncStorage.setItem(NICKNAME_STORAGE_KEY, slug);
       await refreshProfile();
     } catch (e) {
-      const msg = e?.message || 'Не удалось сохранить';
-      Alert.alert('Ошибка', msg);
+      Alert.alert('Ошибка', e?.message || 'Не удалось сохранить');
     } finally {
       setBusy(false);
     }

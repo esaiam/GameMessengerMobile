@@ -10,8 +10,7 @@ export function normalizePendingInviteCode(raw) {
 export function serializePendingInvite(email, code) {
   return JSON.stringify({
     e: String(email || '').trim().toLowerCase(),
-    c: normalizePendingInviteCode(code),
-  });
+    c: normalizePendingInviteCode(code) });
 }
 
 export function parsePendingInvite(raw) {
@@ -48,8 +47,7 @@ export async function callRedeemInviteCode(pCode) {
   return {
     ok: row.success === true,
     errorReason: row.error_reason || null,
-    transportError: null,
-  };
+    transportError: null };
 }
 
 export function inviteRedeemErrorTitle() {
@@ -65,7 +63,6 @@ export function inviteRedeemErrorMessage(reason) {
     expired: 'Срок действия кода истёк.',
     exhausted: 'Код уже использован.',
     already_redeemed: 'Ты уже использовал приглашение',
-    redeem_failed: 'Не удалось применить код. Попробуйте позже.',
-  };
+    redeem_failed: 'Не удалось применить код. Попробуйте позже.' };
   return map[r] || 'Не удалось применить приглашение.';
 }

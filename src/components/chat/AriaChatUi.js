@@ -21,8 +21,7 @@ export function AriaPresenceSubtitle({ ariaOnline, isSick }) {
         alignItems: 'center',
         marginTop: (2 * 2) / 3,
         minWidth: 0,
-        alignSelf: 'stretch',
-      }}
+        alignSelf: 'stretch' }}
     >
       <View
         style={{
@@ -30,8 +29,7 @@ export function AriaPresenceSubtitle({ ariaOnline, isSick }) {
           height: 6,
           borderRadius: 3,
           backgroundColor: online ? V.accentSage : V.textMuted,
-          marginRight: 6,
-        }}
+          marginRight: 6 }}
       />
       <Text
         style={[
@@ -40,10 +38,9 @@ export function AriaPresenceSubtitle({ ariaOnline, isSick }) {
             fontSize: 12,
             fontWeight: '400',
             lineHeight: 16,
-            color: online ? '#5A9E9A' : V.textMuted,
+            color: online ? '#5A9E9A' : V.textMuted
           },
-          Platform.OS === 'android' ? { includeFontPadding: false } : null,
-        ]}
+          Platform.OS === 'android' ? { includeFontPadding: false } : null]}
         numberOfLines={sickOnline ? 2 : 1}
       >
         {statusText}
@@ -77,8 +74,7 @@ export function AriaTypingDots() {
         Animated.sequence([
           Animated.delay(delay),
           Animated.timing(v, { toValue: 1, duration: 320, useNativeDriver: true }),
-          Animated.timing(v, { toValue: 0.35, duration: 320, useNativeDriver: true }),
-        ])
+          Animated.timing(v, { toValue: 0.35, duration: 320, useNativeDriver: true })])
       );
     const a1 = mk(o1, 0);
     const a2 = mk(o2, 120);
@@ -101,8 +97,7 @@ export function AriaTypingDots() {
         borderRadius: 3,
         marginHorizontal: 3,
         backgroundColor: V.accentSage,
-        opacity: anim,
-      }}
+        opacity: anim }}
     />
   );
 

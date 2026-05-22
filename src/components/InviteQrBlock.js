@@ -21,9 +21,7 @@ export default function InviteQrBlock({ code }) {
         {
           backgroundColor: V.bgElevated,
           borderWidth: 0.5,
-          borderColor: V.border,
-        },
-      ]}
+          borderColor: V.border }]}
     >
       <Text style={[tw`text-[11px] mb-2 text-center px-1`, { color: V.textMuted, lineHeight: 16 }]}>
         Покажи другу для регистрации. В QR — ссылка вида vaultmessenger://invite?code=… (тот же код, что в

@@ -21,8 +21,7 @@ export default function useChatMediaActions({
   decryptMsg,
   setMessages,
   filterHiddenForMeKeepingDeleting,
-  filterExpired,
-}) {
+  filterExpired }) {
   const uploadMedia = useCallback(async (uri, folder, ext, contentType) => {
     if (!roomId) {
       throw new Error('room_id отсутствует');
@@ -48,9 +47,7 @@ export default function useChatMediaActions({
           apikey: SUPABASE_ANON_KEY,
           'Content-Type': contentType,
           'cache-control': 'max-age=3600',
-          'x-upsert': 'false',
-        },
-      });
+          'x-upsert': 'false' } });
       if (uploadResult.status < 200 || uploadResult.status >= 300) {
         let detail = `HTTP ${uploadResult.status}`;
         try {
@@ -84,8 +81,7 @@ export default function useChatMediaActions({
       media_url: mediaUrl || null,
       latitude: extra.latitude ?? null,
       longitude: extra.longitude ?? null,
-      reply_to: replyTo?.id || null,
-    };
+      reply_to: replyTo?.id || null };
     if (ephemeralSec) {
       row.expires_at = new Date(Date.now() + ephemeralSec * 1000).toISOString();
     }
@@ -114,8 +110,7 @@ export default function useChatMediaActions({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.7,
-      allowsEditing: true,
-    });
+      allowsEditing: true });
     if (result.canceled || !result.assets?.[0]) return;
     setUploading(true);
     try {
@@ -139,8 +134,7 @@ export default function useChatMediaActions({
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       quality: 0.7,
-      allowsEditing: true,
-    });
+      allowsEditing: true });
     if (result.canceled || !result.assets?.[0]) return;
     setUploading(true);
     try {
@@ -164,13 +158,11 @@ export default function useChatMediaActions({
     setUploading(true);
     try {
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+        accuracy: Location.Accuracy.Balanced });
       await sendMediaMessage('location', null, {
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
-        text: 'Местоположение',
-      });
+        text: 'Местоположение' });
     } catch (e) {
       Alert.alert('Ошибка', 'Не удалось определить местоположение');
       console.warn(e);
@@ -187,8 +179,7 @@ export default function useChatMediaActions({
           Array.isArray(waveform) && waveform.length > 0 ? waveform : DEFAULT_VOICE_WAVEFORM();
         const inserted = await sendMediaMessage('voice', url, {
           text: `🎤 ${formatDuration(duration)}`,
-          waveform: wf,
-        });
+          waveform: wf });
         if (inserted?.id) {
           const msg = await decryptMsg(inserted);
           setMessages((prev) => {
@@ -210,8 +201,7 @@ export default function useChatMediaActions({
       filterHiddenForMeKeepingDeleting,
       filterExpired,
       setMessages,
-      setUploading,
-    ],
+      setUploading],
   );
 
   return {
@@ -220,6 +210,5 @@ export default function useChatMediaActions({
     pickImageFromGallery,
     takePhoto,
     sendCurrentLocation,
-    handleSendVoice,
-  };
+    handleSendVoice };
 }

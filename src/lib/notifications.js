@@ -13,7 +13,7 @@ export async function registerPushToken(userId) {
 
   try {
     const perm = await Notifications.requestPermissionsAsync();
-    console.warn('PUSH PERMISSION:', perm.status);
+    if (__DEV__) console.warn('PUSH PERMISSION:', perm.status);
     if (perm.status !== 'granted') {
       return null;
     }
@@ -38,7 +38,7 @@ export async function registerPushToken(userId) {
 
     return token;
   } catch (e) {
-    console.warn('[notifications]', e?.message ?? e);
+    if (__DEV__) console.warn('[notifications]', e?.message ?? e);
     return null;
   }
 }

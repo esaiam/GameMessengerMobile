@@ -101,6 +101,5 @@ export default function useInlineMediaSearch(text, { enabled = true, parseQuery,
     hasMore,
     loadMore,
     needsQuery: active && query.length < MIN_QUERY_LEN,
-    parsed,
-  };
+    parsed };
 }

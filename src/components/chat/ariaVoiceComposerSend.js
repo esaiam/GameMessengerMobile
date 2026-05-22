@@ -5,8 +5,7 @@ import {
   ARIA_MESSAGE_TYPING,
   ARIA_TYPING_ROW_ID,
   createAriaMessageBaseRow,
-  transcribeAriaVoice,
-} from '../../lib/aria';
+  transcribeAriaVoice } from '../../lib/aria';
 import { readUriAsBase64 } from './chatMediaIo';
 
 /**
@@ -32,8 +31,7 @@ export function startAriaVoiceComposerSend({ uri, nickname, setMessages, sendToA
     message_type: 'text',
     aria_voice_message: true,
     audio_uri: uri,
-    transcription: null,
-  };
+    transcription: null };
 
   const typingRow = {
     ...baseRow,
@@ -43,8 +41,7 @@ export function startAriaVoiceComposerSend({ uri, nickname, setMessages, sendToA
     created_at: now,
     read_at: null,
     message_type: ARIA_MESSAGE_TYPING,
-    isTyping: true,
-  };
+    isTyping: true };
 
   setMessages((prev) => [...prev, userRow, typingRow]);
 

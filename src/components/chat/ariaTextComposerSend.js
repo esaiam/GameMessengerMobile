@@ -8,8 +8,7 @@ export async function sendAriaChatTextMessage({
   sendToAria,
   sendInProgressRef,
   setText,
-  setReplyTarget,
-}) {
+  setReplyTarget }) {
   if (sendInProgressRef.current) return;
   sendInProgressRef.current = true;
   try {

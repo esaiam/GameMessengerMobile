@@ -24,8 +24,7 @@ export default function VoiceWaveformBars({ heights, progress, idle }) {
               height: Math.min(40, Math.max(4, h)),
               marginRight: i === n - 1 ? 0 : VOICE_WAVE_GAP,
               borderRadius: 2,
-              backgroundColor: idle ? VOICE_WAVE_DIM : i < playedEnd ? V.accentSage : VOICE_WAVE_DIM,
-            }}
+              backgroundColor: idle ? VOICE_WAVE_DIM : i < playedEnd ? V.accentSage : VOICE_WAVE_DIM }}
           />
         ))}
       </View>

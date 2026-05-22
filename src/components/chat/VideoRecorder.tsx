@@ -12,8 +12,7 @@ import {
   Animated,
   Alert,
   Platform,
-  TouchableOpacity,
-} from 'react-native';
+  TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import type { VideoCodec } from 'expo-camera';
@@ -97,8 +96,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
             playsInSilentMode: true,
             interruptionMode: 'mixWithOthers',
             allowsRecording: true,
-            shouldRouteThroughEarpiece: false,
-          });
+            shouldRouteThroughEarpiece: false });
         }
         // На Android аудио сессию не трогаем — expo-camera управляет ей сама
       } catch {
@@ -128,15 +126,13 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
           toValue: 1.35,
           damping: 14,
           stiffness: 140,
-          useNativeDriver: true,
-        }).start();
+          useNativeDriver: true }).start();
         startTime.current = Date.now();
 
         progressAnimation.current = Animated.timing(progressAnim, {
           toValue: 1,
           duration: MAX_DURATION_MS,
-          useNativeDriver: false,
-        });
+          useNativeDriver: false });
         progressAnimation.current.start();
 
         elapsedInterval.current = setInterval(() => {
@@ -168,8 +164,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
             damping: 14,
             stiffness: 140,
             overshootClamping: true,
-            useNativeDriver: true,
-          }).start();
+            useNativeDriver: true }).start();
           circleTranslateX.setValue(0);
           circleTranslateY.setValue(0);
           progressAnim.setValue(0);
@@ -206,8 +201,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
             damping: 14,
             stiffness: 140,
             overshootClamping: true,
-            useNativeDriver: true,
-          }).start();
+            useNativeDriver: true }).start();
           circleTranslateX.setValue(0);
           circleTranslateY.setValue(0);
           progressAnim.setValue(0);
@@ -224,8 +218,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       circleTranslateX,
       circleTranslateY,
       uploadMedia,
-      sendMediaMessage,
-    ]);
+      sendMediaMessage]);
 
     const openRecorder = useCallback(async () => {
       onOpen?.();
@@ -279,8 +272,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       prepareRecordingAudioSession,
       runRecordSession,
       progressAnim,
-      onOpen,
-    ]);
+      onOpen]);
 
     const endInlineHold = useCallback(
       (opts: { cancelSlide: boolean }) => {
@@ -302,8 +294,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
             damping: 14,
             stiffness: 140,
             overshootClamping: true,
-            useNativeDriver: true,
-          }).start();
+            useNativeDriver: true }).start();
           circleTranslateX.setValue(0);
           circleTranslateY.setValue(0);
           progressAnim.setValue(0);
@@ -321,8 +312,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
             damping: 14,
             stiffness: 140,
             overshootClamping: true,
-            useNativeDriver: true,
-          }).start();
+            useNativeDriver: true }).start();
           circleTranslateX.setValue(0);
           circleTranslateY.setValue(0);
           progressAnim.setValue(0);
@@ -335,8 +325,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
         onRecordingChange,
         circleScale,
         circleTranslateX,
-        circleTranslateY,
-      ],
+        circleTranslateY],
     );
 
     const onPanUpdate = useCallback(
@@ -372,8 +361,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
         onPanUpdate: (tx, ty) => onPanUpdate(tx, ty),
         lock: () => lock(),
         cancelLocked: () => cancelLocked(),
-        getIsLocked: () => isLocked,
-      }),
+        getIsLocked: () => isLocked }),
       [openRecorder, endInlineHold, onPanUpdate, lock, cancelLocked, isLocked],
     );
 
@@ -385,8 +373,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
 
     const progressWidth = progressAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: ['0%', '100%'],
-    });
+      outputRange: ['0%', '100%'] });
 
     const bottomOffset =
       insets.bottom +
@@ -408,10 +395,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
                   transform: [
                     { translateX: circleTranslateX },
                     { translateY: circleTranslateY },
-                    { scale: circleScale },
-                  ],
-                },
-              ]}
+                    { scale: circleScale }] }]}
               pointerEvents="none"
             >
               <CameraView
@@ -458,9 +442,8 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
                   <Animated.View
                     style={[
                       styles.progressArcFill,
-                      { width: progressWidth },
-                      isRecording && { backgroundColor: V.dangerMuted },
-                    ]}
+                      {width: progressWidth},
+                      isRecording && { backgroundColor: V.dangerMuted }]}
                   />
                 </View>
               </View>
@@ -469,8 +452,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
               pointerEvents={isLocked ? 'box-none' : 'none'}
               style={[
                 styles.overlay,
-                { opacity: isRecording || isLocked ? 1 : 0 },
-              ]}
+                { opacity: isRecording || isLocked ? 1 : 0 }]}
             >
               {isLocked ? (
                 <View style={styles.lockedRow}>
@@ -507,7 +489,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
                     <Text style={styles.timerOverlayText}>{formatTime(elapsedMs)}</Text>
                   </View>
                   <Text
-                    style={[styles.hintText, cancelActive && styles.hintActive]}
+                    style={[styles.hintText, cancelActive && styles.hintActive, { }]}
                     numberOfLines={1}
                   >
                     {'← Slide to cancel'}
@@ -528,8 +510,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 15,
     elevation: 15,
-    pointerEvents: 'none',
-  },
+    pointerEvents: 'none' },
   overlay: {
     position: 'absolute',
     top: 2,
@@ -546,86 +527,73 @@ const styles = StyleSheet.create({
     borderColor: V.border,
     overflow: 'hidden',
     zIndex: 201,
-    elevation: 201,
-  },
+    elevation: 201 },
   timerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingRight: 4,
-  },
+    paddingRight: 4 },
   recDotOverlay: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: V.dangerMuted,
-  },
+    backgroundColor: V.dangerMuted },
   timerOverlayText: {
     fontSize: 13,
     color: V.textPrimary,
     fontWeight: '500',
-    minWidth: 36,
-  },
+    minWidth: 36 },
   hintText: {
     flex: 1,
     fontSize: 11,
     color: V.textMuted,
     fontWeight: '400',
-    textAlign: 'center',
+    textAlign: 'center'
   },
   hintActive: {
-    color: V.dangerMuted,
+    color: V.dangerMuted
   },
   micSpacer: {
     width: MIC_OUTER,
-    height: COMPOSER_LAYOUT.innerHeight,
-  },
+    height: COMPOSER_LAYOUT.innerHeight },
   lockedRow: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   lockedCancelBtn: {
     width: COMPOSER_LAYOUT.innerHeight,
     height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   lockedRowSpacer: {
-    flex: 1,
-  },
+    flex: 1 },
   sendSlot: {
     width: MIC_OUTER,
     height: COMPOSER_LAYOUT.innerHeight,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   inlineCircleWrap: {
     position: 'absolute',
     alignSelf: 'center',
     overflow: 'hidden',
     backgroundColor: V.bgSurface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: V.sageBorder,
-  },
+    borderColor: V.sageBorder },
   /** До onCameraReady: размытая «мутность» вместо пустого чёрного превью */
   cameraWarmupOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: INLINE_CIRCLE / 2,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   circleOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: 10,
-  },
+    paddingTop: 10 },
   circleRing: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: INLINE_CIRCLE / 2,
     borderWidth: 3,
-    borderColor: 'rgba(90,158,154,0.45)',
-  },
+    borderColor: 'rgba(90,158,154,0.45)' },
   timerPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -633,19 +601,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 14,
-    gap: 6,
-  },
+    gap: 6 },
   recDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: V.dangerMuted,
-  },
+    backgroundColor: V.dangerMuted },
   timerText: {
     color: V.textPrimary,
     fontSize: 12,
     fontWeight: '500',
-    fontVariant: ['tabular-nums'],
+    fontVariant: ['tabular-nums']
   },
   /** Узкая полоска прогресса у нижнего края круга */
   progressArc: {
@@ -657,11 +623,8 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden',
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   progressArcFill: {
     height: '100%',
     backgroundColor: V.accentSage,
-    borderRadius: 2,
-  },
-});
+    borderRadius: 2 } });

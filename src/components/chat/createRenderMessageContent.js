@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, TouchableOpacity, Image, Text, Linking } from 'react-native';
+import { View, TouchableOpacity, Text, Linking } from 'react-native';
 import tw from 'twrnc';
+import { MapPin } from '../../icons/lucideIcons';
 import { V } from '../../theme';
 import ChatVoicePlayer from './ChatVoicePlayer';
 import VideoMessage from './VideoMessage';
@@ -17,8 +18,7 @@ export function createRenderMessageContent({
   setActiveVideoId,
   activatedVideoIdsRef,
   rowEnvRef,
-  playbackEnvRef,
-}) {
+  playbackEnvRef }) {
   return function renderMessageContent(item, isMine) {
     const pe = playbackEnvRef.current;
     const type = item.message_type || 'text';
@@ -27,25 +27,17 @@ export function createRenderMessageContent({
       fontSize: MSG_TEXT_SIZE,
       fontWeight: '500',
       lineHeight: MSG_LINE_HEIGHT,
-      color: bodyColor,
+      color: bodyColor
     };
     const bodyTextStyle = {
       fontSize: MSG_TEXT_SIZE,
       fontWeight: '400',
       lineHeight: MSG_LINE_HEIGHT,
-      color: bodyColor,
+      color: bodyColor
     };
     switch (type) {
       case 'image':
-        return (
-          <TouchableOpacity activeOpacity={0.9} onPress={() => setFullScreenImage(item.media_url)}>
-            <Image
-              source={{ uri: item.media_url }}
-              style={tw`w-52 h-52 rounded-[12px]`}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
-        );
+        return null;
       case 'voice':
       case 'audio':
         return (

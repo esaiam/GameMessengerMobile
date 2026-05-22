@@ -9,8 +9,7 @@ export default function ChatClearHistoryConfirmModal({
   uiReady,
   visible,
   onClose,
-  onConfirm,
-}) {
+  onConfirm }) {
   const [deleteForEveryone, setDeleteForEveryone] = useState(false);
 
   useEffect(() => {
@@ -34,9 +33,7 @@ export default function ChatClearHistoryConfirmModal({
             {
               backgroundColor: V.bgElevated,
               borderWidth: StyleSheet.hairlineWidth,
-              borderColor: V.border,
-            },
-          ]}
+              borderColor: V.border }]}
         >
           <View style={tw`px-5 pt-5 pb-2`}>
             <Text style={[tw`text-[16px]`, { color: V.textPrimary, fontWeight: '500' }]}>
@@ -54,8 +51,7 @@ export default function ChatClearHistoryConfirmModal({
             onPress={() => setDeleteForEveryone((v) => !v)}
             style={({ pressed }) => [
               tw`flex-row items-center px-5 py-3`,
-              pressed && { backgroundColor: V.hoverBg },
-            ]}
+              pressed && { backgroundColor: V.hoverBg }]}
           >
             <View
               style={{
@@ -66,8 +62,7 @@ export default function ChatClearHistoryConfirmModal({
                 borderColor: V.border,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: deleteForEveryone ? V.sageSubtle : 'transparent',
-              }}
+                backgroundColor: deleteForEveryone ? V.sageSubtle : 'transparent' }}
             >
               {deleteForEveryone ? (
                 <Check size={14} color={V.accentSage} strokeWidth={1.5} />
@@ -77,8 +72,7 @@ export default function ChatClearHistoryConfirmModal({
               style={[
                 tw`text-[15px] ml-3 flex-1`,
                 { color: V.textPrimary, fontWeight: '400' },
-                Platform.OS === 'android' ? { includeFontPadding: false } : null,
-              ]}
+                Platform.OS === 'android' ? { includeFontPadding: false } : null]}
             >
               Удалить у всех
             </Text>
@@ -93,10 +87,8 @@ export default function ChatClearHistoryConfirmModal({
             style={({ pressed }) => [
               tw`mx-3 mt-2 rounded-[10px] py-3 items-center`,
               {
-                backgroundColor: V.btnPrimaryBg,
-              },
-              pressed && { backgroundColor: V.btnPrimaryHover },
-            ]}
+                backgroundColor: V.btnPrimaryBg },
+              pressed && { backgroundColor: V.btnPrimaryHover }]}
           >
             <Text style={[tw`text-[15px]`, { color: V.dangerMuted, fontWeight: '500' }]}>
               Очистить
@@ -109,8 +101,7 @@ export default function ChatClearHistoryConfirmModal({
             onPress={onClose}
             style={({ pressed }) => [
               tw`items-center py-3.5 mb-1 mx-3 rounded-[10px] mt-1`,
-              pressed && { backgroundColor: V.hoverBg },
-            ]}
+              pressed && { backgroundColor: V.hoverBg }]}
           >
             <Text style={[tw`text-[15px]`, { color: V.textSecondary, fontWeight: '400' }]}>
               Отмена

@@ -8,8 +8,7 @@ import { V, COMPOSER_LAYOUT } from '../../theme';
 import {
   registerActivePlaybackUri,
   unregisterActivePlaybackUri,
-  updateFileAccess,
-} from '../../storage/CacheManager';
+  updateFileAccess } from '../../storage/CacheManager';
 
 export default function ChatVoicePlayer({
   url,
@@ -19,8 +18,7 @@ export default function ChatVoicePlayer({
   onPlay,
   activeVoiceMessageId,
   activePlayerStatus,
-  idleDurationSec,
-}) {
+  idleDurationSec }) {
   const resolvedUri = useVoicePlayerResolvedUri(url);
 
   const preparingRemote =
@@ -70,8 +68,7 @@ export default function ChatVoicePlayer({
           alignItems: 'center',
           width: 200,
           minHeight: COMPOSER_LAYOUT.innerHeight - 4,
-          minWidth: 0,
-        }}
+          minWidth: 0 }}
       >
         <ActivityIndicator size="small" color={V.accentSage} />
         <View style={{ flex: 1, marginLeft: 8, minWidth: 0 }}>

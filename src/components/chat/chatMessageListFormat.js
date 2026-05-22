@@ -22,6 +22,16 @@ export function formatDateLabel(dateStr) {
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
 
+export function formatDateKey(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function stableReactionsSig(reactions) {
   if (reactions == null) return '';
   if (typeof reactions !== 'object') return String(reactions);
@@ -54,8 +64,7 @@ export function messageRowContentSig(m) {
     m.reply_to ?? '',
     m.latitude ?? '',
     m.longitude ?? '',
-    stableReactionsSig(m.reactions),
-  ].join('\x1e');
+    stableReactionsSig(m.reactions)].join('\x1e');
 }
 
 /**
@@ -92,14 +101,15 @@ export function buildFormattedRowCached(msg, above, cache, seenOpt) {
 
   const dateLabel = formatDateLabel(msg.created_at);
   const aboveDateLabel = above ? formatDateLabel(above.created_at) : null;
+  const dateKey = formatDateKey(msg.created_at);
   const row = {
     ...msg,
     _formattedTime: formatTime(msg.created_at),
     _dateLabel: dateLabel,
+    _dateKey: dateKey,
     _showDate: !above || dateLabel !== aboveDateLabel,
     _sameDay: above ? dateLabel === aboveDateLabel : false,
-    _abovePlayerName: above ? above.player_name : null,
-  };
+    _abovePlayerName: above ? above.player_name : null };
   cache.set(key, { row, msgSig, aboveSig });
   if (seenOpt) seenOpt.add(key);
   return row;

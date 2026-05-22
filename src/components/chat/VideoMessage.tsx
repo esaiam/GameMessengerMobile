@@ -6,14 +6,16 @@ import {
   Pressable,
   Platform,
   Animated,
-  Image,
-} from 'react-native';
+  Image } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import Svg, { Circle } from 'react-native-svg';
 import { File as ExpoFile } from 'expo-file-system';
 import { V } from '../../theme';
 import { recordFileAccess } from '../../storage/CacheManager';
+import {
+  VIDEO_FEED_CIRCLE_IDLE,
+  VIDEO_FEED_CIRCLE_ACTIVE } from './messageBubbleLayoutConstants';
 const IDLE_WARMUP_TEXTURE = require('../../../assets/chat-room-wallpaper.jpg');
 
 interface VideoMessageProps {
@@ -25,8 +27,8 @@ interface VideoMessageProps {
   onLongPress?: (event: GestureResponderEvent) => void;
 }
 
-const CIRCLE_IDLE = 200;
-const CIRCLE_ACTIVE = 280;
+const CIRCLE_IDLE = VIDEO_FEED_CIRCLE_IDLE;
+const CIRCLE_ACTIVE = VIDEO_FEED_CIRCLE_ACTIVE;
 const R_IDLE = CIRCLE_IDLE / 2;
 const R_ACTIVE = CIRCLE_ACTIVE / 2;
 /** Свежий локальный mp4 часто шлёт ложный playToEnd до стабильной длительности — не закрываем UI сразу после старта. */
@@ -109,8 +111,7 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
         toValue: CIRCLE_ACTIVE,
         useNativeDriver: false,
         damping: 18,
-        stiffness: 200,
-      }).start();
+        stiffness: 200 }).start();
     } else {
       sawMeaningfulProgressRef.current = false;
       playbackStartedAtRef.current = 0;
@@ -121,8 +122,7 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
         toValue: CIRCLE_IDLE,
         useNativeDriver: false,
         damping: 18,
-        stiffness: 200,
-      }).start();
+        stiffness: 200 }).start();
     }
   }, [isActive, player, sizeAnim, shouldInitPlayer]);
 
@@ -227,8 +227,7 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
 
   const borderRadius = sizeAnim.interpolate({
     inputRange: [CIRCLE_IDLE, CIRCLE_ACTIVE],
-    outputRange: [R_IDLE, R_ACTIVE],
-  });
+    outputRange: [R_IDLE, R_ACTIVE] });
 
   const showIdleLoadingVeil = !isActive && !idlePreviewReady;
   const showActiveStreamVeil = isActive && !streamRenderReady;
@@ -242,8 +241,7 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
       delayLongPress={400}
       accessibilityLabel={isActive ? 'Пауза' : 'Воспроизвести видео'}
       style={({ pressed }) => ({
-        transform: [{ scale: pressed ? 1.04 : 1 }],
-      })}
+        transform: [{ scale: pressed ? 1.04 : 1 }] })}
     >
       {/* Круговой клип только здесь: у предка VideoView не держим overflow+native-driver scale/opacity — иначе после смены layout (выделение и т.п.) поверхность может не рисоваться. */}
       <Animated.View
@@ -254,8 +252,7 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
           overflow: 'hidden',
           backgroundColor: V.bgElevated,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: V.border,
-        }}
+          borderColor: V.border }}
       >
         {isActive && (
           <View style={styles.progressRing} pointerEvents="none">
@@ -324,16 +321,11 @@ export default function VideoMessage({ url, messageId, activeVideoId, wasActivat
 
 const styles = StyleSheet.create({
   videoLayer: {
-    zIndex: 1,
-  },
+    zIndex: 1 },
   veilLayer: {
-    zIndex: 3,
-  },
+    zIndex: 3 },
   thumbLayer: {
-    zIndex: 2,
-  },
+    zIndex: 2 },
   progressRing: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 5,
-  },
-});
+    zIndex: 5 } });

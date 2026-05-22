@@ -13,8 +13,7 @@ export function parseAtTrigger(text, tag) {
     tail.startsWith(' ') || tail.startsWith('\n') ? tail.replace(/^[\s\n]+/, '') : tail;
   return {
     query: query.trim(),
-    triggerStart: idx,
-  };
+    triggerStart: idx };
 }
 
 /** Активен последний из `@pic` / `@gif` в строке. */

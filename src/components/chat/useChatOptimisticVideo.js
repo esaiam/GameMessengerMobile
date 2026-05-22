@@ -11,8 +11,7 @@ export default function useChatOptimisticVideo({
   filterHiddenForMeKeepingDeleting,
   filterExpired,
   fadeAnims,
-  scaleAnims,
-}) {
+  scaleAnims }) {
   /** Temp ID оптимистичного видеосообщения, ожидающего подтверждения от сервера */
   const optimisticVideoTempIdRef = useRef(null);
   /** После INSERT: tempId → реальный id, чтобы не сбрасывать открытое видео при замене плейсхолдера */
@@ -26,8 +25,7 @@ export default function useChatOptimisticVideo({
       scaleAnims[tempId] = new Animated.Value(0.85);
       Animated.parallel([
         Animated.timing(fadeAnims[tempId], { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(scaleAnims[tempId], { toValue: 1, friction: 8, tension: 120, useNativeDriver: true }),
-      ]).start();
+        Animated.spring(scaleAnims[tempId], { toValue: 1, friction: 8, tension: 120, useNativeDriver: true })]).start();
       setMessages((prev) =>
         filterHiddenForMeKeepingDeleting(
           filterExpired([
@@ -40,9 +38,7 @@ export default function useChatOptimisticVideo({
               message_type: 'video',
               media_url: localUri,
               created_at: new Date().toISOString(),
-              _isOptimistic: true,
-            },
-          ]),
+              _isOptimistic: true }]),
         ),
       );
     },
@@ -60,6 +56,5 @@ export default function useChatOptimisticVideo({
     optimisticVideoTempIdRef,
     pendingVideoActiveIdMigrationRef,
     handleVideoRecorded,
-    handleVideoSendError,
-  };
+    handleVideoSendError };
 }

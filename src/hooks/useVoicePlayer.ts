@@ -102,13 +102,13 @@ export function useVoicePlayer() {
           break;
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : String(e);
-          console.warn('[useVoicePlayer] createAsync attempt', attempt + 1, 'failed:', msg);
+          if (__DEV__) console.warn('[useVoicePlayer] createAsync attempt', attempt + 1, 'failed:', msg);
           if (attempt < 2) await new Promise((r) => setTimeout(r, 200));
         }
       }
 
       if (!sound) {
-        console.warn('[useVoicePlayer] all createAsync attempts failed, aborting');
+        if (__DEV__) console.warn('[useVoicePlayer] all createAsync attempts failed, aborting');
         setActiveUri(null);
         activeUriRef.current = null;
         return;
@@ -131,7 +131,7 @@ export function useVoicePlayer() {
       soundRef.current = sound;
       loadedUriRef.current = uri;
     } catch (e) {
-      console.warn('[useVoicePlayer] error', JSON.stringify(e), e instanceof Error ? e.message : e);
+      if (__DEV__) console.warn('[useVoicePlayer] error', JSON.stringify(e), e instanceof Error ? e.message : e);
     }
   }, []);
 

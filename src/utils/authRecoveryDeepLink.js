@@ -22,8 +22,7 @@ export function parseAuthRecoveryFromUrl(rawUrl) {
       return {
         access_token,
         refresh_token,
-        type: p.get('type') || '',
-      };
+        type: p.get('type') || '' };
     };
     if (u.hash && u.hash.length > 1) {
       const r = fromSearch(u.hash.slice(1));

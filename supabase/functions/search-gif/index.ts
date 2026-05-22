@@ -47,9 +47,10 @@ Deno.serve(async (req) => {
 
     const url = new URL(req.url);
     const q = (url.searchParams.get('q') || '').trim();
+    const trending = url.searchParams.get('trending') === '1';
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
 
-    if (q.length < 2) {
+    if (!trending && q.length < 2) {
       return new Response(JSON.stringify({ results: [], page: 1, hasMore: false }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -57,9 +58,10 @@ Deno.serve(async (req) => {
     }
 
     const offset = (page - 1) * PER_PAGE;
-    const giphyRes = await fetch(
-      `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(giphyKey)}&q=${encodeURIComponent(q)}&limit=${PER_PAGE}&offset=${offset}&rating=g&lang=ru`,
-    );
+    const giphyUrl = trending
+      ? `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(giphyKey)}&limit=${PER_PAGE}&offset=${offset}&rating=g`
+      : `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(giphyKey)}&q=${encodeURIComponent(q)}&limit=${PER_PAGE}&offset=${offset}&rating=g&lang=ru`;
+    const giphyRes = await fetch(giphyUrl);
 
     if (!giphyRes.ok) {
       const detail = await giphyRes.text();

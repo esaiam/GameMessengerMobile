@@ -10,6 +10,5 @@ export function getAriaComposerSurfaceProps(isAriaChat, ariaOnline) {
   return {
     ariaTextOnly: aria,
     ariaAllowVoice: aria,
-    ariaUnavailable: aria && ariaOnline === false,
-  };
+    ariaUnavailable: aria && ariaOnline === false };
 }

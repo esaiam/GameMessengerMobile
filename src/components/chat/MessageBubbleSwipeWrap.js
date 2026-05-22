@@ -4,8 +4,7 @@ import Reanimated, {
   useAnimatedStyle,
   withTiming,
   Easing,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 /** Свайп пузырька влево → ответ */
@@ -46,8 +45,7 @@ export default function MessageBubbleSwipeWrap({ children, enabled, isMine, onRe
         .onFinalize(() => {
           translateX.value = withTiming(0, {
             duration: SWIPE_REPLY_RESET_MS,
-            easing: Easing.out(Easing.cubic),
-          });
+            easing: Easing.out(Easing.cubic) });
         }),
     [enabled, translateX, triggerReply]
   );
@@ -56,8 +54,7 @@ export default function MessageBubbleSwipeWrap({ children, enabled, isMine, onRe
     const tx = translateX.value;
     const stretch = Math.min(Math.abs(tx) / 420, 0.045);
     return {
-      transform: [{ translateX: tx }, { scaleX: 1 + stretch }],
-    };
+      transform: [{ translateX: tx }, { scaleX: 1 + stretch }] };
   });
 
   return (

@@ -10,16 +10,15 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  View,
-} from 'react-native';
+  View } from 'react-native';
 import {
   ChevronDown,
   Copy,
   Forward,
+  Image,
   Pin,
   Reply,
-  Trash2,
-} from '../../icons/lucideIcons';
+  Trash2 } from '../../icons/lucideIcons';
 import { V } from '../../theme';
 
 const REACTIONS = ['❤️', '👍', '🔥', '😁', '😢', '👏', '🙏'] as const;
@@ -47,6 +46,8 @@ export type MessageContextMenuProps = {
   visible: boolean;
   onClose: () => void;
   onReply: () => void;
+  /** Фото/GIF: открыть на весь экран */
+  onOpen?: () => void;
   onCopy: () => void;
   onForward: () => void;
   onPin: () => void;
@@ -57,14 +58,12 @@ export type MessageContextMenuProps = {
 const ICON_PROPS = {
   size: 20,
   color: V.textSecondary,
-  strokeWidth: 1.5,
-} as const;
+  strokeWidth: 1.5 } as const;
 
 function ScalePress({
   children,
   onPress,
-  style,
-}: {
+  style }: {
   children: React.ReactNode;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -75,8 +74,7 @@ function ScalePress({
       toValue: v,
       useNativeDriver: true,
       friction: 6,
-      tension: 320,
-    }).start();
+      tension: 320 }).start();
 
   return (
     <Pressable
@@ -94,12 +92,12 @@ export default function MessageContextMenu({
   visible,
   onClose,
   onReply,
+  onOpen,
   onCopy,
   onForward,
   onPin,
   onDelete,
-  position,
-}: MessageContextMenuProps) {
+  position }: MessageContextMenuProps) {
   const [rendered, setRendered] = useState(false);
   const scaleAnim = useRef(new Animated.Value(0.85)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -114,15 +112,12 @@ export default function MessageContextMenu({
           toValue: 1,
           useNativeDriver: true,
           friction: 7,
-          tension: 40,
-        }),
+          tension: 40 }),
         Animated.timing(opacityAnim, {
           toValue: 1,
           duration: 150,
           easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]).start();
+          useNativeDriver: true })]).start();
       return;
     }
     if (!rendered) return;
@@ -130,14 +125,11 @@ export default function MessageContextMenu({
       Animated.timing(scaleAnim, {
         toValue: 0.85,
         duration: 120,
-        useNativeDriver: true,
-      }),
+        useNativeDriver: true }),
       Animated.timing(opacityAnim, {
         toValue: 0,
         duration: 120,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
+        useNativeDriver: true })]).start(({ finished }) => {
       if (finished) setRendered(false);
     });
   }, [visible, rendered, scaleAnim, opacityAnim]);
@@ -147,14 +139,11 @@ export default function MessageContextMenu({
       Animated.timing(scaleAnim, {
         toValue: 0.85,
         duration: 120,
-        useNativeDriver: true,
-      }),
+        useNativeDriver: true }),
       Animated.timing(opacityAnim, {
         toValue: 0,
         duration: 120,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
+        useNativeDriver: true })]).start(({ finished }) => {
       if (finished) {
         setRendered(false);
         onClose();
@@ -192,18 +181,15 @@ export default function MessageContextMenu({
 
   const animStyle = {
     opacity: opacityAnim,
-    transform: [{ scale: scaleAnim }],
-  };
+    transform: [{ scale: scaleAnim }] };
   const menuStyle = {
     top,
     left: menuLeft,
-    width: menuWidth,
-  };
+    width: menuWidth };
   const reactionsStyle = {
     top: top - REACTIONS_HEIGHT - 6,
     left: reactionsLeft,
-    width: reactionsWidth,
-  };
+    width: reactionsWidth };
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={handleClose}>
@@ -243,13 +229,23 @@ export default function MessageContextMenu({
           </View>
         </Animated.View>
 
-        <Animated.View style={[styles.sheetWrap, menuStyle, animStyle]}>
+        <Animated.View style={[styles.sheetWrap, menuStyle, animStyle, { }]}>
           <View style={styles.sheet}>
             <MenuRow
               icon={<Reply {...ICON_PROPS} />}
               label="Ответить"
               onPress={() => run(onReply)}
             />
+            {onOpen ? (
+              <>
+                <View style={styles.rowDivider} />
+                <MenuRow
+                  icon={<Image {...ICON_PROPS} />}
+                  label="Открыть"
+                  onPress={() => run(onOpen)}
+                />
+              </>
+            ) : null}
             <View style={styles.rowDivider} />
             <MenuRow
               icon={<Copy {...ICON_PROPS} />}
@@ -286,8 +282,7 @@ function MenuRow({
   icon,
   label,
   onPress,
-  danger,
-}: {
+  danger }: {
   icon: React.ReactNode;
   label: string;
   onPress: () => void;
@@ -304,58 +299,49 @@ function MenuRow({
       style={[styles.row, pressed && styles.rowPressed]}
     >
       {icon}
-      <Text style={[styles.rowLabel, { color: textColor }]}>{label}</Text>
+      <Text style={[styles.rowLabel, { color: textColor}]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   modalRoot: {
-    flex: 1,
-  },
+    flex: 1 },
   backdropTint: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.45)' },
   sheetWrap: {
-    position: 'absolute',
-  },
+    position: 'absolute' },
   reactionsFloat: {
-    position: 'absolute',
-  },
+    position: 'absolute' },
   reactionsCard: {
     borderRadius: 999,
     paddingVertical: 7,
     paddingHorizontal: 5,
-    backgroundColor: V.bgElevated,
-  },
+    backgroundColor: V.bgElevated },
   sheet: {
     width: '100%',
     backgroundColor: V.bgElevated,
     borderRadius: 16,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   reactionsScroll: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: REACTION_GAP_X,
-    paddingHorizontal: 0,
-  },
+    paddingHorizontal: 0 },
   reactionHit: {
     minWidth: REACTION_EMOJI_CELL,
     minHeight: REACTION_ROW_H,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   reactionInner: {
     width: REACTION_EMOJI_CELL,
     height: REACTION_ROW_H,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   reactionEmoji: {
     fontSize: 22,
     lineHeight: 28,
-    textAlign: 'center',
+    textAlign: 'center'
   },
   chevronCircle: {
     width: REACTION_CHEVRON,
@@ -363,24 +349,19 @@ const styles = StyleSheet.create({
     borderRadius: REACTION_CHEVRON / 2,
     backgroundColor: V.bgSurface,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   row: {
     height: 48,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 18,
-    gap: 14,
-  },
+    gap: 14 },
   rowPressed: {
-    backgroundColor: V.hoverBg,
-  },
+    backgroundColor: V.hoverBg },
   rowLabel: {
     fontSize: 15,
-    fontWeight: '400',
+    fontWeight: '400'
   },
   rowDivider: {
     height: 0.5,
-    backgroundColor: V.border,
-  },
-});
+    backgroundColor: V.border } });

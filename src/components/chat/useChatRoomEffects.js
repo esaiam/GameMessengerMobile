@@ -31,8 +31,7 @@ export default function useChatRoomEffects({
   setMessagesLoading,
   messagesRef,
   /** ref для отправки broadcast после «удалить у всех» / очистки (когда postgres UPDATE не доходит из‑за RLS) */
-  chatSyncRef,
-}) {
+  chatSyncRef }) {
   const readSentRef = useRef(new Set());
 
   /** Realtime INSERT: накапливаем расшифрованные сообщения и сливаем в один setMessages за microtask (меньше ререндеров при пачке событий). */
@@ -164,9 +163,7 @@ export default function useChatRoomEffects({
               toValue: 1,
               friction: 8,
               tension: 120,
-              useNativeDriver: true,
-            }),
-          ]).start();
+              useNativeDriver: true })]).start();
         }
       }
 
@@ -187,8 +184,7 @@ export default function useChatRoomEffects({
               next = filterHiddenForMeKeepingDeleting(
                 filterExpired([
                   ...next.filter((m) => m.id !== tempId),
-                  { ...msg, clientRowKey: tempId },
-                ])
+                  { ...msg, clientRowKey: tempId }])
               );
               continue;
             }
@@ -286,15 +282,12 @@ export default function useChatRoomEffects({
             channel.send({
               type: 'broadcast',
               event: 'vault_msg_hide',
-              payload: { id: messageId },
-            }),
+              payload: { id: messageId } }),
           clearThread: () =>
             channel.send({
               type: 'broadcast',
               event: 'vault_thread_clear',
-              payload: {},
-            }),
-        };
+              payload: {} }) };
       });
 
     return () => {

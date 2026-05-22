@@ -17,8 +17,7 @@ export default function useChatSelection({
   filterExpired,
   formattedMessages,
   decryptMsg,
-  onOpenMessageMenu,
-}) {
+  onOpenMessageMenu }) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
@@ -44,10 +43,10 @@ export default function useChatSelection({
         });
         return;
       }
-      if (isAriaChat || item?.message_type === ARIA_MESSAGE_TYPING) return;
+      if (item?.message_type === ARIA_MESSAGE_TYPING) return;
       onOpenMessageMenu(event, item);
     },
-    [selectionMode, isAriaChat, onOpenMessageMenu],
+    [selectionMode, onOpenMessageMenu],
   );
 
   const handleMessageLongPress = useCallback(
@@ -97,9 +96,7 @@ export default function useChatSelection({
               Alert.alert('Ошибка', lastError.message);
             }
             exitSelectionMode();
-          },
-        },
-      ],
+          } }],
     );
   }, [selectedIds, messages, nickname, exitSelectionMode, filterHiddenForMe, filterExpired, setMessages]);
 
@@ -138,6 +135,5 @@ export default function useChatSelection({
     handleMessageLongPress,
     batchDeleteForMe,
     batchCopySelected,
-    batchForwardSelected,
-  };
+    batchForwardSelected };
 }

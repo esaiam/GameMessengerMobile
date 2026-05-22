@@ -55,6 +55,5 @@ export function useChatInvertedListScroll(roomId, messages, headerMeasured, supp
     stickToBottomRef,
     layoutReadyRef,
     initialScrollDoneRef,
-    onScroll,
-  };
+    onScroll };
 }

@@ -20,9 +20,7 @@ const NavTheme = {
     background: BG,
     card: BG,
     primary: BG,
-    border: BG,
-  },
-};
+    border: BG } };
 
 const Stack = createNativeStackNavigator();
 
@@ -41,8 +39,7 @@ export function RootNavigationTree({ navRef, stackKey, session, profileHandle })
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: BG },
-            animation: 'slide_from_right',
-          }}
+            animation: 'slide_from_right' }}
         >
           {!session ? (
             <>
@@ -54,8 +51,7 @@ export function RootNavigationTree({ navRef, stackKey, session, profileHandle })
                   presentation: 'modal',
                   animation: 'slide_from_bottom',
                   headerShown: false,
-                  contentStyle: { backgroundColor: BG },
-                }}
+                  contentStyle: { backgroundColor: BG } }}
               />
             </>
           ) : !profileHandle ? (
