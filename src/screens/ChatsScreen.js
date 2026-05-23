@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Animated,
   FlatList,
   Platform,
   StyleSheet,
@@ -9,6 +8,8 @@ import {
   TextInput,
   TouchableOpacity,
   View } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
 import SafeBlurView from '../components/SafeBlurView';
 import tw from 'twrnc';
 import { ARIA_CONTACT, ARIA_ROOM_ID } from '../lib/aria';
@@ -29,10 +30,13 @@ import { useSplitDetail } from '../context/SplitDetailContext';
 import { isBlocked } from '../lib/blockedContacts';
 import { navigateToBlockedContacts } from '../lib/navigateToBlockedContacts';
 
+const ReanimatedFlatList = Animated.createAnimatedComponent(FlatList);
+
 export default function ChatsScreen({ route, navigation }) {
   const nickname = useNicknameFromRoute(route);
   const isSplit = useIsSplitLayout();
   const { setDetailParams } = useSplitDetail();
+  const listRef = useRef(null);
 
   useEffect(() => {
     clearPreviewCache();
@@ -47,16 +51,17 @@ export default function ChatsScreen({ route, navigation }) {
 
   const {
     SEARCH_FIELD_H,
+    SEARCH_REVEAL_RANGE_PX,
     searchPointerEvents,
     setSearchShown,
-    panResponder,
-    onListScroll,
-    searchTranslateY,
-    searchOpacity,
-    iconOpacity,
-    listTranslateY,
-    setListViewportH,
-    setListContentH } = useChatsSearchReveal(q, searchFocused);
+    listGesture,
+    scrollHandler,
+    onListScrollEndDrag,
+    onListMomentumScrollEnd,
+    searchBarStyle,
+    iconStyle,
+    listMinHeight,
+    setListViewportH } = useChatsSearchReveal(q, searchFocused, listRef);
 
   const filtered = useMemo(() => filterChatsRows(rows, q), [q, rows]);
 
@@ -114,6 +119,13 @@ export default function ChatsScreen({ route, navigation }) {
     [nickname, navigation, isSplit, setDetailParams]
   );
 
+  const contentContainerStyle = useMemo(
+    () => ({
+      paddingTop: SEARCH_REVEAL_RANGE_PX,
+      ...(listMinHeight != null ? { minHeight: listMinHeight } : null) }),
+    [SEARCH_REVEAL_RANGE_PX, listMinHeight]
+  );
+
   return (
     <TabBackground>
       <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
@@ -129,7 +141,7 @@ export default function ChatsScreen({ route, navigation }) {
           <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
             Vault
           </Text>
-          <Animated.View style={{ opacity: iconOpacity }}>
+          <Animated.View style={iconStyle}>
             <TouchableOpacity
               onPress={() => {
                 setSearchShown(true);
@@ -156,51 +168,48 @@ export default function ChatsScreen({ route, navigation }) {
                 right: MESSENGER_HEADER_PADDING_HORIZONTAL,
                 top: 0,
                 zIndex: 2,
-                elevation: 2,
-                opacity: searchOpacity,
-                transform: [{ translateY: searchTranslateY }] }]}
+                elevation: 2 },
+              searchBarStyle]}
           >
             <View style={{ marginBottom: CHATS_SEARCH_BOTTOM_SPACING_PX }}>
-                <SafeBlurView
-                  intensity={28}
-                  tint="dark"
-                  blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
+              <SafeBlurView
+                intensity={28}
+                tint="dark"
+                blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
+                style={[
+                  tw`flex-row items-center`,
+                  {
+                    minHeight: SEARCH_FIELD_H,
+                    borderRadius: SEARCH_CHATS_CAPSULE_RADIUS,
+                    overflow: 'hidden',
+                    paddingHorizontal: SEARCH_FIELD_LAYOUT.rowPaddingH,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: 'rgba(255,255,255,0.13)',
+                    backgroundColor: 'rgba(255,255,255,0.06)' }]}
+              >
+                <Search
+                  size={14}
+                  strokeWidth={1.5}
+                  color={V.textMuted}
+                  style={{ marginRight: 8, flexShrink: 0 }}
+                />
+                <TextInput
+                  ref={searchInputRef}
                   style={[
-                    tw`flex-row items-center`,
+                    tw`flex-1 text-[15px]`,
                     {
-                      minHeight: SEARCH_FIELD_H,
-                      borderRadius: SEARCH_CHATS_CAPSULE_RADIUS,
-                      overflow: 'hidden',
-                      paddingHorizontal: SEARCH_FIELD_LAYOUT.rowPaddingH,
-                      borderWidth: StyleSheet.hairlineWidth,
-                      borderColor: 'rgba(255,255,255,0.13)',
-                      backgroundColor: 'rgba(255,255,255,0.06)'
-                    }]}
-                >
-                  <Search
-                    size={14}
-                    strokeWidth={1.5}
-                    color={V.textMuted}
-                    style={{ marginRight: 8, flexShrink: 0 }}
-                  />
-                  <TextInput
-                    ref={searchInputRef}
-                    style={[
-                      tw`flex-1 text-[15px]`,
-                      {
-                        color: V.textPrimary,
-                        paddingVertical: 0,
-                        height: SEARCH_FIELD_H
-                      }]}
-                    placeholder="Поиск..."
-                    placeholderTextColor={V.textMuted}
-                    value={q}
-                    onChangeText={setQ}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    onFocus={() => setSearchFocused(true)}
-                    onBlur={() => setSearchFocused(false)}
-                  />
+                      color: V.textPrimary,
+                      paddingVertical: 0,
+                      height: SEARCH_FIELD_H }]}
+                  placeholder="Поиск..."
+                  placeholderTextColor={V.textMuted}
+                  value={q}
+                  onChangeText={setQ}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                />
                 {!!q && (
                   <TouchableOpacity
                     onPress={() => setQ('')}
@@ -216,40 +225,41 @@ export default function ChatsScreen({ route, navigation }) {
             </View>
           </Animated.View>
 
-          <Animated.View
-            {...panResponder.panHandlers}
-            style={[
-              tw`flex-1`,
-              {
-                transform: [{ translateY: listTranslateY }],
-                paddingHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL }]}
+          <View
+            style={[tw`flex-1`, { paddingHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL }]}
             onLayout={(e) => setListViewportH(e.nativeEvent.layout.height)}
           >
-            <FlatList
-              data={listData}
-              keyExtractor={(i) => (i.isAria ? ARIA_ROOM_ID : i.roomId)}
-              renderItem={renderItem}
-              onScroll={onListScroll}
-              scrollEventThrottle={16}
-              onContentSizeChange={(_w, h) => setListContentH(h)}
-              contentContainerStyle={{
-                paddingTop: SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX }}
-              ListEmptyComponent={
-                <View style={tw`py-10`}>
-                  {q.trim().length > 0 ? (
-                    <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>
-                      Контакты не найдены
-                    </Text>
-                  ) : (
-                    <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>
-                      Пока нет чатов.
-                    </Text>
-                  )}
-                </View>
-              }
-              showsVerticalScrollIndicator={false}
-            />
-          </Animated.View>
+            <GestureDetector gesture={listGesture}>
+              <ReanimatedFlatList
+                ref={listRef}
+                data={listData}
+                keyExtractor={(i) => (i.isAria ? ARIA_ROOM_ID : i.roomId)}
+                renderItem={renderItem}
+                onScroll={scrollHandler}
+                onScrollEndDrag={onListScrollEndDrag}
+                onMomentumScrollEnd={onListMomentumScrollEnd}
+                scrollEventThrottle={16}
+                keyboardShouldPersistTaps="handled"
+                overScrollMode="always"
+                nestedScrollEnabled
+                contentContainerStyle={contentContainerStyle}
+                ListEmptyComponent={
+                  <View style={tw`py-10`}>
+                    {q.trim().length > 0 ? (
+                      <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>
+                        Контакты не найдены
+                      </Text>
+                    ) : (
+                      <Text style={[tw`text-center text-[13px]`, { color: V.textMuted }]}>
+                        Пока нет чатов.
+                      </Text>
+                    )}
+                  </View>
+                }
+                showsVerticalScrollIndicator={false}
+              />
+            </GestureDetector>
+          </View>
         </View>
       </View>
     </TabBackground>
