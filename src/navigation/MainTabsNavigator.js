@@ -1,8 +1,7 @@
-import React from 'react';
-import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-
+import PagerView from 'react-native-pager-view';
 import GlassTabBar from '../components/GlassTabBar';
 import GameScreen from '../screens/GameScreen';
 import ChatsScreen from '../screens/ChatsScreen';
@@ -16,36 +15,36 @@ import ContactsScreen from '../screens/ContactsScreen';
 import ContactProfileScreen from '../screens/ContactProfileScreen';
 import { Search, Layers, User, Users } from '../icons/lucideIcons';
 import { V } from '../theme';
-
-const TAB_ACTIVE = V.accentSage;
-const TAB_INACTIVE = V.textMuted;
-
-const TAB_BAR_STYLE = {
-  backgroundColor: 'transparent',
-  borderTopWidth: 0,
-  elevation: 0 };
-
-function hubTabBarStyle(route, hubRouteName) {
-  const focusedRoute = getFocusedRouteNameFromRoute(route) ?? hubRouteName;
-  return focusedRoute === hubRouteName ? TAB_BAR_STYLE : { display: 'none' };
-}
-
-const Tabs = createBottomTabNavigator();
+import { PagerGestureContext } from '../context/PagerGestureContext';
 
 const ChatsStack = createNativeStackNavigator();
 const ContactsStack = createNativeStackNavigator();
 const PokerStack = createNativeStackNavigator();
 const ProfileStack = createNativeStackNavigator();
 
-function ChatsStackNavigator() {
+const TABS = [
+  { key: 'Chats',    name: 'Chats',    icon: (color) => <Search color={color} size={22} strokeWidth={1.5} />, activeTint: V.accentSage },
+  { key: 'Contacts', name: 'Contacts', icon: (color) => <Users  color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentSage },
+  { key: 'Poker',    name: 'Poker',    icon: (color) => <Layers color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentGold },
+  { key: 'Profile',  name: 'Profile',  icon: (color) => <User   color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentSage },
+];
+
+const HIDE_TAB_BAR_ON = new Set(['ChatRoom', 'Room']);
+
+function getDeepestRouteName(state) {
+  let s = state;
+  while (s && s.routes && typeof s.index === 'number') {
+    const r = s.routes[s.index];
+    if (!r?.state) return r?.name || null;
+    s = r.state;
+  }
+  return null;
+}
+
+function ChatsStackNavigator({ initialParams }) {
   return (
-    <ChatsStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        animationDuration: 200 }}
-    >
-      <ChatsStack.Screen name="ChatsList" component={ChatsScreen} />
+    <ChatsStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 200 }}>
+      <ChatsStack.Screen name="ChatsList" component={ChatsScreen} initialParams={initialParams} />
       <ChatsStack.Screen name="ChatRoom" component={ChatRoomScreen} />
       <ChatsStack.Screen name="Room" component={GameScreen} />
       <ChatsStack.Screen name="ContactProfile" component={ContactProfileScreen} />
@@ -53,33 +52,28 @@ function ChatsStackNavigator() {
   );
 }
 
-function ContactsStackNavigator() {
+function ContactsStackNavigator({ initialParams }) {
   return (
-    <ContactsStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        animationDuration: 200 }}
-    >
-      <ContactsStack.Screen name="ContactsHome" component={ContactsScreen} />
+    <ContactsStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 200 }}>
+      <ContactsStack.Screen name="ContactsHome" component={ContactsScreen} initialParams={initialParams} />
       <ContactsStack.Screen name="Room" component={GameScreen} />
       <ContactsStack.Screen name="ContactProfile" component={ContactProfileScreen} />
     </ContactsStack.Navigator>
   );
 }
 
-function PokerStackNavigator() {
+function PokerStackNavigator({ initialParams }) {
   return (
     <PokerStack.Navigator screenOptions={{ headerShown: false }}>
-      <PokerStack.Screen name="PokerHub" component={PokerHubScreen} />
+      <PokerStack.Screen name="PokerHub" component={PokerHubScreen} initialParams={initialParams} />
     </PokerStack.Navigator>
   );
 }
 
-function ProfileStackNavigator() {
+function ProfileStackNavigator({ initialParams }) {
   return (
     <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
-      <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} />
+      <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} initialParams={initialParams} />
       <ProfileStack.Screen name="InviteFriends" component={InviteFriendsScreen} />
       <ProfileStack.Screen name="BlockedContacts" component={BlockedContactsScreen} />
       <ProfileStack.Screen name="ContactProfile" component={ContactProfileScreen} />
@@ -88,55 +82,74 @@ function ProfileStackNavigator() {
   );
 }
 
-export function MainTabs({ route }) {
+function LazyPage({ active, children }) {
+  const hasBeenActive = useRef(false);
+  if (active) hasBeenActive.current = true;
+  if (!hasBeenActive.current) return null;
+  return <View style={{ flex: 1 }}>{children}</View>;
+}
+
+export function MainTabs({ navigation, route }) {
+  const pagerRef = useRef(null);
+  const pagerGestureRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [tabBarVisible, setTabBarVisible] = useState(true);
   const nickname = route.params?.nickname;
 
+  useEffect(() => {
+    return navigation.addListener('state', () => {
+      const state = navigation.getState();
+      const deepest = getDeepestRouteName(state);
+      setTabBarVisible(!HIDE_TAB_BAR_ON.has(deepest));
+    });
+  }, [navigation]);
+
+  const handleTabPress = useCallback((index) => {
+    pagerRef.current?.setPage(index);
+    setActiveIndex(index);
+  }, []);
+
+  const initialParams = { nickname };
+
   return (
-    <Tabs.Navigator
-      initialRouteName="Chats"
-      tabBar={(props) => <GlassTabBar {...props} />}
-      screenOptions={{
-        headerShown: false,
-        tabBarShowLabel: false,
-        tabBarActiveTintColor: TAB_ACTIVE,
-        tabBarInactiveTintColor: TAB_INACTIVE }}
-    >
-      <Tabs.Screen
-        name="Chats"
-        component={ChatsStackNavigator}
-        initialParams={{ nickname }}
-        options={({ route }) => ({
-          tabBarIcon: ({ color, size }) => (
-            <Search color={color} size={size ?? 22} strokeWidth={1.5} />
-          ),
-          tabBarStyle: hubTabBarStyle(route, 'ChatsList') })}
-      />
-      <Tabs.Screen
-        name="Contacts"
-        component={ContactsStackNavigator}
-        initialParams={{ nickname }}
-        options={({ route }) => ({
-          tabBarIcon: ({ color }) => <Users color={color} size={22} strokeWidth={1.8} />,
-          tabBarStyle: hubTabBarStyle(route, 'ContactsHome') })}
-      />
-      <Tabs.Screen
-        name="Poker"
-        component={PokerStackNavigator}
-        initialParams={{ nickname }}
-        options={({ route }) => ({
-          tabBarActiveTintColor: V.accentGold,
-          tabBarInactiveTintColor: TAB_INACTIVE,
-          tabBarIcon: ({ color }) => <Layers color={color} size={22} strokeWidth={1.8} />,
-          tabBarStyle: hubTabBarStyle(route, 'PokerHub') })}
-      />
-      <Tabs.Screen
-        name="Profile"
-        component={ProfileStackNavigator}
-        initialParams={{ nickname }}
-        options={({ route }) => ({
-          tabBarIcon: ({ color }) => <User color={color} size={22} strokeWidth={1.8} />,
-          tabBarStyle: hubTabBarStyle(route, 'ProfileHome') })}
-      />
-    </Tabs.Navigator>
+    <PagerGestureContext.Provider value={pagerGestureRef}>
+      <View style={{ flex: 1, backgroundColor: V.bgApp }}>
+        <PagerView
+          ref={pagerRef}
+          style={{ flex: 1 }}
+          initialPage={0}
+          offscreenPageLimit={1}
+          gestureHandlerRef={pagerGestureRef}
+          onPageSelected={(e) => setActiveIndex(e.nativeEvent.position)}
+        >
+          <View key="0" style={{ flex: 1 }}>
+            <LazyPage active={activeIndex === 0}>
+              <ChatsStackNavigator initialParams={initialParams} />
+            </LazyPage>
+          </View>
+          <View key="1" style={{ flex: 1 }}>
+            <LazyPage active={activeIndex === 1}>
+              <ContactsStackNavigator initialParams={initialParams} />
+            </LazyPage>
+          </View>
+          <View key="2" style={{ flex: 1 }}>
+            <LazyPage active={activeIndex === 2}>
+              <PokerStackNavigator initialParams={initialParams} />
+            </LazyPage>
+          </View>
+          <View key="3" style={{ flex: 1 }}>
+            <LazyPage active={activeIndex === 3}>
+              <ProfileStackNavigator initialParams={initialParams} />
+            </LazyPage>
+          </View>
+        </PagerView>
+        <GlassTabBar
+          activeIndex={activeIndex}
+          tabs={TABS}
+          onTabPress={handleTabPress}
+          visible={tabBarVisible}
+        />
+      </View>
+    </PagerGestureContext.Provider>
   );
 }

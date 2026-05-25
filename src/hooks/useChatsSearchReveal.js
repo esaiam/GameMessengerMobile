@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { Gesture } from 'react-native-gesture-handler';
+import { usePagerGesture } from '../context/PagerGestureContext';
 import {
   Extrapolation,
   interpolate,
@@ -23,6 +24,7 @@ const PAN_SPRING = { damping: 22, stiffness: 240, mass: 0.85 };
 export const CHATS_SEARCH_BOTTOM_SPACING_PX = 20;
 
 export function useChatsSearchReveal(q, searchFocused, listRef) {
+  const pagerGestureRef = usePagerGesture();
   const SEARCH_FIELD_H = SEARCH_FIELD_LAYOUT.chatsHeight;
   const SEARCH_REVEAL_RANGE_PX = SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX;
 
@@ -106,24 +108,19 @@ export function useChatsSearchReveal(q, searchFocused, listRef) {
 
   const listGesture = useMemo(() => {
     const native = Gesture.Native();
-
     if (Platform.OS !== 'android') {
-      return native;
+      return pagerGestureRef
+        ? Gesture.Native().withRef(pagerGestureRef)
+        : native;
     }
-
     const pull = Gesture.Pan()
       .manualActivation(true)
+      .withRef(pagerGestureRef ?? undefined)
       .onTouchesMove((_e, state) => {
-        if (locked.value) {
-          state.fail();
-          return;
-        }
+        if (locked.value) { state.fail(); return; }
         const y = scrollY.value;
         const atOpenTop = y <= 2;
-        if (!atOpenTop && overscrollPull.value <= 0) {
-          state.fail();
-          return;
-        }
+        if (!atOpenTop && overscrollPull.value <= 0) { state.fail(); return; }
         state.activate();
       })
       .onUpdate((e) => {
@@ -140,15 +137,13 @@ export function useChatsSearchReveal(q, searchFocused, listRef) {
           overscrollPull.value = Math.max(0, Math.min(SEARCH_OVERSCROLL_PX, next));
         }
       })
-      .onEnd(() => {
-        overscrollPull.value = withSpring(0, PAN_SPRING);
-      })
-      .onFinalize(() => {
-        overscrollPull.value = withSpring(0, PAN_SPRING);
-      });
-
-    return Gesture.Simultaneous(native, pull);
-  }, [locked, overscrollPull, scrollY]);
+      .onEnd(() => { overscrollPull.value = withSpring(0, PAN_SPRING); })
+      .onFinalize(() => { overscrollPull.value = withSpring(0, PAN_SPRING); });
+    const nativeWithRef = pagerGestureRef
+      ? Gesture.Native().withRef(pagerGestureRef)
+      : native;
+    return Gesture.Simultaneous(nativeWithRef, pull);
+  }, [locked, overscrollPull, scrollY, pagerGestureRef]);
 
   const searchBarStyle = useAnimatedStyle(() => {
     const p = revealProgress.value;
