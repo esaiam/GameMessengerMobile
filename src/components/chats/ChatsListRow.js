@@ -5,6 +5,7 @@ import tw from 'twrnc';
 import { AriaGradientAvatar } from '../chat/AriaChatUi';
 import { Check } from '../../icons/lucideIcons';
 import { V } from '../../theme';
+import { ARIA_CHATS_PREVIEW_TEXT } from '../../screens/chats/chatsConstants';
 import { messagePreview, messagePreviewAsync } from '../../screens/chats/chatsPreviewCache';
 import { formatChatListTime, getInitials } from '../../screens/chats/chatsFormat';
 
@@ -71,12 +72,12 @@ const ChatsListRow = React.memo(
   }) {
     const ts = item.last?.created_at || null;
     const [preview, setPreview] = useState(() =>
-      item.isAria ? 'Привет. Я здесь.' : messagePreview(item.last),
+      item.isAria ? ARIA_CHATS_PREVIEW_TEXT : messagePreview(item.last),
     );
 
     useEffect(() => {
       if (item.isAria) {
-        setPreview('Привет. Я здесь.');
+        setPreview(ARIA_CHATS_PREVIEW_TEXT);
         return undefined;
       }
       let cancelled = false;

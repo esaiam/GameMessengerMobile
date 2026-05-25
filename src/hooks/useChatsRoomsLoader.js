@@ -23,8 +23,6 @@ export function useChatsRoomsLoader(nickname) {
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
-  // Флаг, что диск-кэш уже применён для текущего nickname
-  const diskCacheLoadedRef = useRef(false);
   const blockedCacheRef = useRef({ at: 0, set: new Set() });
   const loadDebounceRef = useRef(null);
 
@@ -48,7 +46,6 @@ export function useChatsRoomsLoader(nickname) {
   /** При монтировании — показать диск-кэш мгновенно, потом догнать сервер */
   useEffect(() => {
     if (!nickname) return;
-    diskCacheLoadedRef.current = false;
 
     let cancelled = false;
     loadDialogsCache(nickname).then((cached) => {
@@ -57,7 +54,6 @@ export function useChatsRoomsLoader(nickname) {
         rowsCacheRef.current = { nickname, rows: cached };
         setRows(cached);
       }
-      diskCacheLoadedRef.current = true;
     });
 
     return () => {

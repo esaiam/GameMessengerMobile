@@ -13,7 +13,8 @@ export default function ChatClearHistoryConfirmModal({
   title = 'Очистить переписку?',
   description = 'Сообщения исчезнут из списка согласно выбранному варианту.',
   confirmLabel = 'Очистить',
-  checkboxLabel = 'Удалить у всех' }) {
+  checkboxLabel = 'Удалить у всех',
+  confirmDisabled = false }) {
   const [deleteForEveryone, setDeleteForEveryone] = useState(false);
 
   useEffect(() => {
@@ -23,12 +24,17 @@ export default function ChatClearHistoryConfirmModal({
   if (!uiReady) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={confirmDisabled ? undefined : onClose}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Закрыть"
         style={[tw`flex-1 justify-center items-center px-6`, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
-        onPress={onClose}
+        onPress={confirmDisabled ? undefined : onClose}
       >
         <Pressable
           onPress={() => {}}
@@ -52,10 +58,10 @@ export default function ChatClearHistoryConfirmModal({
             accessibilityRole="checkbox"
             accessibilityState={{ checked: deleteForEveryone }}
             accessibilityLabel="Удалить у всех"
-            onPress={() => setDeleteForEveryone((v) => !v)}
+            onPress={confirmDisabled ? undefined : () => setDeleteForEveryone((v) => !v)}
             style={({ pressed }) => [
               tw`flex-row items-center px-5 py-3`,
-              pressed && { backgroundColor: V.hoverBg }]}
+              !confirmDisabled && pressed && { backgroundColor: V.hoverBg }]}
           >
             <View
               style={{
@@ -87,12 +93,14 @@ export default function ChatClearHistoryConfirmModal({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={confirmLabel}
-            onPress={() => onConfirm(deleteForEveryone)}
+            disabled={confirmDisabled}
+            onPress={confirmDisabled ? undefined : () => onConfirm(deleteForEveryone)}
             style={({ pressed }) => [
               tw`mx-3 mt-2 rounded-[10px] py-3 items-center`,
               {
-                backgroundColor: V.btnPrimaryBg },
-              pressed && { backgroundColor: V.btnPrimaryHover }]}
+                backgroundColor: V.btnPrimaryBg,
+                opacity: confirmDisabled ? 0.45 : 1 },
+              !confirmDisabled && pressed && { backgroundColor: V.btnPrimaryHover }]}
           >
             <Text style={[tw`text-[15px]`, { color: V.dangerMuted, fontWeight: '500' }]}>
               {confirmLabel}
@@ -102,10 +110,11 @@ export default function ChatClearHistoryConfirmModal({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Отмена"
-            onPress={onClose}
+            disabled={confirmDisabled}
+            onPress={confirmDisabled ? undefined : onClose}
             style={({ pressed }) => [
               tw`items-center py-3.5 mb-1 mx-3 rounded-[10px] mt-1`,
-              pressed && { backgroundColor: V.hoverBg }]}
+              !confirmDisabled && pressed && { backgroundColor: V.hoverBg }]}
           >
             <Text style={[tw`text-[15px]`, { color: V.textSecondary, fontWeight: '400' }]}>
               Отмена

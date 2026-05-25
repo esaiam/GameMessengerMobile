@@ -190,6 +190,7 @@ export default function ChatsScreen({ route, navigation }) {
     closeDeleteConfirm,
     confirmDeleteChats,
     deleteModalTitle,
+    deleteInProgress,
   } = useChatsSelection({
     nickname,
     rows,
@@ -393,6 +394,7 @@ export default function ChatsScreen({ route, navigation }) {
       <ChatClearHistoryConfirmModal
         uiReady
         visible={deleteConfirmVisible}
+        confirmDisabled={deleteInProgress}
         onClose={closeDeleteConfirm}
         onConfirm={confirmDeleteChats}
         title={deleteModalTitle}
