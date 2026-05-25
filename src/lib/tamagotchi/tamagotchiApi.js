@@ -1,4 +1,4 @@
-import { ARIA_API_URL, fetchAriaPendingMessages, fetchAriaState, normalizeAriaState } from '../aria';
+import { getAriaApiBaseUrl, fetchAriaPendingMessages, fetchAriaState, normalizeAriaState } from '../aria';
 
 export {
   DEFAULT_ARIA_STATE,
@@ -35,8 +35,9 @@ function parseRetryAfter(res) {
 }
 
 export async function postAriaAction(userId, action) {
-  if (!ARIA_API_URL || !userId) throw new Error('no_api');
-  const res = await fetch(`${ARIA_API_URL}/action`, {
+  const base = getAriaApiBaseUrl();
+  if (!base || !userId) throw new Error('no_api');
+  const res = await fetch(`${base}/action`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, action }) });

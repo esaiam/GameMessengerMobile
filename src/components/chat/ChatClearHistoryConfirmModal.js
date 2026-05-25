@@ -4,12 +4,16 @@ import tw from 'twrnc';
 import { Check } from '../../icons/lucideIcons';
 import { V } from '../../theme';
 
-/** Подтверждение очистки переписки с чекбоксом «удалить у всех» */
+/** Подтверждение с чекбоксом «удалить у всех» (очистка истории / удаление чатов из списка). */
 export default function ChatClearHistoryConfirmModal({
   uiReady,
   visible,
   onClose,
-  onConfirm }) {
+  onConfirm,
+  title = 'Очистить переписку?',
+  description = 'Сообщения исчезнут из списка согласно выбранному варианту.',
+  confirmLabel = 'Очистить',
+  checkboxLabel = 'Удалить у всех' }) {
   const [deleteForEveryone, setDeleteForEveryone] = useState(false);
 
   useEffect(() => {
@@ -37,10 +41,10 @@ export default function ChatClearHistoryConfirmModal({
         >
           <View style={tw`px-5 pt-5 pb-2`}>
             <Text style={[tw`text-[16px]`, { color: V.textPrimary, fontWeight: '500' }]}>
-              Очистить переписку?
+              {title}
             </Text>
             <Text style={[tw`text-[13px] mt-2`, { color: V.textSecondary, fontWeight: '400' }]}>
-              Сообщения исчезнут из списка согласно выбранному варианту.
+              {description}
             </Text>
           </View>
 
@@ -74,7 +78,7 @@ export default function ChatClearHistoryConfirmModal({
                 { color: V.textPrimary, fontWeight: '400' },
                 Platform.OS === 'android' ? { includeFontPadding: false } : null]}
             >
-              Удалить у всех
+              {checkboxLabel}
             </Text>
           </Pressable>
 
@@ -82,7 +86,7 @@ export default function ChatClearHistoryConfirmModal({
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Очистить"
+            accessibilityLabel={confirmLabel}
             onPress={() => onConfirm(deleteForEveryone)}
             style={({ pressed }) => [
               tw`mx-3 mt-2 rounded-[10px] py-3 items-center`,
@@ -91,7 +95,7 @@ export default function ChatClearHistoryConfirmModal({
               pressed && { backgroundColor: V.btnPrimaryHover }]}
           >
             <Text style={[tw`text-[15px]`, { color: V.dangerMuted, fontWeight: '500' }]}>
-              Очистить
+              {confirmLabel}
             </Text>
           </Pressable>
 

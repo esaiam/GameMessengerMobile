@@ -18,6 +18,7 @@ export default function ChatImageMessage({
   isRead,
   isMine,
   isGif = false,
+  fillWidth = false,
   layoutMaxWidth,
   isEphemeral,
   expiresAt,
@@ -43,7 +44,13 @@ export default function ChatImageMessage({
       uri,
       (w, h) => {
         if (cancelled) return;
-        setLayout(computeChatMediaLayout(w, h, layoutMaxWidth, { isGif }));
+        if (fillWidth) {
+          const fw = Math.max(96, Math.floor(layoutMaxWidth));
+          const fh = w > 0 && h > 0 ? Math.round(fw * h / w) : fw;
+          setLayout({ width: fw, height: fh });
+        } else {
+          setLayout(computeChatMediaLayout(w, h, layoutMaxWidth, { isGif }));
+        }
         setSizing(false);
       },
       () => {
@@ -55,7 +62,7 @@ export default function ChatImageMessage({
     return () => {
       cancelled = true;
     };
-  }, [uri, layoutMaxWidth, isGif]);
+  }, [uri, layoutMaxWidth, isGif, fillWidth]);
 
   const frameStyle = useMemo(
     () => ({

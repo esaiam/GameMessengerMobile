@@ -1,4 +1,5 @@
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
+import { supabase } from './supabase';
+import { invokeVaultEdgeFunction } from './edgeFunctions';
 import { fetchGiphyTrendingDirect, searchGiphyDirect } from './giphySearch';
 
 const GIPHY_CLIENT_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || '';
@@ -10,12 +11,10 @@ async function searchViaEdgeFunction(query, page, accessToken, { trending = fals
   } else {
     params.set('q', query);
   }
-  const url = `${SUPABASE_URL}/functions/v1/search-gif?${params.toString()}`;
-  const res = await fetch(url, {
+  const res = await invokeVaultEdgeFunction('search-gif', accessToken, undefined, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: SUPABASE_ANON_KEY } });
+    query: Object.fromEntries(params),
+  });
 
   let body = {};
   try {

@@ -185,7 +185,12 @@ export default function App() {
   useEffect(() => {
     libsodiumReady
       .then(() => {
-        if (__DEV__) console.log('[Vault] libsodium ready');
+        if (__DEV__) {
+          console.log('[Vault] libsodium ready');
+          import('./src/utils/vaultCryptoSmokeTests').then((m) => {
+            globalThis.runVaultCryptoTests = m.runVaultCryptoTests;
+          });
+        }
       })
       .catch((e) => console.error('[Vault] libsodium init failed:', e));
   }, []);

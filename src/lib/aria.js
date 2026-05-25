@@ -1,11 +1,12 @@
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { parseAriaMessageAttachment } from './ariaAttachment';
 
 /** Виртуальная комната ассистента (не строка в `profiles`). */
 export const ARIA_ROOM_ID = 'aria-direct';
 
-/** Aria-lite на LAN (IP ПК в Wi‑Fi; тот же, что у Metro QR, обычно .100). */
-export const ARIA_LITE_LAN_URL = 'http://192.168.1.100:8001';
+/** Aria-lite на LAN (IP ПК в Wi‑Fi; тот же, что у Metro QR — `ipconfig`, сейчас .101). */
+export const ARIA_LITE_LAN_URL = 'http://192.168.1.101:8001';
 
 /** Тот же ПК, что и сервер (Expo web / клиент на localhost). */
 export const ARIA_LITE_LOCAL_URL = 'http://127.0.0.1:8001';
@@ -14,22 +15,45 @@ function stripTrailingSlashes(url) {
   return typeof url === 'string' ? url.replace(/\/+$/, '') : '';
 }
 
+/** IPv4 хоста Metro (тот же, что в QR `exp://…:8081`). */
+function hostFromExpoDevServer() {
+  const raw =
+    Constants.expoConfig?.hostUri ??
+    Constants.expoGoConfig?.debuggerHost ??
+    Constants.manifest2?.extra?.expoClient?.hostUri ??
+    Constants.manifest?.debuggerHost;
+  if (typeof raw !== 'string' || !raw.trim()) return '';
+  const host = raw.replace(/^[a-z]+:\/\//, '').split('/')[0].split(':')[0]?.trim();
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ? host : '';
+}
+
+function ariaUrlFromDevMetro() {
+  const host = hostFromExpoDevServer();
+  return host ? `http://${host}:8001` : '';
+}
+
 /**
- * EXPO_PUBLIC_ARIA_API_URL (eas.json / .env) имеет приоритет.
- * В __DEV__ без env: web → 127.0.0.1:8001, native → 192.168.1.100:8001.
+ * Dev native: IP из Metro (не зашитый в EAS dev APK eas.json).
+ * Web dev: 127.0.0.1. Prod: EXPO_PUBLIC_ARIA_API_URL.
  */
 export function resolveAriaApiBaseUrl() {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    if (Platform.OS === 'web') return ARIA_LITE_LOCAL_URL;
+    const fromMetro = ariaUrlFromDevMetro();
+    if (fromMetro) return fromMetro;
+  }
   const fromEnv = stripTrailingSlashes(process.env.EXPO_PUBLIC_ARIA_API_URL);
   if (fromEnv) return fromEnv;
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    if (Platform.OS === 'web') return ARIA_LITE_LOCAL_URL;
     return ARIA_LITE_LAN_URL;
   }
   return '';
 }
 
 /** База Aria-lite / полной Aria (не хардкодить :8000). */
-export const ARIA_API_URL = resolveAriaApiBaseUrl();
+export function getAriaApiBaseUrl() {
+  return resolveAriaApiBaseUrl();
+}
 
 export const DEFAULT_ARIA_STATE = {
   mood: 0,
@@ -81,8 +105,9 @@ export function normalizeAriaState(json) {
 
 /** GET /health — для индикатора «онлайн» в шапке чата. */
 export async function checkAriaHealth(signal) {
-  if (!ARIA_API_URL) return false;
-  const url = `${ARIA_API_URL}/health`;
+  const base = getAriaApiBaseUrl();
+  if (!base) return false;
+  const url = `${base}/health`;
   try {
     const res = await fetch(url, { signal });
     let json = {};
@@ -104,18 +129,22 @@ export async function checkAriaHealth(signal) {
   }
 }
 
-if (__DEV__ && ARIA_API_URL) {
-  console.log('[Vault][dev] ARIA_API_URL =', ARIA_API_URL);
-  checkAriaHealth().then((ok) => {
-    console.log('[Vault][dev] Aria health probe ->', ok ? 'ok' : 'FAIL');
-  });
+if (__DEV__) {
+  const devBase = getAriaApiBaseUrl();
+  if (devBase) {
+    console.log('[Vault][dev] ARIA_API_URL =', devBase);
+    checkAriaHealth().then((ok) => {
+      console.log('[Vault][dev] Aria health probe ->', ok ? 'ok' : 'FAIL');
+    });
+  }
 }
 
 /** GET /state?user_id= — mood, hurt, energy, trust, boredom для UI. */
 export async function fetchAriaState(userId) {
-  if (!ARIA_API_URL || !userId) return null;
+  const base = getAriaApiBaseUrl();
+  if (!base || !userId) return null;
   try {
-    const res = await fetch(`${ARIA_API_URL}/state?user_id=${encodeURIComponent(userId)}`);
+    const res = await fetch(`${base}/state?user_id=${encodeURIComponent(userId)}`);
     if (!res.ok) return null;
     let json = {};
     try {
@@ -148,10 +177,11 @@ function extractPendingTexts(json) {
 
 /** GET /pending_messages?user_id= — проактивные реплики Aria. */
 export async function fetchAriaPendingMessages(userId) {
-  if (!ARIA_API_URL || !userId) return [];
+  const base = getAriaApiBaseUrl();
+  if (!base || !userId) return [];
   try {
     const res = await fetch(
-      `${ARIA_API_URL}/pending_messages?user_id=${encodeURIComponent(userId)}`
+      `${base}/pending_messages?user_id=${encodeURIComponent(userId)}`
     );
     if (!res.ok) return [];
     let json = {};
@@ -172,8 +202,9 @@ export async function fetchAriaPendingMessages(userId) {
  * @param {{ userId: string, text: string, history: Array<{ role: string, text: string }> }} p
  */
 export async function postAriaMessage({ userId, text, history }) {
-  if (!ARIA_API_URL || !userId) throw new Error('no_api');
-  const res = await fetch(`${ARIA_API_URL}/message`, {
+  const base = getAriaApiBaseUrl();
+  if (!base || !userId) throw new Error('no_api');
+  const res = await fetch(`${base}/message`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -213,8 +244,9 @@ export async function postAriaMessage({ userId, text, history }) {
  * @param {string} userId — Supabase auth user id
  */
 export async function transcribeAriaVoice(audioBase64, userId) {
-  if (!ARIA_API_URL) throw new Error('no_api');
-  const res = await fetch(`${ARIA_API_URL}/transcribe`, {
+  const base = getAriaApiBaseUrl();
+  if (!base) throw new Error('no_api');
+  const res = await fetch(`${base}/transcribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

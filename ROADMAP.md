@@ -45,8 +45,19 @@
 
 ## P1 — после ограниченной беты
 
-### Наблюдаемость
-- [ ] **Crash reporting** — [Sentry](https://sentry.io) (`@sentry/react-native` + EAS): падения, необработанные ошибки, версия сборки, stack trace, алерты. Сейчас только `console.error` на bootstrap/libsodium.
+### Наблюдаемость (сейчас ≈ ноль в prod)
+
+В prod нет crash reporting, error tracking и метрик — падения у тестеров видны только если напишут; кроме `console.error` на bootstrap/libsodium обратной связи нет.
+
+- [ ] **Crash reporting** — [Sentry](https://sentry.io) (`@sentry/react-native` + EAS): падения, необработанные ошибки, версия сборки, stack trace, алерты
+- [ ] **Error boundaries** — необработанные ошибки React-дерева не теряются молча (связка с Sentry)
+- [ ] *(опционально)* базовые метрики отправки / realtime reconnect — после Sentry, если нужно для широкой беты
+
+### Качество / QA
+
+> **E2E encryption** (VM2 + libsodium) — уже есть. Ниже — **E2E UI** (автотесты сценариев в приложении).
+
+- [ ] **E2E UI-тесты** — Detox или Maestro: auth → чат → отправка текста/медиа → reply; прогон в CI или перед релизным APK. Сейчас только `npm run smoke` / `smoke:api` (Node) и ручной `docs/chat-regression-checklist.md`
 
 ### Продукт
 - [ ] **Aria** — серверная история / sync; fix «пуш пришёл — в чате пусто»
@@ -69,6 +80,10 @@
 - [x] `Chat.js` — вынесены inline media, clear history, input settling, message list, overlays (`src/components/chat/*`)
 - [x] `GameScreen.js` — board vs chat chrome → `src/screens/game/*` (~454 строк wiring)
 - [x] `ContactsDrawer.js` → `src/components/contacts/*` (~95 строк wiring)
+- [ ] **`VoiceRecorder.tsx` + `VideoRecorder.tsx`** (~1388 + ~594 строк) — разделение процессов без смены UX:
+  - Сейчас: `VideoRecorder` не мусор — рендерится **внутри** `VoiceRecorder`; общая кнопка микрофона, переключение Mic ↔ Video, hold → голос или inline-видео в круге
+  - Цель: вынести общее (жесты hold/lock/cancel, haptic, layout капсулы) в shared-слой; **аудио** (`expo-audio`, waveform, trim/pause) и **видео** (`expo-camera`, upload, optimistic bubble) — отдельные модули/хуки с похожим API, но разными пайплайнами
+  - Wiring в `ChatComposer` остаётся одной точкой; поведение для пользователя не менять
 
 ### Дубли и legacy
 - [x] Handle: `PickHandleScreen` + `ProfileEditHandleModal` → `src/lib/handleProfile.js`
@@ -80,12 +95,13 @@
 ### Зависимости
 - [x] Удалён **`@shopify/react-native-skia`** (в `src` не использовался; dice = Three.js + expo-gl)
 - [x] `expo-av` удалён — голос/звуки только `expo-audio` (`useVoicePlayer`, VoiceRecorder, diceSound, Aria)
-- [ ] `EXPO_PUBLIC_XAI_API_KEY` в клиенте — вынести на edge
+- [x] `EXPO_PUBLIC_XAI_API_KEY` — edge `ai-rewrite` + `GROQ_API_KEY` (деплой: `docs/EDGE_FUNCTIONS.md`)
 
-### Качество
-- [ ] Минимальные smoke-тесты (auth, send message, open room)
+### Качество (smoke / crypto)
+- [x] Минимальные smoke-тесты — `npm run smoke` (offline), `npm run smoke:api` (Supabase + `SMOKE_TEST_*` в `.env`)
 - [x] Тексты ошибок в `useChatMessageMutations` → `chatMutationErrorMessage.js` (RLS/сеть/сессия)
-- [ ] `vaultCryptoSmokeTests.ts` — только dev, не в CI
+- [x] `vaultCryptoSmokeTests.ts` — dev-only (`global.runVaultCryptoTests`, `docs/TESTING.md`, `npm run smoke:crypto` — hint)
+- [ ] E2E UI — см. **P1 → Качество / QA** (не путать с E2E encryption VM2)
 
 ---
 

@@ -1,17 +1,27 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import tw from 'twrnc';
 import { AriaGradientAvatar } from '../chat/AriaChatUi';
+import { Check } from '../../icons/lucideIcons';
 import { V } from '../../theme';
 import { messagePreview, messagePreviewAsync } from '../../screens/chats/chatsPreviewCache';
 import { formatChatListTime, getInitials } from '../../screens/chats/chatsFormat';
+
+const AVATAR_SIZE = 56;
+const SELECTION_BADGE_SIZE = 20;
 
 function Avatar({ name }) {
   return (
     <View
       style={[
-        tw`w-14 h-14 rounded-full items-center justify-center`,
-        { backgroundColor: V.outBubbleBg }]}
+        {
+          width: AVATAR_SIZE,
+          height: AVATAR_SIZE,
+          borderRadius: AVATAR_SIZE / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: V.outBubbleBg,
+        }]}
     >
       <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>
         {getInitials(name)}
@@ -20,8 +30,44 @@ function Avatar({ name }) {
   );
 }
 
+function AvatarWithSelectionBadge({ isSelected, children }) {
+  return (
+    <View style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
+      {children}
+      {isSelected ? (
+        <View style={styles.selectionBadge}>
+          <Check size={12} color={V.bgApp} strokeWidth={2.5} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  selectionBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: SELECTION_BADGE_SIZE,
+    height: SELECTION_BADGE_SIZE,
+    borderRadius: SELECTION_BADGE_SIZE / 2,
+    backgroundColor: V.accentSage,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: V.bgApp,
+  },
+});
+
 const ChatsListRow = React.memo(
-  function ChatsListRow({ item, nickname, onPress }) {
+  function ChatsListRow({
+    item,
+    nickname,
+    onPress,
+    onLongPress,
+    selectionMode = false,
+    isSelected = false,
+  }) {
     const ts = item.last?.created_at || null;
     const [preview, setPreview] = useState(() =>
       item.isAria ? 'Привет. Я здесь.' : messagePreview(item.last),
@@ -105,14 +151,19 @@ const ChatsListRow = React.memo(
     );
 
     return (
-      <View
-        style={[tw`pt-0 pb-5`, {overflow: 'hidden'}]}
+      <View style={[tw`pt-0 pb-5`, { overflow: 'hidden' }]}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
           setLayout((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
         }}
       >
-        <Pressable onPressIn={onPressIn} onPress={handlePress} android_ripple={null}>
+        <Pressable
+          onPressIn={selectionMode ? undefined : onPressIn}
+          onPress={handlePress}
+          onLongPress={onLongPress}
+          delayLongPress={400}
+          android_ripple={null}
+        >
           {ripple.visible && maxD > 0 ? (
             <Animated.View
               pointerEvents="none"
@@ -129,7 +180,13 @@ const ChatsListRow = React.memo(
             />
           ) : null}
           <View style={tw`flex-row items-center`}>
-            {item.isAria ? <AriaGradientAvatar size={56} /> : <Avatar name={item.contactName} />}
+            <AvatarWithSelectionBadge isSelected={isSelected}>
+              {item.isAria ? (
+                <AriaGradientAvatar size={AVATAR_SIZE} />
+              ) : (
+                <Avatar name={item.contactName} />
+              )}
+            </AvatarWithSelectionBadge>
             <View style={tw`flex-1 ml-3`}>
               <View style={tw`flex-row items-center justify-between`}>
                 <View style={tw`flex-row items-center flex-1 min-w-0 mr-2`}>
@@ -161,7 +218,9 @@ const ChatsListRow = React.memo(
     prev.item.isAria === next.item.isAria &&
     prev.item.roomId === next.item.roomId &&
     prev.item.last?.id === next.item.last?.id &&
-    prev.item.last?.created_at === next.item.last?.created_at
+    prev.item.last?.created_at === next.item.last?.created_at &&
+    prev.selectionMode === next.selectionMode &&
+    prev.isSelected === next.isSelected
 );
 
 export default ChatsListRow;

@@ -2,7 +2,7 @@ import { ARIA_CONTACT, ARIA_ROOM_ID } from '../../lib/aria';
 
 /**
  * Интервал фонового опроса списка комнат.
- * Realtime (postgres_changes) покрывает новые сообщения мгновенно.
+ * Realtime (postgres_changes на rooms.last_message_id) покрывает превью мгновенно.
  * Polling нужен только как fallback (reconnect, gap sync).
  */
 export const CHATS_LIST_POLL_MS = 60000;

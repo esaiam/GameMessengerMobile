@@ -134,6 +134,7 @@ const MessageRow = React.memo(
     }
 
     const bubbleMaxW = env.windowWidth * 0.75;
+    const ariaImageMaxW = env.windowWidth - 24;
 
     const bubbleRadii = isMine
       ? {
@@ -164,6 +165,7 @@ const MessageRow = React.memo(
       item.player_name === env.ariaPeerName && item.aria_voice_message !== true;
     const ariaGeneratedAttachment =
       listExtra.isAriaChat && item.aria_attachment && !isAriaTyping ? item.aria_attachment : null;
+    const hasAriaImageAttachment = ariaGeneratedAttachment?.mime_type === 'image/png';
 
     const timeMeta = (
       <>
@@ -544,6 +546,7 @@ const MessageRow = React.memo(
                           isEphemeral={isEphemeral}
                           isSelected={false}
                           selectionMode={listExtra.selectionMode}
+                          noPaddingBottom={hasAriaImageAttachment}
                         >
                           {bubbleInner}
                         </OutgoingBubble>
@@ -554,6 +557,7 @@ const MessageRow = React.memo(
                           bubbleRadii={bubbleRadii}
                           isEphemeral={isEphemeral}
                           selectionMode={listExtra.selectionMode}
+                          noPaddingBottom={hasAriaImageAttachment}
                         >
                           {bubbleInner}
                         </BubbleMaterial>
@@ -564,7 +568,9 @@ const MessageRow = React.memo(
                     <View style={{ marginTop: 6, alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
                       <AriaGeneratedAttachment
                         attachment={ariaGeneratedAttachment}
-                        layoutMaxWidth={bubbleMaxW}
+                        layoutMaxWidth={ariaGeneratedAttachment?.mime_type === 'image/png' 
+                          ? ariaImageMaxW 
+                          : bubbleMaxW}
                         formattedTime={item._formattedTime}
                         isRead={!!item.read_at}
                         isMine={isMine}

@@ -1,8 +1,7 @@
-# Vault Messenger — Supabase CLI (linked: supabase/.temp/linked-project.json)
-project_id = "nqssqplizwsukowggzxd"
+# Локальная разработка edge functions: supabase start + supabase functions serve
+# Деплой: supabase functions deploy ai-rewrite --project-ref <ref>
 
-[db]
-major_version = 15
-
-[db.migrations]
-enabled = true
+# sb_publishable_* в apikey: platform verify_jwt ожидает legacy anon JWT.
+# Авторизацию делаем внутри функции (/auth/v1/user + getUser).
+[functions.ai-rewrite]
+verify_jwt = false

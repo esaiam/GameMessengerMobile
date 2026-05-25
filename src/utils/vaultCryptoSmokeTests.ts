@@ -1,9 +1,10 @@
 /**
  * Smoke tests для VaultCrypto — без jest/testing-library.
- * Запуск: вызвать runVaultCryptoTests() вручную из консоли или __DEV__ блока.
  *
- * Тесты используют libsodium напрямую, минуя Supabase и SecureStore,
- * поэтому работают в изолированном окружении.
+ * Только dev-клиент (react-native-libsodium). Не Node, не CI.
+ * Metro: `await global.runVaultCryptoTests()` → { passed, failed }
+ *
+ * libsodium напрямую, без Supabase / SecureStore.
  */
 
 import {
@@ -68,11 +69,15 @@ function decryptDirect(
   }
 }
 
-export async function runVaultCryptoTests(): Promise<void> {
+export type VaultCryptoSmokeResult = { passed: number; failed: number };
+
+export async function runVaultCryptoTests(): Promise<VaultCryptoSmokeResult> {
   await ready;
 
   const ORIGINAL = 'Привет, Vault!';
   let roundTripPayload = '';
+  let passed = 0;
+  let failed = 0;
 
   // ─── Тест 1: Encrypt → Decrypt round-trip ───────────────────────────────
   try {
@@ -86,8 +91,10 @@ export async function runVaultCryptoTests(): Promise<void> {
       throw new Error(`Ожидалось «${ORIGINAL}», получено «${decrypted}»`);
     }
     console.log('[TEST 1] PASS: round-trip шифрование работает');
+    passed += 1;
   } catch (error) {
     console.error('[TEST 1] FAIL:', error);
+    failed += 1;
   }
 
   // ─── Тест 2: isVm2Payload ────────────────────────────────────────────────
@@ -101,8 +108,10 @@ export async function runVaultCryptoTests(): Promise<void> {
       throw new Error('VM2: префикс должен определяться');
     }
     console.log('[TEST 2] PASS: isVm2Payload корректно определяет формат');
+    passed += 1;
   } catch (error) {
     console.error('[TEST 2] FAIL:', error);
+    failed += 1;
   }
 
   // ─── Тест 3: Decrypt с неверным ключом ───────────────────────────────────
@@ -117,7 +126,12 @@ export async function runVaultCryptoTests(): Promise<void> {
       throw new Error(`Ожидался null, получено: «${result}»`);
     }
     console.log('[TEST 3] PASS: неверный ключ возвращает null');
+    passed += 1;
   } catch (error) {
     console.error('[TEST 3] FAIL:', error);
+    failed += 1;
   }
+
+  console.log(`[vaultCryptoSmoke] ${passed} passed, ${failed} failed`);
+  return { passed, failed };
 }

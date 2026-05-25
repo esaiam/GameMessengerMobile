@@ -43,10 +43,11 @@ import {
 import { getBlockedPeers } from '../lib/blockedContacts';
 
 const AVATAR_SIZE = 96;
-const AVATAR_MARGIN_TOP = 8;
+const AVATAR_MARGIN_TOP = -12;
 const NAME_MARGIN_TOP = 14;
 const ACTIONS_MARGIN_TOP = 20;
-const ACTION_ROW_HEIGHT = 58;
+const SCROLL_CONTENT_LIFT = 36;
+const ACTION_ROW_HEIGHT = 52;
 const COLLAPSE_DISTANCE = 132;
 const NAME_LINE_HEIGHT = 22;
 
@@ -137,7 +138,8 @@ export default function ProfileScreen({ route, navigation }) {
     NAME_MARGIN_TOP +
     NAME_LINE_HEIGHT +
     ACTIONS_MARGIN_TOP +
-    ACTION_ROW_HEIGHT;
+    ACTION_ROW_HEIGHT -
+    SCROLL_CONTENT_LIFT;
 
   const onScroll = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -388,9 +390,11 @@ export default function ProfileScreen({ route, navigation }) {
 
       <Animated.ScrollView
         style={tw`flex-1`}
+        overScrollMode="always"
         contentContainerStyle={[
           tw`px-4 pb-10`,
           {
+            flexGrow: 1,
             backgroundColor: 'transparent',
             paddingTop: scrollTopPadding }]}
         keyboardShouldPersistTaps="handled"
@@ -400,12 +404,12 @@ export default function ProfileScreen({ route, navigation }) {
       >
         <View style={styles.actionsRow}>
           <ProfileActionButton
-            icon={<Camera size={16} color={V.accentSage} strokeWidth={1.5} />}
+            icon={<Camera size={14} color={V.accentSage} strokeWidth={1.5} />}
             label="Выбрать фото"
             onPress={pickPhotoFromGallery}
           />
           <ProfileActionButton
-            icon={<Pencil size={16} color={V.accentSage} strokeWidth={1.5} />}
+            icon={<Pencil size={14} color={V.accentSage} strokeWidth={1.5} />}
             label="Изменить"
             onPress={() => setEditHandleModal(true)}
           />
@@ -500,14 +504,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center' },
   actionBtn: {
     flex: 1,
-    maxWidth: 160,
+    maxWidth: 132,
     alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: 8 },
+    gap: 6 },
   actionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : {})
   } });

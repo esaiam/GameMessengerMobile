@@ -1,4 +1,5 @@
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
+import { supabase } from './supabase';
+import { invokeVaultEdgeFunction } from './edgeFunctions';
 import { searchPexelsDirect } from './pexelsSearch';
 
 /**
@@ -9,12 +10,10 @@ const PEXELS_CLIENT_KEY = process.env.EXPO_PUBLIC_PEXELS_API_KEY || '';
 
 async function searchViaEdgeFunction(query, page, accessToken) {
   const params = new URLSearchParams({ q: query, page: String(page) });
-  const url = `${SUPABASE_URL}/functions/v1/search-pic?${params.toString()}`;
-  const res = await fetch(url, {
+  const res = await invokeVaultEdgeFunction('search-pic', accessToken, undefined, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: SUPABASE_ANON_KEY } });
+    query: Object.fromEntries(params),
+  });
 
   let body = {};
   try {

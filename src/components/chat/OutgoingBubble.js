@@ -25,7 +25,8 @@ const outgoingBubbleStyles = StyleSheet.create({
   pressable: {
     minWidth: 60,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 8,
     backgroundColor: 'transparent',
     zIndex: 2 } });
 
@@ -36,6 +37,7 @@ function OutgoingBubble({
   isEphemeral,
   isSelected,
   selectionMode,
+  noPaddingBottom,
   onPress,
   onLongPress,
   children }) {
@@ -57,6 +59,7 @@ function OutgoingBubble({
             delayLongPress={400}
             style={({ pressed }) => [
               outgoingBubbleStyles.pressable,
+              noPaddingBottom && { paddingBottom: 0 },
               { opacity: pressed && !selectionMode ? 0.88 : 1 },
               isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
               isSelected && { borderWidth: 2, borderColor: V.accentSage }]}
@@ -67,6 +70,7 @@ function OutgoingBubble({
           <View
             style={[
               outgoingBubbleStyles.pressable,
+              noPaddingBottom && { paddingBottom: 0 },
               isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
               isSelected && { borderWidth: 2, borderColor: V.accentSage }]}
           >

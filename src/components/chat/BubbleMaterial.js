@@ -8,6 +8,7 @@ const BubbleMaterial = React.memo(function BubbleMaterial({
   bubbleRadii,
   isEphemeral,
   selectionMode,
+  noPaddingBottom,
   onPress,
   onLongPress,
   children }) {
@@ -41,7 +42,8 @@ const BubbleMaterial = React.memo(function BubbleMaterial({
               {
                 minWidth: 60,
                 paddingHorizontal: 10,
-                paddingVertical: 8,
+                paddingTop: 8,
+                paddingBottom: noPaddingBottom ? 0 : 8,
                 backgroundColor: 'transparent',
                 opacity: pressed && !selectionMode ? 0.88 : 1,
                 zIndex: 2 },
@@ -55,7 +57,8 @@ const BubbleMaterial = React.memo(function BubbleMaterial({
               {
                 minWidth: 60,
                 paddingHorizontal: 10,
-                paddingVertical: 8,
+                paddingTop: 8,
+                paddingBottom: noPaddingBottom ? 0 : 8,
                 backgroundColor: 'transparent',
                 zIndex: 2 },
               isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold }]}

@@ -30,6 +30,7 @@ export default function AriaGeneratedAttachment({
         formattedTime={formattedTime}
         isRead={isRead}
         isMine={isMine}
+        fillWidth
         layoutMaxWidth={layoutMaxWidth}
         isEphemeral={false}
         expiresAt={null}

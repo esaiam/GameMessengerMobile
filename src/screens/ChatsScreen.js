@@ -14,8 +14,9 @@ import SafeBlurView from '../components/SafeBlurView';
 import tw from 'twrnc';
 import { ARIA_CONTACT, ARIA_ROOM_ID } from '../lib/aria';
 import { SEARCH_CHATS_CAPSULE_RADIUS, SEARCH_FIELD_LAYOUT, V } from '../theme';
-import { Search } from '../icons/lucideIcons';
+import { Search, Trash2 } from '../icons/lucideIcons';
 import { useNicknameFromRoute } from '../hooks/useNicknameFromRoute';
+import { useChatsSelection } from '../hooks/useChatsSelection';
 import TabBackground from '../components/TabBackground';
 import { useChatsRoomsLoader } from '../hooks/useChatsRoomsLoader';
 import { useChatsSearchReveal, CHATS_SEARCH_BOTTOM_SPACING_PX } from '../hooks/useChatsSearchReveal';
@@ -29,6 +30,7 @@ import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import { useSplitDetail } from '../context/SplitDetailContext';
 import { isBlocked } from '../lib/blockedContacts';
 import { navigateToBlockedContacts } from '../lib/navigateToBlockedContacts';
+import ChatClearHistoryConfirmModal from '../components/chat/ChatClearHistoryConfirmModal';
 
 const ReanimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
@@ -47,7 +49,7 @@ export default function ChatsScreen({ route, navigation }) {
   const searchInputRef = useRef(null);
   const headerLayout = useMessengerHeaderLayout();
 
-  const { rows } = useChatsRoomsLoader(nickname);
+  const { rows, removeRowsByRoomIds } = useChatsRoomsLoader(nickname);
 
   const {
     SEARCH_FIELD_H,
@@ -67,56 +69,92 @@ export default function ChatsScreen({ route, navigation }) {
 
   const listData = useMemo(() => buildChatsListData(q, filtered), [q, filtered]);
 
+  const navigateToChat = useCallback(
+    async (item) => {
+      if (item.isAria) {
+        const params = {
+          roomId: ARIA_ROOM_ID,
+          isAriaChat: true,
+          contact: ARIA_CONTACT,
+          nickname,
+          title: ARIA_CONTACT.display_name,
+          peerName: ARIA_CONTACT.display_name };
+        if (isSplit) {
+          setDetailParams({ type: 'ChatRoom', params });
+        } else {
+          navigation.navigate('ChatRoom', params);
+        }
+        return;
+      }
+      if (await isBlocked(nickname, item.contactName)) {
+        Alert.alert(
+          'Контакт заблокирован',
+          'Разблокируйте в Профиль → Заблокированные контакты.',
+          [
+            { text: 'Отмена', style: 'cancel' },
+            {
+              text: 'Заблокированные',
+              onPress: () => navigateToBlockedContacts(navigation),
+            },
+          ],
+        );
+        return;
+      }
+      const params = {
+        nickname,
+        roomId: item.roomId,
+        roomCode: item.roomCode,
+        peerName: item.contactName,
+        title: item.contactName };
+      if (isSplit) {
+        setDetailParams({ type: 'Room', params });
+      } else {
+        navigation.navigate('Room', params);
+      }
+    },
+    [nickname, navigation, isSplit, setDetailParams],
+  );
+
+  const {
+    selectionMode,
+    selectedRoomIds,
+    selectedHash,
+    exitSelectionMode,
+    handleChatPress,
+    handleChatLongPress,
+    openDeleteConfirm,
+    deleteConfirmVisible,
+    closeDeleteConfirm,
+    confirmDeleteChats,
+    deleteModalTitle,
+  } = useChatsSelection({
+    nickname,
+    rows,
+    onNavigateToChat: navigateToChat,
+    removeRowsByRoomIds,
+  });
+
   const renderItem = useCallback(
-    ({ item }) => (
-      <ChatsListRow
-        item={item}
-        nickname={nickname}
-        onPress={async () => {
-          if (item.isAria) {
-            const params = {
-              roomId: ARIA_ROOM_ID,
-              isAriaChat: true,
-              contact: ARIA_CONTACT,
-              nickname,
-              title: ARIA_CONTACT.display_name,
-              peerName: ARIA_CONTACT.display_name };
-            if (isSplit) {
-              setDetailParams({ type: 'ChatRoom', params });
-            } else {
-              navigation.navigate('ChatRoom', params);
-            }
-            return;
-          }
-          if (await isBlocked(nickname, item.contactName)) {
-            Alert.alert(
-              'Контакт заблокирован',
-              'Разблокируйте в Профиль → Заблокированные контакты.',
-              [
-                { text: 'Отмена', style: 'cancel' },
-                {
-                  text: 'Заблокированные',
-                  onPress: () => navigateToBlockedContacts(navigation),
-                },
-              ],
-            );
-            return;
-          }
-          const params = {
-            nickname,
-            roomId: item.roomId,
-            roomCode: item.roomCode,
-            peerName: item.contactName,
-            title: item.contactName };
-          if (isSplit) {
-            setDetailParams({ type: 'Room', params });
-          } else {
-            navigation.navigate('Room', params);
-          }
-        }}
-      />
-    ),
-    [nickname, navigation, isSplit, setDetailParams]
+    ({ item }) => {
+      const roomKey = item.isAria ? null : item.roomId;
+      return (
+        <ChatsListRow
+          item={item}
+          nickname={nickname}
+          selectionMode={selectionMode}
+          isSelected={roomKey != null && selectedRoomIds.has(roomKey)}
+          onPress={() => handleChatPress(item)}
+          onLongPress={() => handleChatLongPress(item)}
+        />
+      );
+    },
+    [
+      nickname,
+      selectionMode,
+      selectedRoomIds,
+      handleChatPress,
+      handleChatLongPress,
+    ],
   );
 
   const contentContainerStyle = useMemo(
@@ -138,24 +176,47 @@ export default function ChatsScreen({ route, navigation }) {
               alignItems: 'center',
               justifyContent: 'space-between' }]}
         >
-          <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
-            Vault
-          </Text>
-          <Animated.View style={iconStyle}>
-            <TouchableOpacity
-              onPress={() => {
-                setSearchShown(true);
-                requestAnimationFrame(() => {
-                  searchInputRef.current?.focus?.();
-                });
-              }}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel="Поиск"
-            >
-              <Search size={18} strokeWidth={1.5} color={V.textMuted} />
-            </TouchableOpacity>
-          </Animated.View>
+          {selectionMode ? (
+            <>
+              <TouchableOpacity onPress={exitSelectionMode} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <Text style={[tw`text-[14px]`, { color: V.accentSage }]}>Отмена</Text>
+              </TouchableOpacity>
+              <Text style={[tw`text-[13px] font-medium`, { color: V.textPrimary }]}>
+                {selectedRoomIds.size} выбрано
+              </Text>
+              <TouchableOpacity
+                onPress={openDeleteConfirm}
+                disabled={selectedRoomIds.size === 0}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={{ opacity: selectedRoomIds.size === 0 ? 0.35 : 1 }}
+                accessibilityRole="button"
+                accessibilityLabel="Удалить выбранные чаты"
+              >
+                <Trash2 size={20} color={V.dangerMuted} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
+                Vault
+              </Text>
+              <Animated.View style={iconStyle}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchShown(true);
+                    requestAnimationFrame(() => {
+                      searchInputRef.current?.focus?.();
+                    });
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Поиск"
+                >
+                  <Search size={18} strokeWidth={1.5} color={V.textMuted} />
+                </TouchableOpacity>
+              </Animated.View>
+            </>
+          )}
         </View>
 
         <View style={[tw`flex-1`, {}]}>
@@ -233,6 +294,7 @@ export default function ChatsScreen({ route, navigation }) {
               <ReanimatedFlatList
                 ref={listRef}
                 data={listData}
+                extraData={selectedHash}
                 keyExtractor={(i) => (i.isAria ? ARIA_ROOM_ID : i.roomId)}
                 renderItem={renderItem}
                 onScroll={scrollHandler}
@@ -262,6 +324,20 @@ export default function ChatsScreen({ route, navigation }) {
           </View>
         </View>
       </View>
+
+      <ChatClearHistoryConfirmModal
+        uiReady
+        visible={deleteConfirmVisible}
+        onClose={closeDeleteConfirm}
+        onConfirm={confirmDeleteChats}
+        title={deleteModalTitle}
+        description={
+          selectedRoomIds.size === 1
+            ? 'Чат исчезнет из списка. Сообщения скроются согласно выбранному варианту.'
+            : 'Чаты исчезнут из списка. Сообщения скроются согласно выбранному варианту.'
+        }
+        confirmLabel="Удалить"
+      />
     </TabBackground>
   );
 }
