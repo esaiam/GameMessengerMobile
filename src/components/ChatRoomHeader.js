@@ -16,6 +16,7 @@ import { ArrowLeft, X, Copy, Forward, Trash2 } from '../icons/lucideIcons';
 import { V } from '../theme';
 import { fetchAriaState } from '../lib/aria';
 import { supabase } from '../lib/supabase';
+import { safeGoBackToMessengerList } from '../lib/safeGoBack';
 
 const HEADER_BLUR_INTENSITY_IOS = 100;
 const HEADER_BLUR_INTENSITY_ANDROID = 72;
@@ -96,7 +97,9 @@ export default function ChatRoomHeader({
   /** Вызывается при обновлении состояния Aria из fetch (для `AriaStateGauges` снаружи) */
   onAriaStateChange,
   /** Тап по аватару/имени в обычном режиме (не Aria, не выделение) */
-  onHeaderPress }) {
+  onHeaderPress,
+  /** Если задан — заменяет navigation.goBack() (безопасный fallback на список) */
+  onBack }) {
   const insets = useSafeAreaInsets();
   const [ariaState, setAriaState] = useState(null);
   const modeAnim = useRef(new Animated.Value(selectionMode ? 1 : 0)).current;
@@ -154,7 +157,8 @@ export default function ChatRoomHeader({
 
   const onLeftPress = () => {
     if (selectionMode) onExitSelection();
-    else navigation.goBack();
+    else if (typeof onBack === 'function') onBack();
+    else safeGoBackToMessengerList(navigation);
   };
 
   const hasSecondary = title && title !== 'Чат';

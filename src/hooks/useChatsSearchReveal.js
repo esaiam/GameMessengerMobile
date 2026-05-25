@@ -1,190 +1,335 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Gesture } from 'react-native-gesture-handler';
-import { usePagerGesture } from '../context/PagerGestureContext';
 import {
+  cancelAnimation,
   Extrapolation,
   interpolate,
   runOnJS,
+  useAnimatedProps,
   useAnimatedReaction,
   useAnimatedScrollHandler,
   useAnimatedStyle,
-  useDerivedValue,
   useSharedValue,
-  withSpring } from 'react-native-reanimated';
+  withSpring,
+} from 'react-native-reanimated';
 
+import { shouldFailHorizontalPan, VERTICAL_PAN_FAIL_OFFSET_X } from '../lib/verticalPanAxis';
 import { SEARCH_FIELD_LAYOUT } from '../theme';
+import { tabOverscrollRubberBand } from './useAndroidTabOverscroll';
 
-const SEARCH_HIDE_GAP_PX = 8;
-const SEARCH_OVERSCROLL_PX = 28;
-const ANDROID_PULL_COEF = 0.45;
-const PAN_SPRING = { damping: 22, stiffness: 240, mass: 0.85 };
+const SPRING = { damping: 22, stiffness: 240, mass: 0.85 };
+const AT_TOP_THRESHOLD_PX = 12;
+const SNAP_OPEN_THRESHOLD = 0.38;
+const SNAP_SETTLED_EPS = 0.04;
+const SEARCH_DRAG_MIN_DY_PX = 4;
+const POINTER_OPEN_THRESHOLD = 0.06;
+const POINTER_CLOSE_THRESHOLD = 0.02;
 
-/** Отступ под полем поиска до списка (используется в ChatsScreen для paddingTop FlatList). */
+function snapExpandedTo(expanded, target) {
+  'worklet';
+  cancelAnimation(expanded);
+  if (Math.abs(expanded.value - target) < SNAP_SETTLED_EPS) {
+    expanded.value = target;
+    return;
+  }
+  expanded.value = withSpring(target, SPRING);
+}
+
+function applySearchDragFromTranslation(
+  expanded,
+  contentOverscrollY,
+  dragStartExpanded,
+  translationY,
+  revealRangePx,
+) {
+  'worklet';
+  const raw = dragStartExpanded + translationY / revealRangePx;
+  if (raw <= 1) {
+    expanded.value = Math.max(0, raw);
+    contentOverscrollY.value = 0;
+  } else {
+    expanded.value = 1;
+    contentOverscrollY.value = tabOverscrollRubberBand((raw - 1) * revealRangePx);
+  }
+}
+
+function computeListScrollEnabled(atTop, open, drag) {
+  'worklet';
+  if (drag) return false;
+  return !(atTop && !open);
+}
+
+/** Отступ под полем поиска до списка. */
 export const CHATS_SEARCH_BOTTOM_SPACING_PX = 20;
 
-export function useChatsSearchReveal(q, searchFocused, listRef) {
-  const pagerGestureRef = usePagerGesture();
+/**
+ * Collapsible поиск: один Pan, progress следует за translationY до отпускания.
+ * pointerEvents / scrollEnabled — без runOnJS на каждый кадр (Android jank).
+ */
+export function useChatsSearchReveal(q, searchFocused) {
   const SEARCH_FIELD_H = SEARCH_FIELD_LAYOUT.chatsHeight;
   const SEARCH_REVEAL_RANGE_PX = SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX;
 
-  const [searchPointerEvents, setSearchPointerEvents] = useState('auto');
-  const [listViewportH, setListViewportH] = useState(0);
-
-  const scrollY = useSharedValue(0);
-  const overscrollPull = useSharedValue(0);
+  const expanded = useSharedValue(0);
+  const listScrollY = useSharedValue(0);
+  const listMaxScrollY = useSharedValue(0);
   const locked = useSharedValue(false);
+  const dragStartExpanded = useSharedValue(0);
+  const panStartX = useSharedValue(0);
+  const panStartY = useSharedValue(0);
+  const contentOverscrollY = useSharedValue(0);
+  const searchDragActive = useSharedValue(false);
+  const searchPointerOpen = useSharedValue(0);
+  const listScrollEnabledSv = useSharedValue(0);
+
   const isLockedRef = useRef(false);
+  const searchDragActiveRef = useRef(false);
+  const listScrollEnabledRef = useRef(false);
+
+  const setSearchDragActiveJs = useCallback((active) => {
+    searchDragActiveRef.current = active;
+  }, []);
+
+  const setListScrollEnabledIfChanged = useCallback((enabled) => {
+    if (listScrollEnabledRef.current === enabled) return;
+    listScrollEnabledRef.current = enabled;
+    listScrollEnabledSv.value = enabled ? 1 : 0;
+  }, [listScrollEnabledSv]);
+
+  const setExpanded = useCallback(
+    (open, animated = true) => {
+      cancelAnimation(expanded);
+      expanded.value = animated ? withSpring(open ? 1 : 0, SPRING) : open ? 1 : 0;
+    },
+    [expanded],
+  );
 
   useEffect(() => {
     const nextLocked = q.trim().length > 0 || searchFocused;
     isLockedRef.current = nextLocked;
     locked.value = nextLocked;
     if (nextLocked) {
-      overscrollPull.value = 0;
-      listRef?.current?.scrollToOffset?.({ offset: 0, animated: false });
+      setExpanded(true, false);
     }
-  }, [q, searchFocused, listRef, locked, overscrollPull]);
-
-  const effectiveY = useDerivedValue(() => {
-    if (locked.value) return 0;
-    if (Platform.OS === 'android') {
-      return scrollY.value - overscrollPull.value;
-    }
-    return scrollY.value;
-  });
-
-  const revealProgress = useDerivedValue(() => {
-    if (locked.value) return 1;
-    return 1 - effectiveY.value / SEARCH_REVEAL_RANGE_PX;
-  });
+  }, [q, searchFocused, locked, setExpanded]);
 
   useAnimatedReaction(
-    () => revealProgress.value,
-    (p, prev) => {
-      const shown = p > 0.02;
-      const wasShown = prev == null ? true : prev > 0.02;
-      if (shown !== wasShown) {
-        runOnJS(setSearchPointerEvents)(shown ? 'auto' : 'none');
+    () => ({
+      value: expanded.value,
+      drag: searchDragActive.value,
+    }),
+    ({ value, drag }) => {
+      if (drag) {
+        searchPointerOpen.value = value > 0.001 ? 1 : 0;
+        return;
       }
-    }
+      const wasOpen = searchPointerOpen.value > 0.5;
+      const nextOpen = wasOpen ? value > POINTER_CLOSE_THRESHOLD : value > POINTER_OPEN_THRESHOLD;
+      searchPointerOpen.value = nextOpen ? 1 : 0;
+    },
   );
 
-  const resetOverscrollPull = useCallback(() => {
-    overscrollPull.value = withSpring(0, PAN_SPRING);
-  }, [overscrollPull]);
-
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (e) => {
-      const y = e.contentOffset.y;
-      scrollY.value = y;
-      if (Platform.OS === 'android' && y > 2 && overscrollPull.value > 0) {
-        overscrollPull.value = 0;
+  useAnimatedReaction(
+    () => {
+      if (searchDragActive.value) return null;
+      return {
+        atTop: listScrollY.value <= AT_TOP_THRESHOLD_PX,
+        open: expanded.value > 0.001,
+      };
+    },
+    (cur, prev) => {
+      if (cur == null) return;
+      const enabled = !(cur.atTop && !cur.open);
+      const prevEnabled =
+        prev == null ? !enabled : !(prev.atTop && !prev.open);
+      if (enabled !== prevEnabled) {
+        runOnJS(setListScrollEnabledIfChanged)(enabled);
       }
-    } });
-
-  const onListScrollEndDrag = useCallback(() => {
-    if (Platform.OS === 'android') {
-      resetOverscrollPull();
-    }
-  }, [resetOverscrollPull]);
-
-  const onListMomentumScrollEnd = useCallback(() => {
-    if (Platform.OS === 'android') {
-      resetOverscrollPull();
-    }
-  }, [resetOverscrollPull]);
+    },
+    [setListScrollEnabledIfChanged],
+  );
 
   const setSearchShown = useCallback(
     (shown) => {
       if (!shown && isLockedRef.current) return;
-      overscrollPull.value = 0;
-      listRef?.current?.scrollToOffset?.({
-        offset: shown ? 0 : SEARCH_REVEAL_RANGE_PX,
-        animated: true });
+      setExpanded(shown, true);
     },
-    [SEARCH_REVEAL_RANGE_PX, listRef, overscrollPull]
+    [setExpanded],
   );
 
-  const listGesture = useMemo(() => {
-    const native = Gesture.Native();
-    if (Platform.OS !== 'android') {
-      return pagerGestureRef
-        ? Gesture.Native().withRef(pagerGestureRef)
-        : native;
-    }
-    const pull = Gesture.Pan()
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      listScrollY.value = e.contentOffset.y;
+      listMaxScrollY.value = Math.max(
+        0,
+        e.contentSize.height - e.layoutMeasurement.height,
+      );
+    },
+  });
+
+  const pullGesture = useMemo(() => {
+    return Gesture.Pan()
       .manualActivation(true)
-      .withRef(pagerGestureRef ?? undefined)
-      .onTouchesMove((_e, state) => {
-        if (locked.value) { state.fail(); return; }
-        const y = scrollY.value;
-        const atOpenTop = y <= 2;
-        if (!atOpenTop && overscrollPull.value <= 0) { state.fail(); return; }
-        state.activate();
+      .failOffsetX([-VERTICAL_PAN_FAIL_OFFSET_X, VERTICAL_PAN_FAIL_OFFSET_X])
+      .onTouchesDown((e) => {
+        'worklet';
+        const t = e.allTouches[0];
+        if (!t) return;
+        panStartX.value = t.x;
+        panStartY.value = t.y;
       })
-      .onUpdate((e) => {
-        if (locked.value) return;
-        const y = scrollY.value;
-        const atOpenTop = y <= 2;
-        if (e.changeY > 0 && atOpenTop) {
-          const next = overscrollPull.value + e.changeY * ANDROID_PULL_COEF;
-          overscrollPull.value = Math.max(0, Math.min(SEARCH_OVERSCROLL_PX, next));
+      .onTouchesMove((e, state) => {
+        'worklet';
+        if (locked.value) {
+          state.fail();
           return;
         }
-        if (e.changeY < 0 && overscrollPull.value > 0) {
-          const next = overscrollPull.value + e.changeY * ANDROID_PULL_COEF;
-          overscrollPull.value = Math.max(0, Math.min(SEARCH_OVERSCROLL_PX, next));
+        const atTop = listScrollY.value <= AT_TOP_THRESHOLD_PX;
+        const searchOpen = expanded.value > 0.001;
+        if (!atTop && !searchOpen) {
+          state.fail();
+          return;
+        }
+        const t = e.allTouches[0];
+        if (!t) return;
+        const movingUp = t.y < panStartY.value;
+        const atEnd =
+          listMaxScrollY.value >= 0 &&
+          listScrollY.value >= listMaxScrollY.value - 3;
+        if (!searchOpen && atEnd && movingUp) {
+          state.fail();
+          return;
+        }
+        const dx = Math.abs(t.x - panStartX.value);
+        const dy = Math.abs(t.y - panStartY.value);
+        if (shouldFailHorizontalPan(dx, dy)) {
+          state.fail();
+          return;
+        }
+        const minDy = atTop && !searchOpen ? 2 : SEARCH_DRAG_MIN_DY_PX;
+        if (dy < minDy || dy <= dx) {
+          return;
+        }
+        state.activate();
+      })
+      .onStart(() => {
+        'worklet';
+        searchDragActive.value = true;
+        runOnJS(setSearchDragActiveJs)(true);
+        runOnJS(setListScrollEnabledIfChanged)(false);
+        cancelAnimation(expanded);
+        cancelAnimation(contentOverscrollY);
+        contentOverscrollY.value = 0;
+        dragStartExpanded.value = expanded.value;
+      })
+      .onUpdate((e) => {
+        'worklet';
+        if (locked.value) return;
+        applySearchDragFromTranslation(
+          expanded,
+          contentOverscrollY,
+          dragStartExpanded.value,
+          e.translationY,
+          SEARCH_REVEAL_RANGE_PX,
+        );
+      })
+      .onEnd(() => {
+        'worklet';
+        cancelAnimation(contentOverscrollY);
+        contentOverscrollY.value = 0;
+        if (locked.value) {
+          expanded.value = 1;
+          return;
+        }
+        if (expanded.value >= SNAP_OPEN_THRESHOLD) {
+          snapExpandedTo(expanded, 1);
+        } else {
+          snapExpandedTo(expanded, 0);
         }
       })
-      .onEnd(() => { overscrollPull.value = withSpring(0, PAN_SPRING); })
-      .onFinalize(() => { overscrollPull.value = withSpring(0, PAN_SPRING); });
-    const nativeWithRef = pagerGestureRef
-      ? Gesture.Native().withRef(pagerGestureRef)
-      : native;
-    return Gesture.Simultaneous(nativeWithRef, pull);
-  }, [locked, overscrollPull, scrollY, pagerGestureRef]);
+      .onFinalize(() => {
+        'worklet';
+        searchDragActive.value = false;
+        runOnJS(setSearchDragActiveJs)(false);
+        cancelAnimation(contentOverscrollY);
+        contentOverscrollY.value = 0;
+        const enabled = computeListScrollEnabled(
+          listScrollY.value <= AT_TOP_THRESHOLD_PX,
+          expanded.value > 0.001,
+          false,
+        );
+        runOnJS(setListScrollEnabledIfChanged)(enabled);
+      });
+  }, [
+    SEARCH_REVEAL_RANGE_PX,
+    dragStartExpanded,
+    expanded,
+    listScrollY,
+    listMaxScrollY,
+    locked,
+    panStartX,
+    panStartY,
+    searchDragActive,
+    setListScrollEnabledIfChanged,
+    setSearchDragActiveJs,
+    contentOverscrollY,
+  ]);
 
-  const searchBarStyle = useAnimatedStyle(() => {
-    const p = revealProgress.value;
-    const clampedP = Math.min(Math.max(p, 0), 1);
-    const overscrollExtra = Math.max(p - 1, 0);
-    return {
-      opacity: clampedP,
-      transform: [
-        {
-          translateY:
-            interpolate(
-              clampedP,
-              [0, 1],
-              [-(SEARCH_FIELD_H + SEARCH_HIDE_GAP_PX), 0],
-              Extrapolation.CLAMP
-            ) + overscrollExtra * 12 },
-      ] };
-  }, [SEARCH_FIELD_H]);
+  const searchBarWrapStyle = useAnimatedStyle(() => ({
+    height: interpolate(
+      expanded.value,
+      [0, 1],
+      [0, SEARCH_REVEAL_RANGE_PX],
+      Extrapolation.CLAMP,
+    ),
+    opacity: interpolate(expanded.value, [0, 1], [0, 1], Extrapolation.CLAMP),
+    overflow: 'hidden',
+  }));
+
+  const searchBarWrapAnimatedProps = useAnimatedProps(() => ({
+    pointerEvents: searchPointerOpen.value > 0.5 ? 'box-none' : 'none',
+  }));
+
+  const searchBarInnerStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(
+          expanded.value,
+          [0, 1],
+          [-SEARCH_FIELD_H * 0.35, 0],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
 
   const iconStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      Math.min(Math.max(revealProgress.value, 0), 1),
-      [0, 1],
-      [1, 0],
-      Extrapolation.CLAMP
-    ) }));
+    opacity: interpolate(expanded.value, [0, 1], [1, 0], Extrapolation.CLAMP),
+  }));
 
-  const listMinHeight =
-    listViewportH > 0 ? listViewportH + SEARCH_REVEAL_RANGE_PX + 1 : undefined;
+  const contentBounceStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: contentOverscrollY.value }],
+  }));
+
+  const listScrollAnimatedProps = useAnimatedProps(() => ({
+    scrollEnabled: listScrollEnabledSv.value > 0.5,
+  }));
 
   return {
     SEARCH_FIELD_H,
     SEARCH_REVEAL_RANGE_PX,
-    searchPointerEvents,
     setSearchShown,
-    listGesture,
+    listScrollY,
+    listMaxScrollY,
+    searchDragActive,
+    searchDragActiveRef,
+    pullGesture,
+    contentBounceStyle,
     scrollHandler,
-    onListScrollEndDrag,
-    onListMomentumScrollEnd,
-    searchBarStyle,
+    searchBarWrapStyle,
+    searchBarWrapAnimatedProps,
+    searchBarInnerStyle,
     iconStyle,
-    listMinHeight,
-    setListViewportH };
+    listScrollAnimatedProps,
+  };
 }

@@ -3,7 +3,11 @@ import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { NavigationContext } from '@react-navigation/native';
 import { V } from '../theme';
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
-import { SplitDetailContext, SplitDetailProvider, useSplitDetail } from '../context/SplitDetailContext';
+import {
+  SplitDetailContext,
+  SplitDetailProvider,
+  useSplitDetail,
+  splitDetailApi } from '../context/SplitDetailContext';
 import GameScreen from '../screens/GameScreen';
 import ChatRoomScreen from '../screens/ChatRoomScreen';
 import ContactProfileScreen from '../screens/ContactProfileScreen';
@@ -131,6 +135,23 @@ export function TabletSplitShell({ children }) {
   }, [isPortrait, windowW]);
 
   const [stack, setStack] = useState([]);
+
+  const clearStack = useCallback(() => {
+    setStack([]);
+  }, []);
+
+  const clearContactProfile = useCallback(() => {
+    setStack((prev) => (prev.some((e) => e.type === 'ContactProfile') ? [] : prev));
+  }, []);
+
+  useEffect(() => {
+    splitDetailApi.clearStack = clearStack;
+    splitDetailApi.clearContactProfile = clearContactProfile;
+    return () => {
+      splitDetailApi.clearStack = null;
+      splitDetailApi.clearContactProfile = null;
+    };
+  }, [clearStack, clearContactProfile]);
 
   const setDetailParams = useCallback((entry) => {
     setStack(entry ? [entry] : []);

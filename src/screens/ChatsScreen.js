@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   Alert,
   FlatList,
@@ -8,12 +9,18 @@ import {
   TextInput,
   TouchableOpacity,
   View } from 'react-native';
-import { GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 import SafeBlurView from '../components/SafeBlurView';
 import tw from 'twrnc';
 import { ARIA_CONTACT, ARIA_ROOM_ID } from '../lib/aria';
-import { SEARCH_CHATS_CAPSULE_RADIUS, SEARCH_FIELD_LAYOUT, V } from '../theme';
+import {
+  SEARCH_CHATS_CAPSULE_RADIUS,
+  SEARCH_FIELD_LAYOUT,
+  V,
+} from '../theme';
+import { useAndroidTabOverscroll } from '../hooks/useAndroidTabOverscroll';
+import { useMainTabsNavigationOptional } from '../context/MainTabsNavigationContext';
 import { Search, Trash2 } from '../icons/lucideIcons';
 import { useNicknameFromRoute } from '../hooks/useNicknameFromRoute';
 import { useChatsSelection } from '../hooks/useChatsSelection';
@@ -38,8 +45,6 @@ export default function ChatsScreen({ route, navigation }) {
   const nickname = useNicknameFromRoute(route);
   const isSplit = useIsSplitLayout();
   const { setDetailParams } = useSplitDetail();
-  const listRef = useRef(null);
-
   useEffect(() => {
     clearPreviewCache();
   }, [nickname]);
@@ -51,19 +56,77 @@ export default function ChatsScreen({ route, navigation }) {
 
   const { rows, removeRowsByRoomIds } = useChatsRoomsLoader(nickname);
 
+  const mainTabsNav = useMainTabsNavigationOptional();
+  const acquirePagerLock = mainTabsNav?.acquirePagerInteractionLock;
+  const releasePagerLock = mainTabsNav?.releasePagerInteractionLock;
+  const resetPagerLock = mainTabsNav?.resetPagerInteractionLock;
+
   const {
     SEARCH_FIELD_H,
-    SEARCH_REVEAL_RANGE_PX,
-    searchPointerEvents,
     setSearchShown,
-    listGesture,
+    listScrollY,
+    listMaxScrollY,
+    searchDragActive,
+    searchDragActiveRef,
+    pullGesture,
+    contentBounceStyle,
     scrollHandler,
-    onListScrollEndDrag,
-    onListMomentumScrollEnd,
-    searchBarStyle,
+    searchBarWrapStyle,
+    searchBarWrapAnimatedProps,
+    searchBarInnerStyle,
     iconStyle,
-    listMinHeight,
-    setListViewportH } = useChatsSearchReveal(q, searchFocused, listRef);
+    listScrollAnimatedProps,
+  } = useChatsSearchReveal(q, searchFocused);
+
+  const listScrollDragRef = useRef(false);
+
+  const onListScrollBeginDrag = useCallback(() => {
+    if (searchDragActiveRef.current) return;
+    listScrollDragRef.current = true;
+    acquirePagerLock?.();
+  }, [acquirePagerLock, searchDragActiveRef]);
+
+  const onListScrollEndDrag = useCallback(
+    (e) => {
+      const vy = e?.nativeEvent?.velocity?.y ?? 0;
+      if (Math.abs(vy) < 0.15) {
+        listScrollDragRef.current = false;
+        releasePagerLock?.();
+      }
+    },
+    [releasePagerLock],
+  );
+
+  const onListMomentumScrollEnd = useCallback(() => {
+    if (listScrollDragRef.current) {
+      listScrollDragRef.current = false;
+      releasePagerLock?.();
+    }
+  }, [releasePagerLock]);
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        listScrollDragRef.current = false;
+        resetPagerLock?.();
+      },
+      [resetPagerLock],
+    ),
+  );
+
+  const { animatedStyle: bottomBounceStyle, wrapGesture, overscrollProps } = useAndroidTabOverscroll({
+    scrollY: listScrollY,
+    maxScrollY: listMaxScrollY,
+    suppressTopBounce: true,
+    acquirePagerLock,
+    releasePagerLock,
+    searchDragActive,
+  });
+  const listScrollGesture = wrapGesture(Gesture.Native()) ?? Gesture.Native();
+  const chatsGesture = useMemo(
+    () => Gesture.Simultaneous(pullGesture, listScrollGesture),
+    [pullGesture, listScrollGesture],
+  );
 
   const filtered = useMemo(() => filterChatsRows(rows, q), [q, rows]);
 
@@ -157,13 +220,6 @@ export default function ChatsScreen({ route, navigation }) {
     ],
   );
 
-  const contentContainerStyle = useMemo(
-    () => ({
-      paddingTop: SEARCH_REVEAL_RANGE_PX,
-      ...(listMinHeight != null ? { minHeight: listMinHeight } : null) }),
-    [SEARCH_REVEAL_RANGE_PX, listMinHeight]
-  );
-
   return (
     <TabBackground>
       <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
@@ -219,92 +275,100 @@ export default function ChatsScreen({ route, navigation }) {
           )}
         </View>
 
-        <View style={[tw`flex-1`, {}]}>
-          <Animated.View
-            pointerEvents={searchPointerEvents}
-            style={[
-              {
-                position: 'absolute',
-                left: MESSENGER_HEADER_PADDING_HORIZONTAL,
-                right: MESSENGER_HEADER_PADDING_HORIZONTAL,
-                top: 0,
-                zIndex: 2,
-                elevation: 2 },
-              searchBarStyle]}
-          >
-            <View style={{ marginBottom: CHATS_SEARCH_BOTTOM_SPACING_PX }}>
-              <SafeBlurView
-                intensity={28}
-                tint="dark"
-                blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
-                style={[
-                  tw`flex-row items-center`,
-                  {
-                    minHeight: SEARCH_FIELD_H,
-                    borderRadius: SEARCH_CHATS_CAPSULE_RADIUS,
-                    overflow: 'hidden',
-                    paddingHorizontal: SEARCH_FIELD_LAYOUT.rowPaddingH,
-                    borderWidth: StyleSheet.hairlineWidth,
-                    borderColor: 'rgba(255,255,255,0.13)',
-                    backgroundColor: 'rgba(255,255,255,0.06)' }]}
-              >
-                <Search
-                  size={14}
-                  strokeWidth={1.5}
-                  color={V.textMuted}
-                  style={{ marginRight: 8, flexShrink: 0 }}
-                />
-                <TextInput
-                  ref={searchInputRef}
-                  style={[
-                    tw`flex-1 text-[15px]`,
-                    {
-                      color: V.textPrimary,
-                      paddingVertical: 0,
-                      height: SEARCH_FIELD_H }]}
-                  placeholder="Поиск..."
-                  placeholderTextColor={V.textMuted}
-                  value={q}
-                  onChangeText={setQ}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                />
-                {!!q && (
-                  <TouchableOpacity
-                    onPress={() => setQ('')}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    style={tw`ml-2`}
-                    accessibilityRole="button"
-                    accessibilityLabel="Очистить поиск"
+        <GestureDetector gesture={chatsGesture}>
+          <Animated.View style={[tw`flex-1`, contentBounceStyle]}>
+            <Animated.View
+              animatedProps={searchBarWrapAnimatedProps}
+              style={[
+                { marginHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL },
+                searchBarWrapStyle,
+              ]}
+            >
+              <Animated.View style={searchBarInnerStyle}>
+                <View style={{ marginBottom: CHATS_SEARCH_BOTTOM_SPACING_PX }}>
+                  <SafeBlurView
+                    intensity={28}
+                    tint="dark"
+                    blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
+                    style={[
+                      tw`flex-row items-center`,
+                      {
+                        minHeight: SEARCH_FIELD_H,
+                        borderRadius: SEARCH_CHATS_CAPSULE_RADIUS,
+                        overflow: 'hidden',
+                        paddingHorizontal: SEARCH_FIELD_LAYOUT.rowPaddingH,
+                        borderWidth: StyleSheet.hairlineWidth,
+                        borderColor: 'rgba(255,255,255,0.13)',
+                        backgroundColor: 'rgba(255,255,255,0.06)' },
+                    ]}
                   >
-                    <Text style={[tw`text-[18px]`, { color: V.textPrimary, lineHeight: 18 }]}>×</Text>
-                  </TouchableOpacity>
-                )}
-              </SafeBlurView>
-            </View>
-          </Animated.View>
+                    <Search
+                      size={14}
+                      strokeWidth={1.5}
+                      color={V.textMuted}
+                      style={{ marginRight: 8, flexShrink: 0 }}
+                    />
+                    <TextInput
+                      ref={searchInputRef}
+                      style={[
+                        tw`flex-1 text-[15px]`,
+                        {
+                          color: V.textPrimary,
+                          paddingVertical: 0,
+                          height: SEARCH_FIELD_H,
+                        },
+                      ]}
+                      placeholder="Поиск..."
+                      placeholderTextColor={V.textMuted}
+                      value={q}
+                      onChangeText={setQ}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onFocus={() => setSearchFocused(true)}
+                      onBlur={() => {
+                        setSearchFocused(false);
+                        if (!q.trim()) setSearchShown(false);
+                      }}
+                    />
+                    {!!q && (
+                      <TouchableOpacity
+                        onPress={() => setQ('')}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={tw`ml-2`}
+                        accessibilityRole="button"
+                        accessibilityLabel="Очистить поиск"
+                      >
+                        <Text style={[tw`text-[18px]`, { color: V.textPrimary, lineHeight: 18 }]}>
+                          ×
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </SafeBlurView>
+                </View>
+              </Animated.View>
+            </Animated.View>
 
-          <View
-            style={[tw`flex-1`, { paddingHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL }]}
-            onLayout={(e) => setListViewportH(e.nativeEvent.layout.height)}
-          >
-            <GestureDetector gesture={listGesture}>
-              <ReanimatedFlatList
-                ref={listRef}
-                data={listData}
-                extraData={selectedHash}
-                keyExtractor={(i) => (i.isAria ? ARIA_ROOM_ID : i.roomId)}
-                renderItem={renderItem}
-                onScroll={scrollHandler}
-                onScrollEndDrag={onListScrollEndDrag}
-                onMomentumScrollEnd={onListMomentumScrollEnd}
-                scrollEventThrottle={16}
-                keyboardShouldPersistTaps="handled"
-                overScrollMode="always"
-                nestedScrollEnabled
-                contentContainerStyle={contentContainerStyle}
+            <Animated.View style={[tw`flex-1`, bottomBounceStyle]}>
+              <View
+                style={[
+                  tw`flex-1`,
+                  { paddingHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL },
+                ]}
+              >
+                <ReanimatedFlatList
+                  animatedProps={listScrollAnimatedProps}
+                  data={listData}
+                  extraData={selectedHash}
+                  keyExtractor={(i) => (i.isAria ? ARIA_ROOM_ID : i.roomId)}
+                  renderItem={renderItem}
+                  onScroll={scrollHandler}
+                  onScrollBeginDrag={onListScrollBeginDrag}
+                  onScrollEndDrag={onListScrollEndDrag}
+                  onMomentumScrollEnd={onListMomentumScrollEnd}
+                  scrollEventThrottle={16}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                  {...overscrollProps}
                 ListEmptyComponent={
                   <View style={tw`py-10`}>
                     {q.trim().length > 0 ? (
@@ -319,10 +383,11 @@ export default function ChatsScreen({ route, navigation }) {
                   </View>
                 }
                 showsVerticalScrollIndicator={false}
-              />
-            </GestureDetector>
-          </View>
-        </View>
+                />
+              </View>
+            </Animated.View>
+          </Animated.View>
+        </GestureDetector>
       </View>
 
       <ChatClearHistoryConfirmModal

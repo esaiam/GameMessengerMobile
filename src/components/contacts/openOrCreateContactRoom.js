@@ -4,6 +4,7 @@ import { normalizeUserPair } from '../../utils/roomIds';
 import { generateRoomCode } from '../../utils/roomCode';
 import { isBlocked } from '../../lib/blockedContacts';
 import { navigateToBlockedContacts } from '../../lib/navigateToBlockedContacts';
+import { syncDialogToChatsList } from '../../lib/chatsListSync';
 
 /**
  * Открыть DM-комнату с контактом или создать rooms row.
@@ -55,6 +56,13 @@ export async function openOrCreateContactRoom({ nickname, contactName, navigatio
       }
       room = created;
     }
+
+    await syncDialogToChatsList(nickname, {
+      roomId: room.id,
+      roomCode: room.code,
+      contactName,
+      last: null,
+    });
 
     navigation?.navigate('Room', {
       roomId: room.id,

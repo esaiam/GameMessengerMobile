@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -12,13 +11,16 @@ import tw from 'twrnc';
 import TabBackground from '../components/TabBackground';
 import { UserAvatar } from '../components/UserAvatar';
 import { V } from '../theme';
+import TabOverscrollFlatList from '../components/TabOverscrollFlatList';
 import { ArrowLeft } from '../icons/lucideIcons';
 import { getBlockedPeers, unblockPeer } from '../lib/blockedContacts';
 import { normalizeUserPair } from '../utils/roomIds';
 import { useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
 import { useNicknameFromRoute } from '../hooks/useNicknameFromRoute';
+import { profileStackGoBack, useProfileStackBackHandler } from '../lib/profileStackGoBack';
 
 export default function BlockedContactsScreen({ route, navigation }) {
+  useProfileStackBackHandler(navigation);
   const nickname = useNicknameFromRoute(route);
   const headerLayout = useMessengerHeaderLayout();
   const [peers, setPeers] = useState([]);
@@ -125,7 +127,7 @@ export default function BlockedContactsScreen({ route, navigation }) {
       <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
         <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => profileStackGoBack(navigation)}
             style={{
               minHeight: headerLayout.contentMinHeight,
               justifyContent: 'center',
@@ -154,7 +156,7 @@ export default function BlockedContactsScreen({ route, navigation }) {
               <ActivityIndicator color={V.textMuted} />
             </View>
           ) : (
-            <FlatList
+            <TabOverscrollFlatList
               style={tw`flex-1`}
               data={peers}
               keyExtractor={(item) => item}

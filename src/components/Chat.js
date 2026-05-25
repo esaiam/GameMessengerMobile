@@ -86,7 +86,9 @@ export default function Chat({
   chatRoomHeader,
   onTopOverlayHeight,
   /** GameScreen: true — не трогать JS-таймеры эфемерки (бросок кубиков) */
-  renderPausedRef }) {
+  renderPausedRef,
+  /** false в `RoomChatContainer` (нарды) — без вертикального bounce ленты */
+  overscrollEnabled = true }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const inputBarRef = useRef(null);
@@ -691,6 +693,7 @@ export default function Chat({
           selectedIds={selectedIds}
           exitSelectionMode={exitSelectionMode}
           batchDeleteForMe={batchDeleteForMe}
+          overscrollEnabled={overscrollEnabled}
         />
 
         <Reanimated.View

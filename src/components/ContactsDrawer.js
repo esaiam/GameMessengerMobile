@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, FlatList, Alert } from 'react-native';
+import { View, Text, Alert } from 'react-native';
+import TabOverscrollFlatList from './TabOverscrollFlatList';
 import tw from 'twrnc';
 import { V } from '../theme';
 import { useMessengerHeaderLayout } from './MessengerHeaderLayout';
 import useContactsList from './contacts/useContactsList';
 import useContactsHandleSearch from './contacts/useContactsHandleSearch';
 import { openOrCreateContactRoom } from './contacts/openOrCreateContactRoom';
+import { navigateToProfileScreen } from '../lib/navigateToProfileScreen';
 import ContactsSearchHeader from './contacts/ContactsSearchHeader';
 import ContactsDrawerRow from './contacts/ContactsDrawerRow';
 
@@ -26,11 +28,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
   );
 
   const openInviteFriends = useCallback(() => {
-    const tabNav = navigation?.getParent?.();
-    if (tabNav?.navigate) {
-      tabNav.navigate('Profile', { screen: 'InviteFriends' });
-      return;
-    }
+    if (navigateToProfileScreen('InviteFriends', undefined, navigation)) return;
     Alert.alert('Приглашения', 'Откройте вкладку «Профиль» → приглашения.');
   }, [navigation]);
 
@@ -76,7 +74,7 @@ export default function ContactsDrawer({ nickname, navigation }) {
 
   return (
     <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
-      <FlatList
+      <TabOverscrollFlatList
         style={tw`flex-1`}
         data={filteredContacts}
         keyExtractor={(item) => item}

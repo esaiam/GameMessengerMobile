@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
   Alert,
   Share } from 'react-native';
@@ -12,12 +11,14 @@ import tw from 'twrnc';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import { V } from '../theme';
+import TabOverscrollFlatList from '../components/TabOverscrollFlatList';
 import TabBackground from '../components/TabBackground';
 import { ArrowLeft, Copy, Forward } from '../icons/lucideIcons';
 import InviteQrBlock from '../components/InviteQrBlock';
 import { generateInviteCode } from '../utils/inviteCode';
 import { buildInviteQrPayload } from '../utils/inviteDeepLink';
 import { useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
+import { profileStackGoBack, useProfileStackBackHandler } from '../lib/profileStackGoBack';
 
 const LIST_LIMIT = 10;
 const INSERT_RETRIES = 3;
@@ -50,6 +51,7 @@ function buildInviteShareMessage(code, expiresAtIso) {
 }
 
 export default function InviteFriendsScreen({ navigation }) {
+  useProfileStackBackHandler(navigation);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -204,7 +206,7 @@ export default function InviteFriendsScreen({ navigation }) {
       <View style={[tw`flex-1`, {backgroundColor: 'transparent'}]}>
         <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => profileStackGoBack(navigation)}
             style={{ minHeight: headerLayout.contentMinHeight, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
@@ -249,7 +251,7 @@ export default function InviteFriendsScreen({ navigation }) {
               <ActivityIndicator color={V.textMuted} />
             </View>
           ) : (
-            <FlatList
+            <TabOverscrollFlatList
               style={tw`flex-1`}
               data={rows}
               keyExtractor={(item) => item.id}

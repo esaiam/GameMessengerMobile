@@ -21,7 +21,7 @@ import {
 import { registerPushToken } from './src/lib/notifications';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { RootNavigationTree } from './src/navigation/RootNavigationTree';
-import { MainTabSwipeOverlay } from './src/navigation/useMainTabSwipeGesture';
+import { MainTabsNavigationProvider } from './src/context/MainTabsNavigationContext';
 import { parseInviteQrPayload } from './src/utils/inviteDeepLink';
 import { parseAuthRecoveryFromUrl } from './src/utils/authRecoveryDeepLink';
 import { cleanupCache } from './src/storage/CacheManager';
@@ -95,7 +95,7 @@ function AppNavigationRoot() {
   return (
     <View style={{ flex: 1, backgroundColor: V.bgApp }}>
       <PermissionBanner />
-      <MainTabSwipeOverlay navRef={navRef}>{navTree}</MainTabSwipeOverlay>
+      <MainTabsNavigationProvider>{navTree}</MainTabsNavigationProvider>
     </View>
   );
 }

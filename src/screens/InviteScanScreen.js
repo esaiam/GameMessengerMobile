@@ -6,6 +6,10 @@ import tw from 'twrnc';
 import { V } from '../theme';
 import { ArrowLeft } from '../icons/lucideIcons';
 import { parseInviteQrPayload } from '../utils/inviteDeepLink';
+import { safeGoBack } from '../lib/safeGoBack';
+
+const goBackToAuth = (navigation) =>
+  safeGoBack(navigation, () => navigation.navigate('Auth'));
 
 export default function InviteScanScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -24,7 +28,7 @@ export default function InviteScanScreen({ navigation }) {
         name: 'Auth',
         params: { scannedCode: code },
         merge: true });
-      navigation.goBack();
+      goBackToAuth(navigation);
     },
     [navigation]
   );
@@ -58,7 +62,7 @@ export default function InviteScanScreen({ navigation }) {
   if (!permission.granted) {
     return (
       <View style={[styles.fill, { backgroundColor: V.bgApp, paddingTop: insets.top + 12, paddingHorizontal: 16 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={tw`flex-row items-center mb-6 py-2`}>
+        <TouchableOpacity onPress={() => goBackToAuth(navigation)} style={tw`flex-row items-center mb-6 py-2`}>
           <ArrowLeft size={18} color={V.textSecondary} strokeWidth={1.5} />
           <Text style={[tw`text-[14px] font-medium ml-2`, { color: V.textSecondary }]}>Назад</Text>
         </TouchableOpacity>
@@ -96,7 +100,7 @@ export default function InviteScanScreen({ navigation }) {
             paddingBottom: insets.bottom + 12 }]}
       >
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={() => goBackToAuth(navigation)}
           style={[
             tw`self-start flex-row items-center py-2 px-3 rounded-[10px]`,
             { backgroundColor: 'rgba(13,15,20,0.65)' }]}

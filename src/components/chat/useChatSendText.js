@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { encryptMessage } from '../../utils/VaultCrypto';
+import { refreshChatsListAfterMessage } from '../../lib/chatsListSync';
 
 export default function useChatSendText({
   text,
@@ -52,6 +53,8 @@ export default function useChatSendText({
         setText(trimmed);
         setReplyTarget(replySnapshot);
         Alert.alert('Ошибка', error.message || 'Не удалось отправить сообщение');
+      } else {
+        await refreshChatsListAfterMessage(nickname, roomId);
       }
     } catch (e) {
       const detail = e?.message || String(e);

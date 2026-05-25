@@ -7,6 +7,7 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase';
 import { storageRoomSegment, readUriAsArrayBuffer } from './chatMediaIo';
 import { DEFAULT_VOICE_WAVEFORM } from './voiceWaveformSamples';
 import { formatDuration } from './chatMessageListFormat';
+import { refreshChatsListAfterMessage } from '../../lib/chatsListSync';
 
 export default function useChatMediaActions({
   roomId,
@@ -95,6 +96,7 @@ export default function useChatMediaActions({
       console.warn('Chat media insert error:', error.message);
       throw error;
     }
+    await refreshChatsListAfterMessage(nickname, roomId);
     setReplyTarget(null);
     return data ?? null;
   }, [roomId, nickname, replyTo, ephemeralSec, setReplyTarget]);

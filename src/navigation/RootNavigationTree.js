@@ -8,6 +8,7 @@ import AuthScreen from '../screens/AuthScreen';
 import InviteScanScreen from '../screens/InviteScanScreen';
 import PickHandleScreen from '../screens/PickHandleScreen';
 import { V } from '../theme';
+import { syncMainTabsFromNavState } from '../context/MainTabsNavigationContext';
 import { MainTabs } from './MainTabsNavigator';
 import { TabletSplitShell } from './TabletSplitShell';
 
@@ -25,13 +26,17 @@ const NavTheme = {
 const Stack = createNativeStackNavigator();
 
 /**
- * Корневой NavigationContainer и auth/main стек. Межтабовый свайп — Pan в App (`MainTabSwipeOverlay`).
+ * Корневой NavigationContainer и auth/main стек.
  */
 export function RootNavigationTree({ navRef, stackKey, session, profileHandle }) {
   return (
     <TabletSplitShell>
       <View style={{ flex: 1 }}>
-      <NavigationContainer ref={navRef} theme={NavTheme}>
+      <NavigationContainer
+        ref={navRef}
+        theme={NavTheme}
+        onStateChange={syncMainTabsFromNavState}
+      >
         <StatusBar style="light" />
         <Stack.Navigator
           key={stackKey}

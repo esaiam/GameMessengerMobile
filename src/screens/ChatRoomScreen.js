@@ -22,6 +22,7 @@ import { V } from '../theme';
 import { setAudioModeAsync } from '../utils/audioMode';
 import { usePresence } from '../hooks/usePresence';
 import { Phone } from '../icons/lucideIcons';
+import { useMessengerScreenBackHandler } from '../lib/safeGoBack';
 
 const ARIA_REPLY_VOLUME = 0.3;
 const ARIA_MESSAGE_RECEIVED_MP3 = require('../assets/sounds/message_received.mp3');
@@ -48,6 +49,7 @@ function ariaMessagesFromDbRows(rows, nickname) {
 export default function ChatRoomScreen({ route, navigation }) {
   const { nickname, roomId, roomCode, title, peerName, isAriaChat, contact } = route.params || {};
   const insets = useSafeAreaInsets();
+  useMessengerScreenBackHandler(navigation);
 
   const [ariaMessages, setAriaMessages] = useState(() =>
     route.params?.isAriaChat ? getAriaSeedMessages() : []

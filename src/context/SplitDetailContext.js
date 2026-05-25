@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 /**
  * Каждый элемент стека: { type: 'Room' | 'ChatRoom' | 'ContactProfile', params: object }
@@ -10,8 +10,39 @@ import React, { createContext, useCallback, useContext, useState } from 'react';
  */
 export const SplitDetailContext = createContext(null);
 
+/** Вызовы вне React (блокировка контакта, смена вкладки). */
+export const splitDetailApi = {
+  clearStack: null,
+  clearContactProfile: null,
+};
+
+function registerSplitDetailApi(clearStack, clearContactProfile) {
+  splitDetailApi.clearStack = clearStack;
+  splitDetailApi.clearContactProfile = clearContactProfile;
+}
+
+function useSplitDetailApiRegistration(setStack) {
+  const clearStack = useCallback(() => {
+    setStack([]);
+  }, [setStack]);
+
+  const clearContactProfile = useCallback(() => {
+    setStack((prev) =>
+      prev.some((e) => e.type === 'ContactProfile') ? [] : prev,
+    );
+  }, [setStack]);
+
+  useEffect(() => {
+    registerSplitDetailApi(clearStack, clearContactProfile);
+    return () => registerSplitDetailApi(null, null);
+  }, [clearStack, clearContactProfile]);
+
+  return { clearStack, clearContactProfile };
+}
+
 export function SplitDetailProvider({ children }) {
   const [stack, setStack] = useState([]);
+  useSplitDetailApiRegistration(setStack);
 
   const setDetailParams = useCallback((entry) => {
     setStack(entry ? [entry] : []);

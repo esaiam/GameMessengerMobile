@@ -5,6 +5,7 @@ import {
   createInitialGameState,
   migrateGameState,
   stripTerminalMetaForDb } from '../utils/gameLogic';
+import { safeGoBackToMessengerList } from '../lib/safeGoBack';
 
 export function useGameSession({
   roomId,
@@ -57,7 +58,7 @@ export function useGameSession({
         Alert.alert('Ошибка', 'Комната не найдена');
         Keyboard.dismiss();
         setKbVisible(false);
-        navigation.goBack();
+        safeGoBackToMessengerList(navigation);
         return;
       }
 
@@ -326,7 +327,7 @@ export function useGameSession({
   const leaveRoom = useCallback(() => {
     Keyboard.dismiss();
     setKbVisible(false);
-    navigation.goBack();
+    safeGoBackToMessengerList(navigation);
   }, [navigation]);
 
   return {

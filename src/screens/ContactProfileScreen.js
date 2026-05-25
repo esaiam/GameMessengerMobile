@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   Alert,
   Platform,
@@ -12,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, MessageCircle, User } from '../icons/lucideIcons';
 import { UserAvatar } from '../components/UserAvatar';
 import { V } from '../theme';
+import TabOverscrollScrollView from '../components/TabOverscrollScrollView';
 import {
   blockPeer,
   unblockPeer,
@@ -19,10 +19,15 @@ import {
 import { hideChatRoom } from '../lib/hiddenChats';
 import { hideAllRoomMessagesForMe } from '../lib/hideRoomMessagesForMe';
 import { loadDialogsCache, saveDialogsCache } from '../utils/dialogsCache';
+import {
+  leaveContactProfileAfterDestructiveAction,
+  safeGoBackFromContactProfile,
+  useContactProfileBackHandler } from '../lib/safeGoBack';
 
 export default function ContactProfileScreen({ route, navigation }) {
   const { peerName, contactOnline, roomId, nickname } = route.params || {};
   const insets = useSafeAreaInsets();
+  useContactProfileBackHandler(navigation);
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
 
@@ -32,15 +37,11 @@ export default function ContactProfileScreen({ route, navigation }) {
   }, [nickname, peerName]);
 
   const goBackToChat = () => {
-    navigation.goBack();
+    safeGoBackFromContactProfile(navigation);
   };
 
   const goToContactsTab = () => {
     navigation.getParent()?.navigate('Contacts', { screen: 'ContactsHome' });
-  };
-
-  const leaveChatList = () => {
-    navigation.navigate('ChatsList');
   };
 
   const pruneDialogsCache = useCallback(async () => {
@@ -61,13 +62,13 @@ export default function ContactProfileScreen({ route, navigation }) {
       await hideAllRoomMessagesForMe({ roomId, nickname });
       await hideChatRoom(nickname, roomId);
       await pruneDialogsCache();
-      leaveChatList();
+      leaveContactProfileAfterDestructiveAction(navigation);
     } catch (e) {
       Alert.alert('Ошибка', e?.message || 'Не удалось удалить переписку');
     } finally {
       setBusy(false);
     }
-  }, [roomId, nickname, pruneDialogsCache]);
+  }, [roomId, nickname, navigation, pruneDialogsCache]);
 
   const handleDeleteConversation = () => {
     Alert.alert(
@@ -91,13 +92,13 @@ export default function ContactProfileScreen({ route, navigation }) {
         await pruneDialogsCache();
       }
       Alert.alert('Готово', `${peerName} заблокирован.`);
-      leaveChatList();
+      leaveContactProfileAfterDestructiveAction(navigation, { afterBlock: true });
     } catch (e) {
       Alert.alert('Ошибка', e?.message || 'Не удалось заблокировать');
     } finally {
       setBusy(false);
     }
-  }, [peerName, nickname, roomId, pruneDialogsCache]);
+  }, [peerName, nickname, roomId, navigation, pruneDialogsCache]);
 
   const runUnblock = useCallback(async () => {
     if (!peerName || !nickname) return;
@@ -154,7 +155,7 @@ export default function ContactProfileScreen({ route, navigation }) {
         </View>
       </View>
 
-      <ScrollView
+      <TabOverscrollScrollView
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: insets.bottom + 32 }]}
@@ -217,7 +218,7 @@ export default function ContactProfileScreen({ route, navigation }) {
             last
           />
         </View>
-      </ScrollView>
+      </TabOverscrollScrollView>
     </View>
   );
 }

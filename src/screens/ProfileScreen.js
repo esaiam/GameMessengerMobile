@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -19,9 +19,10 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
 import tw from 'twrnc';
-import { V } from '../theme';
+import { TAB_OVERSCROLL_PROPS, V } from '../theme';
 import { supabase } from '../lib/supabase';
 import { useAuthGate } from '../context/AuthGateContext';
+import { useMainTabsNavigationOptional } from '../context/MainTabsNavigationContext';
 import { clearNicknameFromStorage } from '../lib/nicknameStorage';
 import { UserAvatar } from '../components/UserAvatar';
 import ProfileAvatarModal from '../components/ProfileAvatarModal';
@@ -125,6 +126,12 @@ export default function ProfileScreen({ route, navigation }) {
   const headerLayout = useMessengerHeaderLayout();
   const { width: screenW } = useWindowDimensions();
   const scrollY = useSharedValue(0);
+  const scrollDragRef = useRef(false);
+
+  const mainTabsNav = useMainTabsNavigationOptional();
+  const acquirePagerLock = mainTabsNav?.acquirePagerInteractionLock;
+  const releasePagerLock = mainTabsNav?.releasePagerInteractionLock;
+  const resetPagerLock = mainTabsNav?.resetPagerInteractionLock;
 
   const headerH = headerLayout.minHeight;
   const avatarTop = headerH + AVATAR_MARGIN_TOP;
@@ -144,12 +151,14 @@ export default function ProfileScreen({ route, navigation }) {
   const onScroll = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
-    } });
+    },
+  });
 
   const avatarWrapStyle = useAnimatedStyle(() => {
     const p = Math.min(scrollY.value / COLLAPSE_DISTANCE, 1);
-    const translateY = interpolate(p, [0, 1], [0, -avatarLiftY]);
-    const scale = interpolate(p, [0, 1], [1, 0]);
+    const lift = Math.sin(p * Math.PI * 0.5);
+    const translateY = -avatarLiftY * lift;
+    const scale = interpolate(p, [0, 1], [1, 0.42]);
     const opacity = interpolate(p, [0, 0.72, 1], [1, 0.35, 0], Extrapolation.CLAMP);
     return {
       opacity,
@@ -193,13 +202,41 @@ export default function ProfileScreen({ route, navigation }) {
     }, [refreshSettingsLabels])
   );
 
-  const openInvites = () => {
-    const tabNav = navigation.getParent?.();
-    if (tabNav?.navigate) {
-      tabNav.navigate('Profile', { screen: 'InviteFriends' });
-    } else {
-      navigation.navigate('InviteFriends');
+  const onScrollBeginDrag = useCallback(() => {
+    scrollDragRef.current = true;
+    acquirePagerLock?.();
+  }, [acquirePagerLock]);
+
+  const onScrollEndDrag = useCallback(
+    (e) => {
+      const vy = e?.nativeEvent?.velocity?.y ?? 0;
+      if (Math.abs(vy) < 0.15) {
+        scrollDragRef.current = false;
+        releasePagerLock?.();
+      }
+    },
+    [releasePagerLock],
+  );
+
+  const onMomentumScrollEnd = useCallback(() => {
+    if (scrollDragRef.current) {
+      scrollDragRef.current = false;
+      releasePagerLock?.();
     }
+  }, [releasePagerLock]);
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        scrollDragRef.current = false;
+        resetPagerLock?.();
+      },
+      [resetPagerLock],
+    ),
+  );
+
+  const openInvites = () => {
+    navigation.navigate('InviteFriends');
   };
 
   const pickPhotoFromGallery = async () => {
@@ -389,17 +426,22 @@ export default function ProfileScreen({ route, navigation }) {
       </View>
 
       <Animated.ScrollView
+        {...TAB_OVERSCROLL_PROPS}
         style={tw`flex-1`}
-        overScrollMode="always"
         contentContainerStyle={[
           tw`px-4 pb-10`,
           {
             flexGrow: 1,
             backgroundColor: 'transparent',
-            paddingTop: scrollTopPadding }]}
+            paddingTop: scrollTopPadding },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
         onScroll={onScroll}
+        onScrollBeginDrag={onScrollBeginDrag}
+        onScrollEndDrag={onScrollEndDrag}
+        onMomentumScrollEnd={onMomentumScrollEnd}
         scrollEventThrottle={16}
       >
         <View style={styles.actionsRow}>

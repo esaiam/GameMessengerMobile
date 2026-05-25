@@ -13,11 +13,12 @@ import {
   Animated,
   Easing,
   TouchableOpacity,
-  PanResponder,
   LayoutAnimation,
   Image,
   Platform,
   StyleSheet } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import SafeBlurView from './SafeBlurView';
 import tw from 'twrnc';
 import { V, boardPalette } from '../theme';
@@ -372,23 +373,30 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
   const onSwipeRef = useRef(onSwipe);
   useEffect(() => { onSwipeRef.current = onSwipe; }, [onSwipe]);
 
-  const swipePan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        !!onSwipeRef.current && (Math.abs(gs.dx) > 20 || Math.abs(gs.dy) > 20),
-      onPanResponderRelease: (evt, gs) => {
-        if (!onSwipeRef.current) return;
-        const dist = Math.sqrt(gs.dx * gs.dx + gs.dy * gs.dy);
-        if (dist < 30) return;
-        const ex = evt.nativeEvent.pageX - boardPos.current.x;
-        const ey = evt.nativeEvent.pageY - boardPos.current.y;
-        onSwipeRef.current({
-          startX: ex - gs.dx, startY: ey - gs.dy,
-          endX: ex, endY: ey,
-          vx: gs.vx, vy: gs.vy });
-      } })
-  ).current;
+  const emitBoardSwipe = useCallback((absoluteX, absoluteY, translationX, translationY) => {
+    if (!onSwipeRef.current) return;
+    const dist = Math.hypot(translationX, translationY);
+    if (dist < 28) return;
+    const { x: bx, y: by } = boardPos.current;
+    onSwipeRef.current({
+      startX: absoluteX - translationX - bx,
+      startY: absoluteY - translationY - by,
+      endX: absoluteX - bx,
+      endY: absoluteY - by,
+      vx: 0,
+      vy: 0,
+    });
+  }, []);
+
+  const boardSwipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .minDistance(28)
+        .onEnd((e) => {
+          runOnJS(emitBoardSwipe)(e.absoluteX, e.absoluteY, e.translationX, e.translationY);
+        }),
+    [emitBoardSwipe],
+  );
 
   const topIndices = useMemo(() => [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], []);
   const bottomIndices = useMemo(() => [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0], []);
@@ -551,16 +559,17 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
         </View>
       </View>
 
-      <View
-        ref={boardAreaRef}
-        onLayout={() => {
-          boardAreaRef.current?.measureInWindow((x, y) => {
-            boardPos.current = { x, y };
-          });
-        }}
-        {...swipePan.panHandlers}
-        style={{ position: 'relative', width: layoutBoardW || '100%' }}
-      >
+      <GestureDetector gesture={boardSwipeGesture}>
+        <View
+          ref={boardAreaRef}
+          onLayout={() => {
+            boardAreaRef.current?.measureInWindow((x, y) => {
+              boardPos.current = { x, y };
+            });
+          }}
+          collapsable={false}
+          style={{ position: 'relative', width: layoutBoardW || '100%' }}
+        >
         {!!layoutBoardW && pointW > 0 && checkerSize > 0 && (
           <>
             {renderHalf(topIndices, true)}
@@ -618,6 +627,21 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
             {centerOverlay}
           </View>
         )}
+        {!!onSwipe && !!layoutBoardW && (
+          <View
+            pointerEvents="auto"
+            accessibilityLabel="Свайп для броска кубиков"
+            style={{
+              position: 'absolute',
+              left: layoutBoardW * 0.18,
+              width: layoutBoardW * 0.64,
+              top: pointHeight * 0.1,
+              height: pointHeight * 1.8,
+              zIndex: 25,
+              elevation: 25,
+            }}
+          />
+        )}
         {!!diceOverlay && (
           <View
             pointerEvents="none"
@@ -640,7 +664,8 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
           opponentOnline={opponentOnline}
         />
         {swipeHintOverlay}
-      </View>
+        </View>
+      </GestureDetector>
 
       {children}
       </View>

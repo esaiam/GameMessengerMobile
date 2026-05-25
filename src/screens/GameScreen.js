@@ -31,9 +31,11 @@ import useGameDiceAnimComplete from './game/useGameDiceAnimComplete';
 import useGameBoardSwipe from './game/useGameBoardSwipe';
 import useGameBoardHandleStyles from './game/useGameBoardHandleStyles';
 import GameBoardColumn from './game/GameBoardColumn';
+import { useMessengerScreenBackHandler } from '../lib/safeGoBack';
 
 export default function GameScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  useMessengerScreenBackHandler(navigation);
   const { width: windowW, height: windowH } = useWindowDimensions();
   const shortestSide = Math.min(windowW, windowH);
   const isTabletLayout = shortestSide >= 540;

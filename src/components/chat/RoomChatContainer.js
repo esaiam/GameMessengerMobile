@@ -31,6 +31,7 @@ export function RoomChatContainer({
       onEmojiPickerChange={onEmojiPickerChange}
       onInputBarTopY={onInputBarTopY}
       onInputBarHeight={onInputBarHeight}
+      overscrollEnabled={false}
     />
   );
 }

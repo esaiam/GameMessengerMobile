@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Text,
   View } from 'react-native';
+import TabOverscrollScrollView from '../TabOverscrollScrollView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TabBackground from '../TabBackground';
 import { useTamagotchi } from '../../hooks/useTamagotchi';
@@ -51,11 +52,16 @@ export default function TamagotchiScreen() {
 
   return (
     <TabBackground>
-      <View
-        style={[
+      <TabOverscrollScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
           styles.root,
-          {paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 16}]}
+          {
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 16,
+          }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.title}>Ария</Text>
         <Text style={styles.subtitle}>Твоё отражение настроения</Text>
@@ -104,14 +110,16 @@ export default function TamagotchiScreen() {
             </Pressable>
           ))}
         </View>
-      </View>
+      </TabOverscrollScrollView>
     </TabBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1 },
   root: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 24,
     alignItems: 'center' },
   title: {

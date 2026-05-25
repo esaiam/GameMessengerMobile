@@ -3,15 +3,16 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
   Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import tw from 'twrnc';
 import { V } from '../theme';
+import TabOverscrollFlatList from '../components/TabOverscrollFlatList';
 import TabBackground from '../components/TabBackground';
 import { ArrowLeft, Trash2 } from '../icons/lucideIcons';
 import { useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
+import { profileStackGoBack, useProfileStackBackHandler } from '../lib/profileStackGoBack';
 import {
   getCacheSizeInfo,
   listCacheEntriesSorted,
@@ -39,6 +40,7 @@ function formatTs(ts) {
 }
 
 export default function StorageScreen({ navigation }) {
+  useProfileStackBackHandler(navigation);
   const headerLayout = useMessengerHeaderLayout();
   const [info, setInfo] = useState({ usedMB: 0, limitMB: 500, percentUsed: 0 });
   const [entries, setEntries] = useState([]);
@@ -114,7 +116,7 @@ export default function StorageScreen({ navigation }) {
       <View style={[tw`flex-1`, {backgroundColor: 'transparent'}]}>
         <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => profileStackGoBack(navigation)}
             style={{
               minHeight: headerLayout.contentMinHeight,
               justifyContent: 'center',
@@ -171,7 +173,7 @@ export default function StorageScreen({ navigation }) {
               <Text style={[tw`text-[12px] font-medium mb-2`, { color: V.textSecondary }]}>
                 Файлы в кэше ({entries.length})
               </Text>
-              <FlatList
+              <TabOverscrollFlatList
                 style={tw`flex-1`}
                 data={entries}
                 keyExtractor={(item, index) => `${item.uri}-${index}`}

@@ -47,6 +47,20 @@ export const V = {
 /** Низ градиента затемнения ленты над композером (95%, rgb совпадает с `V.bgApp`). */
 export const chatListBottomFadeBottom = 'rgba(13, 15, 20, 0.95)';
 
+/** Вертикальный overscroll на экранах вкладок (iOS bounce; Android — `useAndroidTabOverscroll`). */
+export const TAB_OVERSCROLL_PROPS = {
+  bounces: true,
+  alwaysBounceVertical: true,
+  overScrollMode: 'always',
+};
+
+/** Без bounce — экран нард (`GameScreen` / лента чата в комнате игры). */
+export const GAME_NO_OVERSCROLL_PROPS = {
+  bounces: false,
+  alwaysBounceVertical: false,
+  overScrollMode: 'never',
+};
+
 /**
  * Геометрия «парящего» таб-бара (`GlassTabBar`).
  * Плашка ввода в чате (`ChatComposer`) по горизонтали и размеру иконок согласована с `TAB_BAR_LAYOUT`, не с полями поиска.

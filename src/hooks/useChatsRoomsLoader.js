@@ -8,6 +8,7 @@ import { loadDialogsCache, saveDialogsCache } from '../utils/dialogsCache';
 import { filterVisibleChatRows } from '../lib/filterVisibleChats';
 import { getBlockedPeers } from '../lib/blockedContacts';
 import { unhideChatRoom } from '../lib/hiddenChats';
+import { registerChatsListReload } from '../lib/chatsListSync';
 
 const MESSAGE_PREVIEW_SELECT =
   'id, room_id, text, message_type, created_at, player_name';
@@ -213,6 +214,11 @@ export function useChatsRoomsLoader(nickname) {
       supabase.removeChannel(channel);
     };
   }, [nickname, load]);
+
+  useEffect(() => {
+    registerChatsListReload(load);
+    return () => registerChatsListReload(null);
+  }, [load]);
 
   const removeRowsByRoomIds = useCallback(
     (roomIds) => {

@@ -3,6 +3,8 @@ import { View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import PagerView from 'react-native-pager-view';
 import GlassTabBar from '../components/GlassTabBar';
+import { useMainTabsNavigation } from '../context/MainTabsNavigationContext';
+import { ProfileStackBridge } from './ProfileStackBridge';
 import GameScreen from '../screens/GameScreen';
 import ChatsScreen from '../screens/ChatsScreen';
 import ChatRoomScreen from '../screens/ChatRoomScreen';
@@ -15,7 +17,11 @@ import ContactsScreen from '../screens/ContactsScreen';
 import ContactProfileScreen from '../screens/ContactProfileScreen';
 import { Search, Layers, User, Users } from '../icons/lucideIcons';
 import { V } from '../theme';
-import { PagerGestureContext } from '../context/PagerGestureContext';
+import { splitDetailApi } from '../context/SplitDetailContext';
+import {
+  getDeepestRouteName,
+  isPagerNativeScrollEnabled,
+} from './mainTabPagerGesturePolicy';
 
 const ChatsStack = createNativeStackNavigator();
 const ContactsStack = createNativeStackNavigator();
@@ -30,16 +36,6 @@ const TABS = [
 ];
 
 const HIDE_TAB_BAR_ON = new Set(['ChatRoom', 'Room']);
-
-function getDeepestRouteName(state) {
-  let s = state;
-  while (s && s.routes && typeof s.index === 'number') {
-    const r = s.routes[s.index];
-    if (!r?.state) return r?.name || null;
-    s = r.state;
-  }
-  return null;
-}
 
 function ChatsStackNavigator({ initialParams }) {
   return (
@@ -70,10 +66,19 @@ function PokerStackNavigator({ initialParams }) {
   );
 }
 
+function ProfileHomeRoute(props) {
+  return (
+    <>
+      <ProfileStackBridge />
+      <ProfileScreen {...props} />
+    </>
+  );
+}
+
 function ProfileStackNavigator({ initialParams }) {
   return (
-    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
-      <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} initialParams={initialParams} />
+    <ProfileStack.Navigator id="ProfileStack" screenOptions={{ headerShown: false }}>
+      <ProfileStack.Screen name="ProfileHome" component={ProfileHomeRoute} initialParams={initialParams} />
       <ProfileStack.Screen name="InviteFriends" component={InviteFriendsScreen} />
       <ProfileStack.Screen name="BlockedContacts" component={BlockedContactsScreen} />
       <ProfileStack.Screen name="ContactProfile" component={ContactProfileScreen} />
@@ -82,65 +87,92 @@ function ProfileStackNavigator({ initialParams }) {
   );
 }
 
-function LazyPage({ active, children }) {
-  const hasBeenActive = useRef(false);
-  if (active) hasBeenActive.current = true;
-  if (!hasBeenActive.current) return null;
-  return <View style={{ flex: 1 }}>{children}</View>;
-}
-
 export function MainTabs({ navigation, route }) {
   const pagerRef = useRef(null);
-  const pagerGestureRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const activeIndexRef = useRef(0);
   const [tabBarVisible, setTabBarVisible] = useState(true);
   const nickname = route.params?.nickname;
+  const {
+    registerMainTabsHandlers,
+    setPagerNativeScrollEnabled,
+    pagerNativeScrollEnabled,
+    registerPagerInteractionLockListener,
+  } = useMainTabsNavigation();
 
-  useEffect(() => {
-    return navigation.addListener('state', () => {
-      const state = navigation.getState();
-      const deepest = getDeepestRouteName(state);
-      setTabBarVisible(!HIDE_TAB_BAR_ON.has(deepest));
-    });
-  }, [navigation]);
+  const [pagerInteractionLocked, setPagerInteractionLocked] = useState(false);
 
-  const handleTabPress = useCallback((index) => {
+  useEffect(() => registerPagerInteractionLockListener(setPagerInteractionLocked), [
+    registerPagerInteractionLockListener,
+  ]);
+
+  const pagerScrollEnabled = pagerNativeScrollEnabled && !pagerInteractionLocked;
+
+  const switchToTab = useCallback((index) => {
     pagerRef.current?.setPage(index);
     setActiveIndex(index);
+    activeIndexRef.current = index;
   }, []);
+
+  const applyRootNavState = useCallback(
+    (state) => {
+      if (!state) return;
+      const deepest = getDeepestRouteName(state);
+      setTabBarVisible(!HIDE_TAB_BAR_ON.has(deepest));
+      setPagerNativeScrollEnabled(isPagerNativeScrollEnabled({ navigationState: state }));
+    },
+    [setPagerNativeScrollEnabled],
+  );
+
+  useEffect(() => {
+    registerMainTabsHandlers({
+      switchToTab,
+      getActiveTabIndex: () => activeIndexRef.current,
+      onRootNavState: applyRootNavState,
+    });
+    return () => registerMainTabsHandlers(null);
+  }, [registerMainTabsHandlers, switchToTab, applyRootNavState]);
+
+  useEffect(() => {
+    applyRootNavState(navigation.getState());
+    return navigation.addListener('state', () => {
+      applyRootNavState(navigation.getState());
+    });
+  }, [navigation, applyRootNavState]);
+
+  const handleTabPress = useCallback((index) => {
+    splitDetailApi.clearContactProfile?.();
+    switchToTab(index);
+  }, [switchToTab]);
 
   const initialParams = { nickname };
 
   return (
-    <PagerGestureContext.Provider value={pagerGestureRef}>
-      <View style={{ flex: 1, backgroundColor: V.bgApp }}>
+    <View style={{ flex: 1, backgroundColor: V.bgApp }}>
         <PagerView
           ref={pagerRef}
           style={{ flex: 1 }}
           initialPage={0}
           offscreenPageLimit={1}
-          gestureHandlerRef={pagerGestureRef}
-          onPageSelected={(e) => setActiveIndex(e.nativeEvent.position)}
+          scrollEnabled={pagerScrollEnabled}
+          onPageSelected={(e) => {
+            const index = e.nativeEvent.position;
+            splitDetailApi.clearContactProfile?.();
+            setActiveIndex(index);
+            activeIndexRef.current = index;
+          }}
         >
           <View key="0" style={{ flex: 1 }}>
-            <LazyPage active={activeIndex === 0}>
-              <ChatsStackNavigator initialParams={initialParams} />
-            </LazyPage>
+            {activeIndex === 0 && <ChatsStackNavigator initialParams={initialParams} />}
           </View>
           <View key="1" style={{ flex: 1 }}>
-            <LazyPage active={activeIndex === 1}>
-              <ContactsStackNavigator initialParams={initialParams} />
-            </LazyPage>
+            {activeIndex === 1 && <ContactsStackNavigator initialParams={initialParams} />}
           </View>
           <View key="2" style={{ flex: 1 }}>
-            <LazyPage active={activeIndex === 2}>
-              <PokerStackNavigator initialParams={initialParams} />
-            </LazyPage>
+            {activeIndex === 2 && <PokerStackNavigator initialParams={initialParams} />}
           </View>
           <View key="3" style={{ flex: 1 }}>
-            <LazyPage active={activeIndex === 3}>
-              <ProfileStackNavigator initialParams={initialParams} />
-            </LazyPage>
+            {activeIndex === 3 && <ProfileStackNavigator initialParams={initialParams} />}
           </View>
         </PagerView>
         <GlassTabBar
@@ -150,6 +182,5 @@ export function MainTabs({ navigation, route }) {
           visible={tabBarVisible}
         />
       </View>
-    </PagerGestureContext.Provider>
   );
 }
