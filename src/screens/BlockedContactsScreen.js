@@ -1,10 +1,11 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import tw from 'twrnc';
@@ -26,22 +27,32 @@ export default function BlockedContactsScreen({ route, navigation }) {
   const [peers, setPeers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyHandle, setBusyHandle] = useState(null);
+  const hasLoadedRef = useRef(false);
 
-  const loadBlocked = useCallback(async () => {
+  useEffect(() => {
+    hasLoadedRef.current = false;
+    setLoading(true);
+  }, [nickname]);
+
+  const loadBlocked = useCallback(async ({ silent = false } = {}) => {
     if (!nickname) {
       setPeers([]);
       setLoading(false);
+      hasLoadedRef.current = false;
       return;
     }
-    setLoading(true);
+    if (!silent && !hasLoadedRef.current) {
+      setLoading(true);
+    }
     const set = await getBlockedPeers(nickname);
     setPeers([...set].sort());
     setLoading(false);
+    hasLoadedRef.current = true;
   }, [nickname]);
 
   useFocusEffect(
     useCallback(() => {
-      loadBlocked();
+      loadBlocked({ silent: hasLoadedRef.current });
     }, [loadBlocked]),
   );
 
@@ -151,11 +162,7 @@ export default function BlockedContactsScreen({ route, navigation }) {
             переписку.
           </Text>
 
-          {loading ? (
-            <View style={tw`py-8 items-center`}>
-              <ActivityIndicator color={V.textMuted} />
-            </View>
-          ) : (
+          <View style={tw`flex-1`}>
             <TabOverscrollFlatList
               style={tw`flex-1`}
               data={peers}
@@ -164,14 +171,29 @@ export default function BlockedContactsScreen({ route, navigation }) {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
-                <Text style={[tw`text-[13px] py-4`, { color: V.textMuted }]}>
-                  Нет заблокированных контактов.
-                </Text>
+                loading ? null : (
+                  <Text style={[tw`text-[13px] py-4`, { color: V.textMuted }]}>
+                    Нет заблокированных контактов.
+                  </Text>
+                )
               }
             />
-          )}
+            {loading && peers.length === 0 ? (
+              <View style={[styles.loadingOverlay, { backgroundColor: V.bgApp }]}>
+                <ActivityIndicator color={V.textMuted} />
+              </View>
+            ) : null}
+          </View>
         </View>
       </View>
     </TabBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

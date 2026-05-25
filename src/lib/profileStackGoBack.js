@@ -6,8 +6,12 @@ export const PROFILE_STACK_ID = 'ProfileStack';
 
 /** @param {import('@react-navigation/native').NavigationProp<any>} navigation */
 export function profileStackGoBack(navigation) {
-  if (!navigation?.navigate) return;
-  navigation.navigate('ProfileHome');
+  if (!navigation) return;
+  if (navigation.canGoBack?.()) {
+    navigation.goBack();
+    return;
+  }
+  navigation.navigate?.('ProfileHome');
 }
 
 /** Кнопка «Назад» в UI + hardware back (Android). */

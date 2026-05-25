@@ -7,6 +7,7 @@ import {
   Alert,
   Platform,
   ActivityIndicator } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, MessageCircle, User } from '../icons/lucideIcons';
 import { UserAvatar } from '../components/UserAvatar';
@@ -23,6 +24,7 @@ import {
   leaveContactProfileAfterDestructiveAction,
   safeGoBackFromContactProfile,
   useContactProfileBackHandler } from '../lib/safeGoBack';
+import { useContactProfileSwipeBack } from '../hooks/useContactProfileSwipeBack';
 
 export default function ContactProfileScreen({ route, navigation }) {
   const { peerName, contactOnline, roomId, nickname } = route.params || {};
@@ -36,9 +38,11 @@ export default function ContactProfileScreen({ route, navigation }) {
     isBlocked(nickname, peerName).then(setBlocked);
   }, [nickname, peerName]);
 
-  const goBackToChat = () => {
+  const goBackToChat = useCallback(() => {
     safeGoBackFromContactProfile(navigation);
-  };
+  }, [navigation]);
+
+  const swipeBackGesture = useContactProfileSwipeBack(goBackToChat);
 
   const goToContactsTab = () => {
     navigation.getParent()?.navigate('Contacts', { screen: 'ContactsHome' });
@@ -130,7 +134,7 @@ export default function ContactProfileScreen({ route, navigation }) {
     );
   };
 
-  return (
+  const content = (
     <View style={[styles.root, { backgroundColor: V.bgApp }]}>
       <View
         style={[
@@ -220,6 +224,14 @@ export default function ContactProfileScreen({ route, navigation }) {
         </View>
       </TabOverscrollScrollView>
     </View>
+  );
+
+  return swipeBackGesture ? (
+    <GestureDetector gesture={swipeBackGesture}>
+      {content}
+    </GestureDetector>
+  ) : (
+    content
   );
 }
 

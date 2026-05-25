@@ -19,6 +19,7 @@ import { Search, Layers, User, Users } from '../icons/lucideIcons';
 import { V } from '../theme';
 import { splitDetailApi } from '../context/SplitDetailContext';
 import {
+  CONTACT_PROFILE_STACK_SCREEN_OPTIONS,
   getDeepestRouteName,
   isPagerNativeScrollEnabled,
 } from './mainTabPagerGesturePolicy';
@@ -35,7 +36,7 @@ const TABS = [
   { key: 'Profile',  name: 'Profile',  icon: (color) => <User   color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentSage },
 ];
 
-const HIDE_TAB_BAR_ON = new Set(['ChatRoom', 'Room']);
+const HIDE_TAB_BAR_ON = new Set(['ChatRoom', 'Room', 'ContactProfile']);
 
 function ChatsStackNavigator({ initialParams }) {
   return (
@@ -43,7 +44,11 @@ function ChatsStackNavigator({ initialParams }) {
       <ChatsStack.Screen name="ChatsList" component={ChatsScreen} initialParams={initialParams} />
       <ChatsStack.Screen name="ChatRoom" component={ChatRoomScreen} />
       <ChatsStack.Screen name="Room" component={GameScreen} />
-      <ChatsStack.Screen name="ContactProfile" component={ContactProfileScreen} />
+      <ChatsStack.Screen
+        name="ContactProfile"
+        component={ContactProfileScreen}
+        options={CONTACT_PROFILE_STACK_SCREEN_OPTIONS}
+      />
     </ChatsStack.Navigator>
   );
 }
@@ -53,7 +58,11 @@ function ContactsStackNavigator({ initialParams }) {
     <ContactsStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 200 }}>
       <ContactsStack.Screen name="ContactsHome" component={ContactsScreen} initialParams={initialParams} />
       <ContactsStack.Screen name="Room" component={GameScreen} />
-      <ContactsStack.Screen name="ContactProfile" component={ContactProfileScreen} />
+      <ContactsStack.Screen
+        name="ContactProfile"
+        component={ContactProfileScreen}
+        options={CONTACT_PROFILE_STACK_SCREEN_OPTIONS}
+      />
     </ContactsStack.Navigator>
   );
 }
@@ -77,11 +86,19 @@ function ProfileHomeRoute(props) {
 
 function ProfileStackNavigator({ initialParams }) {
   return (
-    <ProfileStack.Navigator id="ProfileStack" screenOptions={{ headerShown: false }}>
+    <ProfileStack.Navigator
+      id="ProfileStack"
+      detachInactiveScreens={false}
+      screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 200 }}
+    >
       <ProfileStack.Screen name="ProfileHome" component={ProfileHomeRoute} initialParams={initialParams} />
       <ProfileStack.Screen name="InviteFriends" component={InviteFriendsScreen} />
       <ProfileStack.Screen name="BlockedContacts" component={BlockedContactsScreen} />
-      <ProfileStack.Screen name="ContactProfile" component={ContactProfileScreen} />
+      <ProfileStack.Screen
+        name="ContactProfile"
+        component={ContactProfileScreen}
+        options={CONTACT_PROFILE_STACK_SCREEN_OPTIONS}
+      />
       {__DEV__ && <ProfileStack.Screen name="Storage" component={StorageScreen} />}
     </ProfileStack.Navigator>
   );

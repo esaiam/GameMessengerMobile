@@ -180,6 +180,15 @@ export default function ProfileScreen({ route, navigation }) {
       transform: [{ translateX }, { translateY }] };
   });
 
+  const refreshBlockedCount = useCallback(async () => {
+    if (!nickname) {
+      setBlockedCount(0);
+      return;
+    }
+    const blocked = await getBlockedPeers(nickname);
+    setBlockedCount(blocked.size);
+  }, [nickname]);
+
   const refreshSettingsLabels = useCallback(async () => {
     const [policy, wallpaper, perm, blocked] = await Promise.all([
       getDmPolicy(),
@@ -196,10 +205,17 @@ export default function ProfileScreen({ route, navigation }) {
     else setPushStatusLabel('Не запрошены');
   }, [nickname]);
 
+  const settingsLoadedRef = useRef(false);
+
   useFocusEffect(
     useCallback(() => {
-      refreshSettingsLabels();
-    }, [refreshSettingsLabels])
+      if (!settingsLoadedRef.current) {
+        settingsLoadedRef.current = true;
+        refreshSettingsLabels();
+        return;
+      }
+      refreshBlockedCount();
+    }, [refreshSettingsLabels, refreshBlockedCount]),
   );
 
   const onScrollBeginDrag = useCallback(() => {
