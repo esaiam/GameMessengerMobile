@@ -33,6 +33,9 @@
 
 ## MVP (2026-05) — статус
 
+> **Актуальный снимок «готовы к MVP / бете?»** — всегда в **`docs/MVP_READINESS.md`** (обновлять после VPS/APK).  
+> Aria «push / пустая лента» — **закрыто**, не поднимать.
+
 - [x] Миграции БД: `last_message`, purge hidden, pg_cron, push + Vault
 - [x] RLS на prod — participant-политики, не `supabase_setup_v2` как есть
 - [x] Регрессия чата (ручной чеклист)
