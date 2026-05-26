@@ -3,8 +3,8 @@
 | | |
 |--|--|
 | **APK** | _TBD_ (после VPS + release-сборки) |
-| **Канал багов** | _TBD_ (Telegram-чат / @username / email) |
-| **Код** | ветка `tab-pager-experiment`, commit `caf85fe` (после `beta-0.1.0`) |
+| **Канал багов** | **esaiam86@gmail.com** (тема письма: `Vault beta`) |
+| **Код** | ветка `tab-pager-experiment`, commit `b141280` |
 
 > Пока APK нет: разработка через dev-клиент + Metro (одна Wi‑Fi сеть с ПК).
 
@@ -22,14 +22,16 @@
 
 ## Как сообщить о баге
 
-Пишите в: **_TBD_**
+**Email:** esaiam86@gmail.com  
+**Тема:** `Vault beta`  
+*(позже можно добавить Telegram-чат — допиши сюда ссылку)*
 
-Скопируйте шаблон и заполните:
+Скопируйте шаблон в тело письма:
 
 ```
 Vault beta — баг
 
-Сборка: APK TBD / commit caf85fe
+Сборка: APK TBD / commit b141280
 Устройство: (например Samsung S23)
 Android: (например 14)
 Время (МСК): 
