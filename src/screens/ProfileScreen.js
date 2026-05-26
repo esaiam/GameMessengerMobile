@@ -11,8 +11,12 @@ import {
 import Animated, {
   Extrapolation,
   interpolate,
+  runOnUI,
+  scrollTo,
+  useAnimatedRef,
   useAnimatedScrollHandler,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -51,6 +55,22 @@ const SCROLL_CONTENT_LIFT = 36;
 const ACTION_ROW_HEIGHT = 52;
 const COLLAPSE_DISTANCE = 132;
 const NAME_LINE_HEIGHT = 22;
+const SNAP_COLLAPSE_THRESHOLD = 0.42;
+const COLLAPSE_SNAP_ZONE_EXTRA = 12;
+
+function snapHeaderToOffset(offsetY, scrollRef) {
+  'worklet';
+  scrollTo(scrollRef, 0, offsetY, true);
+}
+
+function calcSnapTarget(y, vy) {
+  if (y < 0 || y > COLLAPSE_DISTANCE + COLLAPSE_SNAP_ZONE_EXTRA) return -1;
+  let target = (y / COLLAPSE_DISTANCE) >= SNAP_COLLAPSE_THRESHOLD ? 1 : 0;
+  if (Math.abs(vy) > 0.35) target = vy > 0 ? 1 : 0;
+  const offsetY = target * COLLAPSE_DISTANCE;
+  if (Math.abs(y - offsetY) < 2) return -1;
+  return offsetY;
+}
 
 function RowButton({ title, subtitle, onPress, variant = 'default' }) {
   const color =
@@ -122,11 +142,15 @@ export default function ProfileScreen({ route, navigation }) {
   const [wallpaperOn, setWallpaperOn] = useState(true);
   const [pushStatusLabel, setPushStatusLabel] = useState('');
   const [blockedCount, setBlockedCount] = useState(0);
-  const [nameWidth, setNameWidth] = useState(0);
   const headerLayout = useMessengerHeaderLayout();
   const { width: screenW } = useWindowDimensions();
+  const scrollRef = useAnimatedRef();
   const scrollY = useSharedValue(0);
+  const nameWidthSv = useSharedValue(120);
+  const collapseP = useDerivedValue(() =>
+    Math.min(Math.max(scrollY.value / COLLAPSE_DISTANCE, 0), 1));
   const scrollDragRef = useRef(false);
+  const dragVyRef = useRef(0);
 
   const mainTabsNav = useMainTabsNavigationOptional();
   const acquirePagerLock = mainTabsNav?.acquirePagerInteractionLock;
@@ -135,10 +159,12 @@ export default function ProfileScreen({ route, navigation }) {
 
   const headerH = headerLayout.minHeight;
   const avatarTop = headerH + AVATAR_MARGIN_TOP;
-  const nameStartY = avatarTop + AVATAR_SIZE + NAME_MARGIN_TOP;
   const nameEndY =
     headerLayout.paddingTop + headerLayout.contentMinHeight / 2 - 9;
-  const avatarLiftY = avatarTop - (headerLayout.paddingTop + headerLayout.contentMinHeight / 2 - AVATAR_SIZE / 2);
+  const nameStartY = avatarTop + AVATAR_SIZE + NAME_MARGIN_TOP;
+  const avatarLiftY =
+    avatarTop -
+    (headerLayout.paddingTop + headerLayout.contentMinHeight / 2 - AVATAR_SIZE / 2);
   const scrollTopPadding =
     AVATAR_MARGIN_TOP +
     AVATAR_SIZE +
@@ -148,36 +174,35 @@ export default function ProfileScreen({ route, navigation }) {
     ACTION_ROW_HEIGHT -
     SCROLL_CONTENT_LIFT;
 
-  const onScroll = useAnimatedScrollHandler({
+  const scrollSnapHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
     },
   });
 
   const avatarWrapStyle = useAnimatedStyle(() => {
-    const p = Math.min(scrollY.value / COLLAPSE_DISTANCE, 1);
+    const p = collapseP.value;
     const lift = Math.sin(p * Math.PI * 0.5);
-    const translateY = -avatarLiftY * lift;
-    const scale = interpolate(p, [0, 1], [1, 0.42]);
-    const opacity = interpolate(p, [0, 0.72, 1], [1, 0.35, 0], Extrapolation.CLAMP);
     return {
-      opacity,
-      transform: [{ translateY }, { scale }] };
+      opacity: interpolate(p, [0, 0.75, 1], [1, 0.4, 0], Extrapolation.CLAMP),
+      transform: [
+        { translateY: -avatarLiftY * lift },
+        { scale: interpolate(p, [0, 1], [1, 0.42]) },
+      ] };
   });
 
   const nameStyle = useAnimatedStyle(() => {
-    const p = Math.min(scrollY.value / COLLAPSE_DISTANCE, 1);
+    const p = collapseP.value;
     const arcY = Math.sin(p * Math.PI * 0.5);
     const arcX = 1 - Math.cos(p * Math.PI * 0.5);
-    const translateY = (nameEndY - nameStartY) * arcY;
-    const half = (nameWidth || 120) / 2;
+    const half = nameWidthSv.value / 2;
     const startTx = -half;
     const endTx = MESSENGER_HEADER_PADDING_HORIZONTAL - screenW / 2;
-    const translateX = startTx + (endTx - startTx) * arcX;
-    const fontSize = interpolate(p, [0, 1], [18, 17]);
     return {
-      fontSize,
-      transform: [{ translateX }, { translateY }] };
+      transform: [
+        { translateX: startTx + (endTx - startTx) * arcX },
+        { translateY: (nameEndY - nameStartY) * arcY },
+      ] };
   });
 
   const refreshBlockedCount = useCallback(async () => {
@@ -218,6 +243,15 @@ export default function ProfileScreen({ route, navigation }) {
     }, [refreshSettingsLabels, refreshBlockedCount]),
   );
 
+  const snapIfNeeded = useCallback((y, vy) => {
+    const offsetY = calcSnapTarget(y, vy);
+    if (offsetY < 0) return;
+    runOnUI((off) => {
+      'worklet';
+      snapHeaderToOffset(off, scrollRef);
+    })(offsetY);
+  }, [scrollRef]);
+
   const onScrollBeginDrag = useCallback(() => {
     scrollDragRef.current = true;
     acquirePagerLock?.();
@@ -225,29 +259,44 @@ export default function ProfileScreen({ route, navigation }) {
 
   const onScrollEndDrag = useCallback(
     (e) => {
-      const vy = e?.nativeEvent?.velocity?.y ?? 0;
-      if (Math.abs(vy) < 0.15) {
+      const y = e.nativeEvent.contentOffset.y;
+      const vy = e.nativeEvent.velocity?.y ?? 0;
+      dragVyRef.current = vy;
+      const noMomentum = Math.abs(vy) < 0.15;
+      if (noMomentum) {
         scrollDragRef.current = false;
         releasePagerLock?.();
+        snapIfNeeded(y, vy);
       }
     },
-    [releasePagerLock],
+    [releasePagerLock, snapIfNeeded],
   );
 
-  const onMomentumScrollEnd = useCallback(() => {
+  const onMomentumScrollEnd = useCallback((e) => {
     if (scrollDragRef.current) {
       scrollDragRef.current = false;
       releasePagerLock?.();
     }
-  }, [releasePagerLock]);
+    const y = e.nativeEvent.contentOffset.y;
+    const vy = dragVyRef.current;
+    dragVyRef.current = 0;
+    snapIfNeeded(y, vy);
+  }, [releasePagerLock, snapIfNeeded]);
 
   useFocusEffect(
     useCallback(
-      () => () => {
-        scrollDragRef.current = false;
-        resetPagerLock?.();
+      () => {
+        runOnUI(() => {
+          'worklet';
+          scrollY.value = 0;
+          scrollTo(scrollRef, 0, 0, false);
+        })();
+        return () => {
+          scrollDragRef.current = false;
+          resetPagerLock?.();
+        };
       },
-      [resetPagerLock],
+      [resetPagerLock, scrollRef, scrollY],
     ),
   );
 
@@ -416,6 +465,7 @@ export default function ProfileScreen({ route, navigation }) {
               width: AVATAR_SIZE,
               height: AVATAR_SIZE },
             avatarWrapStyle]}
+          collapsable={false}
         >
           <UserAvatar
             name={nickname}
@@ -434,7 +484,7 @@ export default function ProfileScreen({ route, navigation }) {
           numberOfLines={1}
           onLayout={(e) => {
             const w = e.nativeEvent.layout.width;
-            if (w > 0 && w !== nameWidth) setNameWidth(w);
+            if (w > 0) nameWidthSv.value = w;
           }}
         >
           {displayName}
@@ -442,6 +492,7 @@ export default function ProfileScreen({ route, navigation }) {
       </View>
 
       <Animated.ScrollView
+        ref={scrollRef}
         {...TAB_OVERSCROLL_PROPS}
         style={tw`flex-1`}
         contentContainerStyle={[
@@ -453,12 +504,10 @@ export default function ProfileScreen({ route, navigation }) {
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-        onScroll={onScroll}
+        onScroll={scrollSnapHandler}
         onScrollBeginDrag={onScrollBeginDrag}
         onScrollEndDrag={onScrollEndDrag}
         onMomentumScrollEnd={onMomentumScrollEnd}
-        scrollEventThrottle={16}
       >
         <View style={styles.actionsRow}>
           <ProfileActionButton
@@ -522,18 +571,19 @@ export default function ProfileScreen({ route, navigation }) {
           <RowButton title="Удалить аккаунт" onPress={deleteAccount} variant="danger" />
         </Section>
 
-        <ProfileAvatarModal
-          visible={avatarModal}
-          onClose={() => setAvatarModal(false)}
-          nickname={nickname}
-        />
-        <ProfileEditHandleModal
-          visible={editHandleModal}
-          onClose={() => setEditHandleModal(false)}
-          currentHandle={nickname}
-          onSaved={onHandleSaved}
-        />
       </Animated.ScrollView>
+
+      <ProfileAvatarModal
+        visible={avatarModal}
+        onClose={() => setAvatarModal(false)}
+        nickname={nickname}
+      />
+      <ProfileEditHandleModal
+        visible={editHandleModal}
+        onClose={() => setEditHandleModal(false)}
+        currentHandle={nickname}
+        onSaved={onHandleSaved}
+      />
     </TabBackground>
   );
 }
@@ -551,9 +601,10 @@ const styles = StyleSheet.create({
   nameFloat: {
     position: 'absolute',
     zIndex: 21,
+    fontSize: 18,
     fontWeight: '500',
     maxWidth: '92%',
-    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {})
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   actionsRow: {
     flexDirection: 'row',

@@ -171,6 +171,8 @@ export function MainTabs({ navigation, route }) {
           style={{ flex: 1 }}
           initialPage={0}
           offscreenPageLimit={1}
+          overdrag={false}
+          overScrollMode="never"
           scrollEnabled={pagerScrollEnabled}
           onPageSelected={(e) => {
             const index = e.nativeEvent.position;
