@@ -87,6 +87,11 @@ export default function Chat({
   onTopOverlayHeight,
   /** GameScreen: true — не трогать JS-таймеры эфемерки (бросок кубиков) */
   renderPausedRef,
+  /** GameScreen: ref — отложенные chat INSERT/UPDATE во время 3D-броска */
+  diceBusyRef,
+  chatFlushDeferredRef,
+  diceAnimating = false,
+  showAnimDice = false,
   /** false в `RoomChatContainer` (нарды) — без вертикального bounce ленты */
   overscrollEnabled = true }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -450,6 +455,10 @@ export default function Chat({
     nickname,
     isAriaChat,
     renderPausedRef,
+    diceBusyRef,
+    chatFlushDeferredRef,
+    diceAnimating,
+    showAnimDice,
     listOpacity,
     decryptMsg,
     decryptBatch,

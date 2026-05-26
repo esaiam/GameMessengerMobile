@@ -11,6 +11,7 @@ export default function useGameDiceAnimComplete({
   setShowAnimDice,
   setDiceAnimating,
   setAnimDice,
+  flushDeferredWhileDice,
 }) {
   return useCallback(async () => {
     const pendingDice = pendingRollRef.current;
@@ -26,6 +27,7 @@ export default function useGameDiceAnimComplete({
       setDiceAnimating,
       setAnimDice,
     });
+    flushDeferredWhileDice?.();
   }, [
     pendingRollRef,
     gameStateRef,
@@ -36,5 +38,6 @@ export default function useGameDiceAnimComplete({
     setShowAnimDice,
     setDiceAnimating,
     setAnimDice,
+    flushDeferredWhileDice,
   ]);
 }

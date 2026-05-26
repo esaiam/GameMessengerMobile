@@ -26,6 +26,8 @@ export function useGameSession({
   setSwipeStart,
   setSwipeEnd,
   pendingRollRef,
+  diceBusyRef,
+  pendingSessionStateRef,
   navigation,
   setKbVisible }) {
   const [room, setRoom] = useState(null);
@@ -247,6 +249,10 @@ export function useGameSession({
             const current = gameStateRef.current;
             const incoming = migrateGameState(payload.new.board_state);
             if (JSON.stringify(incoming) !== JSON.stringify(current)) {
+              if (diceBusyRef?.current) {
+                pendingSessionStateRef.current = incoming;
+                return;
+              }
               setGameState(incoming);
               setSelectedPoint(null);
               setHighlightedMoves([]);

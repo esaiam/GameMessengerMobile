@@ -29,6 +29,7 @@ export function AriaChatContainer({
       listPaddingTop={listPaddingTop}
       chatRoomHeader={chatRoomHeader}
       onTopOverlayHeight={onTopOverlayHeight}
+      overscrollEnabled={false}
     />
   );
 }

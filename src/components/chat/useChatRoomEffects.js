@@ -14,6 +14,10 @@ export default function useChatRoomEffects({
   nickname,
   isAriaChat,
   renderPausedRef,
+  diceBusyRef,
+  chatFlushDeferredRef,
+  diceAnimating,
+  showAnimDice,
   listOpacity,
   decryptMsg,
   decryptBatch,
@@ -37,6 +41,12 @@ export default function useChatRoomEffects({
   /** Realtime INSERT: накапливаем расшифрованные сообщения и сливаем в один setMessages за microtask (меньше ререндеров при пачке событий). */
   const realtimeInsertQueueRef = useRef([]);
   const realtimeFlushScheduledRef = useRef(false);
+  const deferredInsertBatchRef = useRef([]);
+  const deferredUpdatesRef = useRef(new Map());
+  const applyInsertBatchRef = useRef(null);
+
+  const shouldDeferChatUi = () =>
+    Boolean(renderPausedRef?.current || diceBusyRef?.current);
 
   /** Иначе при смене комнаты без размонтирования Chat старые id остаются в Set и read_at не шлётся. */
   useEffect(() => {
@@ -207,6 +217,28 @@ export default function useChatRoomEffects({
 
     };
 
+    applyInsertBatchRef.current = applyRealtimeInsertBatch;
+
+    const flushDeferredChat = () => {
+      if (deferredInsertBatchRef.current.length > 0) {
+        const batch = deferredInsertBatchRef.current.splice(0);
+        applyRealtimeInsertBatch(batch);
+      }
+      if (deferredUpdatesRef.current.size > 0) {
+        const updates = new Map(deferredUpdatesRef.current);
+        deferredUpdatesRef.current.clear();
+        setMessages((prev) => {
+          let next = prev;
+          for (const [id, updatedMsg] of updates) {
+            next = next.map((m) => (m.id === id ? updatedMsg : m));
+          }
+          const filtered = filterHiddenForMeKeepingDeleting(filterExpired(next));
+          roomMessagesCache.set(roomId, filtered);
+          return filtered;
+        });
+      }
+    };
+
     const flushRealtimeInsertQueue = () => {
       realtimeFlushScheduledRef.current = false;
       const raw = realtimeInsertQueueRef.current;
@@ -249,6 +281,10 @@ export default function useChatRoomEffects({
             const msg = await decryptMsg(payload.new);
             if (msg.expires_at && new Date(msg.expires_at).getTime() <= Date.now()) return;
             if ((msg.hidden_for || []).includes(nickname)) return;
+            if (shouldDeferChatUi()) {
+              deferredInsertBatchRef.current.push(msg);
+              return;
+            }
             realtimeInsertQueueRef.current.push(msg);
             scheduleRealtimeInsertFlush();
           } else if (payload.eventType === 'UPDATE') {
@@ -257,6 +293,10 @@ export default function useChatRoomEffects({
             const base = messagesRef.current.find((m) => m.id === id) || {};
             const merged = { ...base, ...payload.new, id };
             const updatedMsg = await decryptMsg(merged);
+            if (shouldDeferChatUi()) {
+              deferredUpdatesRef.current.set(id, updatedMsg);
+              return;
+            }
             setMessages((prev) => {
               const next = prev.map((m) => (m.id === id ? updatedMsg : m));
               const filtered = filterHiddenForMeKeepingDeleting(filterExpired(next));
@@ -292,6 +332,7 @@ export default function useChatRoomEffects({
 
     return () => {
       if (syncRef) syncRef.current = null;
+      applyInsertBatchRef.current = null;
       realtimeFlushScheduledRef.current = false;
       const pending = realtimeInsertQueueRef.current;
       realtimeInsertQueueRef.current = [];
@@ -299,8 +340,44 @@ export default function useChatRoomEffects({
       if (pending.length > 0) {
         applyRealtimeInsertBatch(pending);
       }
+      if (deferredInsertBatchRef.current.length > 0 || deferredUpdatesRef.current.size > 0) {
+        flushDeferredChat();
+      }
     };
-  }, [roomId, isAriaChat, decryptMsg, nickname, filterHiddenForMeKeepingDeleting, filterExpired, chatSyncRef]);
+  }, [roomId, isAriaChat, decryptMsg, nickname, filterHiddenForMeKeepingDeleting, filterExpired, chatSyncRef, diceBusyRef, renderPausedRef]);
+
+  useEffect(() => {
+    if (!chatFlushDeferredRef) return undefined;
+    const flush = () => {
+      if (deferredInsertBatchRef.current.length > 0 && applyInsertBatchRef.current) {
+        const batch = deferredInsertBatchRef.current.splice(0);
+        applyInsertBatchRef.current(batch);
+      }
+      if (deferredUpdatesRef.current.size > 0) {
+        const updates = new Map(deferredUpdatesRef.current);
+        deferredUpdatesRef.current.clear();
+        setMessages((prev) => {
+          let next = prev;
+          for (const [id, updatedMsg] of updates) {
+            next = next.map((m) => (m.id === id ? updatedMsg : m));
+          }
+          const filtered = filterHiddenForMeKeepingDeleting(filterExpired(next));
+          roomMessagesCache.set(roomId, filtered);
+          return filtered;
+        });
+      }
+    };
+    chatFlushDeferredRef.current = flush;
+    return () => {
+      chatFlushDeferredRef.current = null;
+    };
+  }, [chatFlushDeferredRef, roomId, filterHiddenForMeKeepingDeleting, filterExpired, setMessages]);
+
+  useEffect(() => {
+    if (isAriaChat) return;
+    if (diceAnimating || showAnimDice) return;
+    chatFlushDeferredRef?.current?.();
+  }, [diceAnimating, showAnimDice, isAriaChat, chatFlushDeferredRef]);
 
   useEffect(() => {
     if (isAriaChat) return;

@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { View, Text, Platform, FlatList } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS } from 'react-native-reanimated';
 import tw from 'twrnc';
 import { V } from '../../theme';
@@ -28,7 +28,7 @@ export default function ChatMessageList({
   batchDeleteForMe,
   overscrollEnabled = true,
 }) {
-  const { scrollHandler, animatedStyle: listBounceStyle, overscrollProps, wrapGesture } =
+  const { androidBounce, scrollHandler, animatedStyle: listBounceStyle, overscrollProps, wrapGesture } =
     useAndroidTabOverscroll({
       enabled: overscrollEnabled,
       inverted: true,
@@ -41,7 +41,7 @@ export default function ChatMessageList({
           }
         : undefined,
     });
-  const listGesture = wrapGesture?.(null) ?? Gesture.Native();
+  const mergedOnScroll = onListScroll ?? scrollHandler;
 
   const ListBottomInsetHeader = useCallback(
     () => <Reanimated.View collapsable={false} style={listBottomSpacerStyle} />,
@@ -85,7 +85,7 @@ export default function ChatMessageList({
       initialNumToRender={20}
       maxToRenderPerBatch={10}
       windowSize={10}
-      onScroll={scrollHandler ?? onListScroll}
+      onScroll={androidBounce ? scrollHandler : mergedOnScroll}
       scrollEventThrottle={32}
       onScrollToIndexFailed={(info) => {
         flatListRef.current?.scrollToOffset({
@@ -124,14 +124,18 @@ export default function ChatMessageList({
     />
   );
 
+  const listBody = androidBounce ? (
+    <GestureDetector gesture={wrapGesture(null)}>
+      <Reanimated.View style={[tw`flex-1`, listBounceStyle]}>{messageList}</Reanimated.View>
+    </GestureDetector>
+  ) : (
+    messageList
+  );
+
   return (
     <View style={{ flex: 1 }}>
       <ChatMessagesLoadingOverlay visible={messagesLoading} />
-      <Reanimated.View style={[tw`flex-1`, listAnimatedStyle, {}]}>
-        <GestureDetector gesture={listGesture}>
-          <Reanimated.View style={[tw`flex-1`, listBounceStyle]}>{messageList}</Reanimated.View>
-        </GestureDetector>
-      </Reanimated.View>
+      <Reanimated.View style={[tw`flex-1`, listAnimatedStyle, {}]}>{listBody}</Reanimated.View>
     </View>
   );
 }

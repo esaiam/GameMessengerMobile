@@ -72,7 +72,6 @@ export default function GameScreen({ route, navigation }) {
 
   const [swipeStart, setSwipeStart] = useState(null);
   const [swipeEnd, setSwipeEnd] = useState(null);
-  const [throwKey, setThrowKey] = useState(0);
   const pendingRollRef = useRef(null);
   const lastLocalRealRollRef = useRef(null); // { dice: number[], at: number }
   const prevNetDiceRef = useRef(null); // number[] | null
@@ -80,6 +79,13 @@ export default function GameScreen({ route, navigation }) {
   const lastLocalRollEventIdRef = useRef(null); // string | null
   const gameStateRef = useRef(gameState);
   gameStateRef.current = gameState;
+
+  const diceBusyRef = useRef(false);
+  useEffect(() => {
+    diceBusyRef.current = diceAnimating || showAnimDice;
+  }, [diceAnimating, showAnimDice]);
+  const pendingSessionStateRef = useRef(null);
+  const chatFlushDeferredRef = useRef(null);
 
   const [kbVisible, setKbVisible] = useState(false);
 
@@ -110,6 +116,8 @@ export default function GameScreen({ route, navigation }) {
     setSwipeStart,
     setSwipeEnd,
     pendingRollRef,
+    diceBusyRef,
+    pendingSessionStateRef,
     navigation,
     setKbVisible });
 
@@ -233,7 +241,6 @@ export default function GameScreen({ route, navigation }) {
     setSwipeEnd,
     setShowAnimDice,
     setDiceAnimating,
-    setThrowKey,
   });
 
   useEffect(() => {
@@ -262,9 +269,24 @@ export default function GameScreen({ route, navigation }) {
     return () => { unloadDiceSound(); };
   }, []);
 
+  const flushDeferredWhileDice = useCallback(() => {
+    diceBusyRef.current = false;
+    chatFlushDeferredRef.current?.();
+    const pending = pendingSessionStateRef.current;
+    pendingSessionStateRef.current = null;
+    if (pending) {
+      setGameState(pending);
+      backgammonSettersRef.current?.setSelectedPoint?.(null);
+      backgammonSettersRef.current?.setHighlightedMoves?.([]);
+    }
+  }, []);
+  const flushDeferredWhileDiceRef = useRef(flushDeferredWhileDice);
+  flushDeferredWhileDiceRef.current = flushDeferredWhileDice;
+
   useEffect(() => {
     if (!diceAnimating) return;
     const t = setTimeout(() => {
+      flushDeferredWhileDiceRef.current?.();
       setDiceAnimating(false);
       setShowAnimDice(false);
       setAnimDice(null);
@@ -282,6 +304,7 @@ export default function GameScreen({ route, navigation }) {
     setShowAnimDice,
     setDiceAnimating,
     setAnimDice,
+    flushDeferredWhileDice,
   });
 
   const handleBoardSwipe = useGameBoardSwipe({
@@ -307,7 +330,6 @@ export default function GameScreen({ route, navigation }) {
     setSwipeEnd,
     setShowAnimDice,
     setDiceAnimating,
-    setThrowKey,
   });
 
   const canEndTurn =
@@ -377,7 +399,6 @@ export default function GameScreen({ route, navigation }) {
             isTabletLayout={isTabletLayout}
             boardMaxW={boardMaxW}
             showAnimDice={showAnimDice}
-            throwKey={throwKey}
             animDice={animDice}
             swipeStart={swipeStart}
             swipeEnd={swipeEnd}
@@ -411,6 +432,10 @@ export default function GameScreen({ route, navigation }) {
             nickname={nickname}
             peerName={opponentName}
             renderPausedRef={renderPausedRef}
+            diceBusyRef={diceBusyRef}
+            chatFlushDeferredRef={chatFlushDeferredRef}
+            diceAnimating={diceAnimating}
+            showAnimDice={showAnimDice}
             listPaddingTop={listPaddingTop}
             onTopOverlayHeight={setFrostedHeaderH}
             chatRoomHeader={{

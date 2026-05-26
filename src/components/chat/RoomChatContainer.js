@@ -11,6 +11,10 @@ export function RoomChatContainer({
   nickname,
   peerName,
   renderPausedRef,
+  diceBusyRef,
+  chatFlushDeferredRef,
+  diceAnimating,
+  showAnimDice,
   listPaddingTop,
   chatRoomHeader,
   onTopOverlayHeight,
@@ -25,6 +29,10 @@ export function RoomChatContainer({
       peerName={peerName}
       isAriaChat={false}
       renderPausedRef={renderPausedRef}
+      diceBusyRef={diceBusyRef}
+      chatFlushDeferredRef={chatFlushDeferredRef}
+      diceAnimating={diceAnimating}
+      showAnimDice={showAnimDice}
       listPaddingTop={listPaddingTop}
       chatRoomHeader={chatRoomHeader}
       onTopOverlayHeight={onTopOverlayHeight}

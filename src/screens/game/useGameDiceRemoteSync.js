@@ -27,7 +27,6 @@ export default function useGameDiceRemoteSync({
   setSwipeEnd,
   setShowAnimDice,
   setDiceAnimating,
-  setThrowKey,
 }) {
   useEffect(() => {
     if (boardMode !== 'match') return;
@@ -78,7 +77,6 @@ export default function useGameDiceRemoteSync({
       setSwipeEnd(endPos);
       setShowAnimDice(true);
       setDiceAnimating(true);
-      setThrowKey((k) => k + 1);
     }, delay);
 
     return () => clearTimeout(t);
@@ -100,7 +98,6 @@ export default function useGameDiceRemoteSync({
     setSwipeEnd,
     setShowAnimDice,
     setDiceAnimating,
-    setThrowKey,
   ]);
 
   useEffect(() => {
@@ -132,7 +129,6 @@ export default function useGameDiceRemoteSync({
     setSwipeEnd({ x: (windowW || Dimensions.get('window').width) - 42, y: pointH * 0.75 });
     setShowAnimDice(true);
     setDiceAnimating(true);
-    setThrowKey((k) => k + 1);
   }, [
     boardMode,
     gameStarted,
@@ -152,7 +148,6 @@ export default function useGameDiceRemoteSync({
     setSwipeEnd,
     setShowAnimDice,
     setDiceAnimating,
-    setThrowKey,
   ]);
 }
 

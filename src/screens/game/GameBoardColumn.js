@@ -55,7 +55,6 @@ export default function GameBoardColumn({
   isTabletLayout,
   boardMaxW,
   showAnimDice,
-  throwKey,
   animDice,
   swipeStart,
   swipeEnd,
@@ -151,7 +150,6 @@ export default function GameBoardColumn({
                 diceOverlay={
                   showAnimDice && (
                     <DiceThrow3D
-                      key={throwKey}
                       dice={animDice}
                       startPos={swipeStart}
                       endPos={swipeEnd}

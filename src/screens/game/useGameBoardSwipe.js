@@ -27,7 +27,6 @@ export default function useGameBoardSwipe({
   setSwipeEnd,
   setShowAnimDice,
   setDiceAnimating,
-  setThrowKey,
 }) {
   return useCallback(
     (swipe) => {
@@ -73,7 +72,6 @@ export default function useGameBoardSwipe({
       setSwipeEnd({ x: swipe.endX, y: swipe.endY });
       setShowAnimDice(true);
       setDiceAnimating(true);
-      setThrowKey((k) => k + 1);
 
       if (isRealRoll) {
         const at = Date.now();
@@ -123,7 +121,6 @@ export default function useGameBoardSwipe({
       setSwipeEnd,
       setShowAnimDice,
       setDiceAnimating,
-      setThrowKey,
     ],
   );
 }
