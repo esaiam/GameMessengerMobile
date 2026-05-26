@@ -123,8 +123,9 @@ ORDER BY routine_name, grantee;
 
 ## 7. Клиент
 
-- [ ] В приложении только `EXPO_PUBLIC_SUPABASE_ANON_KEY` / publishable — **не** `service_role`
-- [ ] `eas.json` production env без секретов сервера
+- [x] В приложении только `EXPO_PUBLIC_SUPABASE_ANON_KEY` / publishable — **не** `service_role` (проверено в `src/`, 2026-05-26)
+- [x] `eas.json` production: только `APP_VARIANT`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (publishable)
+- [x] `npm run verify:env` — URL согласованы `.env` ↔ EAS
 
 ---
 
