@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 import tw from 'twrnc';
@@ -28,6 +28,11 @@ import {
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import { useSplitDetail } from '../context/SplitDetailContext';
 import ChatClearHistoryConfirmModal from '../components/chat/ChatClearHistoryConfirmModal';
+import { V } from '../theme';
+
+function ChatsListTopInset({ style }) {
+  return <Animated.View style={style} />;
+}
 
 export default function ChatsScreen({ route, navigation }) {
   const nickname = useNicknameFromRoute(route);
@@ -57,14 +62,15 @@ export default function ChatsScreen({ route, navigation }) {
     searchDragActive,
     searchDragActiveRef,
     pullGesture,
-    contentBounceStyle,
+    topPullBounceStyle,
     scrollHandler,
     searchBarWrapStyle,
     searchBarWrapAnimatedProps,
     searchBarInnerStyle,
     iconStyle,
     listScrollAnimatedProps,
-  } = useChatsSearchReveal(q, searchFocused);
+    listTopInsetStyle,
+  } = useChatsSearchReveal(q, searchFocused, headerLayout.minHeight);
 
   const {
     onListScrollBeginDrag,
@@ -157,21 +163,44 @@ export default function ChatsScreen({ route, navigation }) {
     [searchBarWrapStyle],
   );
 
+  const listTopInset = useMemo(
+    () => <ChatsListTopInset style={listTopInsetStyle} />,
+    [listTopInsetStyle],
+  );
+
   return (
     <TabBackground>
-      <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
-        <ChatsScreenHeader
-          containerStyle={headerLayout.containerStyle}
-          selectionMode={selectionMode}
-          selectedCount={selectedRoomIds.size}
-          onExitSelection={exitSelectionMode}
-          onOpenDeleteConfirm={openDeleteConfirm}
-          searchIconStyle={iconStyle}
-          onOpenSearch={onOpenSearch}
-        />
+      <GestureDetector gesture={chatsGesture}>
+        <Animated.View style={[tw`flex-1`, topPullBounceStyle]}>
+          <Animated.View
+            style={[StyleSheet.absoluteFillObject, styles.listLayer, bottomBounceStyle]}
+          >
+            <View
+              style={[
+                tw`flex-1`,
+                { paddingHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL },
+              ]}
+            >
+              <ChatsScreenFlatList
+                listAnimatedProps={listScrollAnimatedProps}
+                data={listData}
+                extraData={selectedHash}
+                renderItem={renderItem}
+                onScroll={scrollHandler}
+                onScrollBeginDrag={onListScrollBeginDrag}
+                onScrollEndDrag={onListScrollEndDrag}
+                onMomentumScrollEnd={onListMomentumScrollEnd}
+                overscrollProps={overscrollProps}
+                query={q}
+                ListHeaderComponent={listTopInset}
+              />
+            </View>
+          </Animated.View>
 
-        <GestureDetector gesture={chatsGesture}>
-          <Animated.View style={[tw`flex-1`, contentBounceStyle]}>
+          <View
+            style={[styles.searchOverlay, { top: headerLayout.minHeight }]}
+            pointerEvents="box-none"
+          >
             <ChatsCollapsibleSearchField
               searchFieldHeight={SEARCH_FIELD_H}
               searchBottomSpacingPx={CHATS_SEARCH_BOTTOM_SPACING_PX}
@@ -184,31 +213,21 @@ export default function ChatsScreen({ route, navigation }) {
               onFocus={() => setSearchFocused(true)}
               onBlur={onSearchBlur}
             />
+          </View>
 
-            <Animated.View style={[tw`flex-1`, bottomBounceStyle]}>
-              <View
-                style={[
-                  tw`flex-1`,
-                  { paddingHorizontal: MESSENGER_HEADER_PADDING_HORIZONTAL },
-                ]}
-              >
-                <ChatsScreenFlatList
-                  listAnimatedProps={listScrollAnimatedProps}
-                  data={listData}
-                  extraData={selectedHash}
-                  renderItem={renderItem}
-                  onScroll={scrollHandler}
-                  onScrollBeginDrag={onListScrollBeginDrag}
-                  onScrollEndDrag={onListScrollEndDrag}
-                  onMomentumScrollEnd={onListMomentumScrollEnd}
-                  overscrollProps={overscrollProps}
-                  query={q}
-                />
-              </View>
-            </Animated.View>
-          </Animated.View>
-        </GestureDetector>
-      </View>
+          <View style={styles.headerOverlay} pointerEvents="box-none">
+            <ChatsScreenHeader
+              containerStyle={headerLayout.containerStyle}
+              selectionMode={selectionMode}
+              selectedCount={selectedRoomIds.size}
+              onExitSelection={exitSelectionMode}
+              onOpenDeleteConfirm={openDeleteConfirm}
+              searchIconStyle={iconStyle}
+              onOpenSearch={onOpenSearch}
+            />
+          </View>
+        </Animated.View>
+      </GestureDetector>
 
       <ChatClearHistoryConfirmModal
         uiReady
@@ -227,3 +246,24 @@ export default function ChatsScreen({ route, navigation }) {
     </TabBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  listLayer: {
+    zIndex: 0,
+  },
+  searchOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 1,
+    backgroundColor: V.bgApp,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+    backgroundColor: V.bgApp,
+  },
+});

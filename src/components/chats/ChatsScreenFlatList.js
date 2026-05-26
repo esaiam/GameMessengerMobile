@@ -18,6 +18,7 @@ export default function ChatsScreenFlatList({
   onMomentumScrollEnd,
   overscrollProps,
   query,
+  ListHeaderComponent,
 }) {
   const trimmedQuery = query.trim();
 
@@ -35,6 +36,7 @@ export default function ChatsScreenFlatList({
       scrollEventThrottle={16}
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled
+      ListHeaderComponent={ListHeaderComponent}
       {...overscrollProps}
       ListEmptyComponent={
         <View style={tw`py-10`}>

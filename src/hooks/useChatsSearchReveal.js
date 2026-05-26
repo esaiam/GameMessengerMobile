@@ -24,6 +24,8 @@ const SNAP_SETTLED_EPS = 0.04;
 const SEARCH_DRAG_MIN_DY_PX = 4;
 const POINTER_OPEN_THRESHOLD = 0.06;
 const POINTER_CLOSE_THRESHOLD = 0.02;
+/** Сырой pull (px) после полного раскрытия поиска, до rubber-band всего экрана. */
+const TOP_PULL_CAP_PX = 200;
 
 function snapExpandedTo(expanded, target) {
   'worklet';
@@ -35,22 +37,58 @@ function snapExpandedTo(expanded, target) {
   expanded.value = withSpring(target, SPRING);
 }
 
-function applySearchDragFromTranslation(
+function snapTopPullTo(topPullPx, target) {
+  'worklet';
+  cancelAnimation(topPullPx);
+  if (Math.abs(topPullPx.value - target) < 0.5) {
+    topPullPx.value = target;
+    return;
+  }
+  topPullPx.value = withSpring(target, SPRING);
+}
+
+/**
+ * Двухфазный pull: сначала поиск 0→1, затем rubber-band всего контента; закрытие — зеркально.
+ */
+function applyTwoStageSearchDrag(
   expanded,
-  contentOverscrollY,
+  topPullPx,
   dragStartExpanded,
+  dragStartTopPullPx,
   translationY,
-  revealRangePx,
+  searchRevealRangePx,
 ) {
   'worklet';
-  const raw = dragStartExpanded + translationY / revealRangePx;
-  if (raw <= 1) {
-    expanded.value = Math.max(0, raw);
-    contentOverscrollY.value = 0;
-  } else {
-    expanded.value = 1;
-    contentOverscrollY.value = tabOverscrollRubberBand((raw - 1) * revealRangePx);
+  let search = dragStartExpanded;
+  let pullPx = dragStartTopPullPx;
+  let dy = translationY;
+
+  if (dy > 0) {
+    const searchRoom = Math.max(0, 1 - search) * searchRevealRangePx;
+    const addSearch = Math.min(dy, searchRoom);
+    search += addSearch / searchRevealRangePx;
+    dy -= addSearch;
+    if (dy > 0 && search >= 1 - 1e-4) {
+      search = 1;
+      pullPx = Math.min(pullPx + dy, TOP_PULL_CAP_PX);
+    }
+  } else if (dy < 0) {
+    let closePx = -dy;
+    if (pullPx > 0) {
+      const sub = Math.min(closePx, pullPx);
+      pullPx -= sub;
+      closePx -= sub;
+    }
+    if (closePx > 0 && pullPx <= 1e-4) {
+      pullPx = 0;
+      const searchRoom = search * searchRevealRangePx;
+      const sub = Math.min(closePx, searchRoom);
+      search -= sub / searchRevealRangePx;
+    }
   }
+
+  expanded.value = Math.max(0, Math.min(1, search));
+  topPullPx.value = Math.max(0, pullPx);
 }
 
 function computeListScrollEnabled(atTop, open, drag) {
@@ -64,9 +102,10 @@ export const CHATS_SEARCH_BOTTOM_SPACING_PX = 20;
 
 /**
  * Collapsible поиск: один Pan, progress следует за translationY до отпускания.
+ * После полного раскрытия — rubber-band шапки, поиска и списка вместе.
  * pointerEvents / scrollEnabled — без runOnJS на каждый кадр (Android jank).
  */
-export function useChatsSearchReveal(q, searchFocused) {
+export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
   const SEARCH_FIELD_H = SEARCH_FIELD_LAYOUT.chatsHeight;
   const SEARCH_REVEAL_RANGE_PX = SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX;
 
@@ -75,9 +114,10 @@ export function useChatsSearchReveal(q, searchFocused) {
   const listMaxScrollY = useSharedValue(0);
   const locked = useSharedValue(false);
   const dragStartExpanded = useSharedValue(0);
+  const dragStartTopPullPx = useSharedValue(0);
   const panStartX = useSharedValue(0);
   const panStartY = useSharedValue(0);
-  const contentOverscrollY = useSharedValue(0);
+  const topPullPx = useSharedValue(0);
   const searchDragActive = useSharedValue(false);
   const searchPointerOpen = useSharedValue(0);
   const listScrollEnabledSv = useSharedValue(0);
@@ -99,9 +139,11 @@ export function useChatsSearchReveal(q, searchFocused) {
   const setExpanded = useCallback(
     (open, animated = true) => {
       cancelAnimation(expanded);
+      cancelAnimation(topPullPx);
+      topPullPx.value = 0;
       expanded.value = animated ? withSpring(open ? 1 : 0, SPRING) : open ? 1 : 0;
     },
-    [expanded],
+    [expanded, topPullPx],
   );
 
   useEffect(() => {
@@ -218,25 +260,25 @@ export function useChatsSearchReveal(q, searchFocused) {
         runOnJS(setSearchDragActiveJs)(true);
         runOnJS(setListScrollEnabledIfChanged)(false);
         cancelAnimation(expanded);
-        cancelAnimation(contentOverscrollY);
-        contentOverscrollY.value = 0;
+        cancelAnimation(topPullPx);
         dragStartExpanded.value = expanded.value;
+        dragStartTopPullPx.value = topPullPx.value;
       })
       .onUpdate((e) => {
         'worklet';
         if (locked.value) return;
-        applySearchDragFromTranslation(
+        applyTwoStageSearchDrag(
           expanded,
-          contentOverscrollY,
+          topPullPx,
           dragStartExpanded.value,
+          dragStartTopPullPx.value,
           e.translationY,
           SEARCH_REVEAL_RANGE_PX,
         );
       })
       .onEnd(() => {
         'worklet';
-        cancelAnimation(contentOverscrollY);
-        contentOverscrollY.value = 0;
+        snapTopPullTo(topPullPx, 0);
         if (locked.value) {
           expanded.value = 1;
           return;
@@ -251,8 +293,6 @@ export function useChatsSearchReveal(q, searchFocused) {
         'worklet';
         searchDragActive.value = false;
         runOnJS(setSearchDragActiveJs)(false);
-        cancelAnimation(contentOverscrollY);
-        contentOverscrollY.value = 0;
         const enabled = computeListScrollEnabled(
           listScrollY.value <= AT_TOP_THRESHOLD_PX,
           expanded.value > 0.001,
@@ -263,7 +303,9 @@ export function useChatsSearchReveal(q, searchFocused) {
   }, [
     SEARCH_REVEAL_RANGE_PX,
     dragStartExpanded,
+    dragStartTopPullPx,
     expanded,
+    topPullPx,
     listScrollY,
     listMaxScrollY,
     locked,
@@ -272,7 +314,6 @@ export function useChatsSearchReveal(q, searchFocused) {
     searchDragActive,
     setListScrollEnabledIfChanged,
     setSearchDragActiveJs,
-    contentOverscrollY,
   ]);
 
   const searchBarWrapStyle = useAnimatedStyle(() => ({
@@ -307,8 +348,14 @@ export function useChatsSearchReveal(q, searchFocused) {
     opacity: interpolate(expanded.value, [0, 1], [1, 0], Extrapolation.CLAMP),
   }));
 
-  const contentBounceStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: contentOverscrollY.value }],
+  const topPullBounceStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: tabOverscrollRubberBand(topPullPx.value) }],
+  }));
+
+  const listTopInsetStyle = useAnimatedStyle(() => ({
+    height:
+      headerMinHeightPx +
+      interpolate(expanded.value, [0, 1], [0, SEARCH_REVEAL_RANGE_PX], Extrapolation.CLAMP),
   }));
 
   const listScrollAnimatedProps = useAnimatedProps(() => ({
@@ -324,7 +371,8 @@ export function useChatsSearchReveal(q, searchFocused) {
     searchDragActive,
     searchDragActiveRef,
     pullGesture,
-    contentBounceStyle,
+    topPullBounceStyle,
+    listTopInsetStyle,
     scrollHandler,
     searchBarWrapStyle,
     searchBarWrapAnimatedProps,
