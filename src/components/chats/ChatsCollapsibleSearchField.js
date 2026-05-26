@@ -27,6 +27,7 @@ export default function ChatsCollapsibleSearchField({
   onChangeQuery,
   onFocus,
   onBlur,
+  placeholder = 'Поиск...',
 }) {
   return (
     <Animated.View animatedProps={wrapAnimatedProps} style={wrapStyle}>
@@ -65,7 +66,7 @@ export default function ChatsCollapsibleSearchField({
                   height: searchFieldHeight,
                 },
               ]}
-              placeholder="Поиск..."
+              placeholder={placeholder}
               placeholderTextColor={V.textMuted}
               value={query}
               onChangeText={onChangeQuery}

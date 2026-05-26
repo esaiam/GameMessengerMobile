@@ -2,8 +2,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getBlockedPeers } from '../../lib/blockedContacts';
 
+/** In-memory cache: PagerView монтирует один stack — без кэша каждый визит = новый fetch. */
+const contactsByNickname = new Map();
+
+export function clearContactsListCache(nickname) {
+  if (nickname) contactsByNickname.delete(nickname);
+  else contactsByNickname.clear();
+}
+
 export default function useContactsList(nickname) {
-  const [contacts, setContacts] = useState([]);
+  const [contacts, setContacts] = useState(() =>
+    nickname ? contactsByNickname.get(nickname) ?? [] : [],
+  );
 
   const fetchContacts = useCallback(async () => {
     if (!nickname) return;
@@ -25,12 +35,19 @@ export default function useContactsList(nickname) {
         names.add(r.user2_id);
       }
     });
-    setContacts([...names].sort());
+    const sorted = [...names].sort();
+    contactsByNickname.set(nickname, sorted);
+    setContacts(sorted);
   }, [nickname]);
 
   useEffect(() => {
+    if (!nickname) return;
+    if (contactsByNickname.has(nickname)) {
+      setContacts(contactsByNickname.get(nickname));
+      return;
+    }
     fetchContacts();
-  }, [fetchContacts]);
+  }, [nickname, fetchContacts]);
 
   const filterContacts = useCallback(
     (searchQ) => {
