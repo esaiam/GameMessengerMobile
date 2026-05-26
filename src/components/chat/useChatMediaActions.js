@@ -93,7 +93,7 @@ export default function useChatMediaActions({
     }
     const { data, error } = await supabase.from('messages').insert(row).select('*').single();
     if (error) {
-      console.warn('Chat media insert error:', error.message);
+      if (__DEV__) console.warn('Chat media insert error:', error.message);
       throw error;
     }
     await refreshChatsListAfterMessage(nickname, roomId);
@@ -120,7 +120,7 @@ export default function useChatMediaActions({
     } catch (e) {
       const detail = e?.message || e?.error_description || String(e);
       Alert.alert('Ошибка', `Не удалось отправить фото.\n${detail}`);
-      console.warn(e);
+      if (__DEV__) console.warn(e);
     }
     setUploading(false);
   }, [uploadMedia, sendMediaMessage, setUploading, setShowAttachMenu]);
@@ -144,7 +144,7 @@ export default function useChatMediaActions({
     } catch (e) {
       const detail = e?.message || e?.error_description || String(e);
       Alert.alert('Ошибка', `Не удалось отправить фото.\n${detail}`);
-      console.warn(e);
+      if (__DEV__) console.warn(e);
     }
     setUploading(false);
   }, [uploadMedia, sendMediaMessage, setUploading, setShowAttachMenu]);
@@ -166,7 +166,7 @@ export default function useChatMediaActions({
         text: 'Местоположение' });
     } catch (e) {
       Alert.alert('Ошибка', 'Не удалось определить местоположение');
-      console.warn(e);
+      if (__DEV__) console.warn(e);
     }
     setUploading(false);
   }, [sendMediaMessage, setUploading, setShowAttachMenu]);
@@ -191,7 +191,7 @@ export default function useChatMediaActions({
       } catch (e) {
         const detail = e?.message || e?.error_description || String(e);
         Alert.alert('Ошибка', `Не удалось отправить голосовое.\n${detail}`);
-        console.warn(e);
+        if (__DEV__) console.warn(e);
       }
       setUploading(false);
     },
