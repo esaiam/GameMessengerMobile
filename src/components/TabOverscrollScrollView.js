@@ -4,6 +4,8 @@ import { GestureDetector } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 import { useAndroidTabOverscroll } from '../hooks/useAndroidTabOverscroll';
 
+const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
+
 /**
  * ScrollView с bounce на Android для экранов вкладок.
  */
@@ -25,18 +27,19 @@ export default function TabOverscrollScrollView({
       onScrollExtra,
     });
 
-  const mergedOnScroll = onScroll ?? scrollHandler;
+  const ScrollComponent = androidBounce ? AnimatedScrollView : ScrollView;
+  const scrollOnScroll = androidBounce ? scrollHandler : onScroll;
 
   const scroll = (
-    <ScrollView
+    <ScrollComponent
       {...overscrollProps}
       {...rest}
       style={style}
-      onScroll={androidBounce ? scrollHandler : mergedOnScroll}
+      onScroll={scrollOnScroll}
       scrollEventThrottle={rest.scrollEventThrottle ?? 16}
     >
       {children}
-    </ScrollView>
+    </ScrollComponent>
   );
 
   if (!androidBounce) {

@@ -28,8 +28,9 @@ export default function TabOverscrollFlatList({
       onScrollExtra,
     });
 
-  const ListComponent = animated ? AnimatedFlatList : FlatList;
-  const mergedOnScroll = onScroll ?? scrollHandler;
+  const ListComponent =
+    androidBounce || animated ? AnimatedFlatList : FlatList;
+  const scrollOnScroll = androidBounce ? scrollHandler : onScroll;
 
   const list = (
     <ListComponent
@@ -37,7 +38,7 @@ export default function TabOverscrollFlatList({
       {...rest}
       inverted={inverted}
       style={style}
-      onScroll={androidBounce ? scrollHandler : mergedOnScroll}
+      onScroll={scrollOnScroll}
       scrollEventThrottle={rest.scrollEventThrottle ?? 16}
     />
   );
