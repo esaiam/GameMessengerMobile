@@ -59,9 +59,12 @@ npx eas build -p android --profile production --non-interactive
 
 ### 4. Security prod (P0.4) — до APK, без Studio
 
-- [ ] Storage `chat-media`: политики на prod vs `scripts/supabase-storage-chat-media.sql`
-- [ ] Дубли RLS: убрать legacy `Users can read own rooms` если есть participant-политики
-- [ ] Push body без plaintext (должно быть «Новое сообщение»)
+Чеклист + SQL: **`docs/PROD_SECURITY_CHECKLIST.md`** (прогон в Supabase SQL Editor).
+
+- [ ] Пройден чеклист §1–7
+- [ ] Storage `chat-media`: INSERT = `authenticated`, не `anon`
+- [ ] Дубли RLS убраны
+- [ ] Push без plaintext
 
 ### 5. После APK
 
