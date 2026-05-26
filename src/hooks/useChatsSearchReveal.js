@@ -121,6 +121,7 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
   const searchDragActive = useSharedValue(false);
   const searchPointerOpen = useSharedValue(0);
   const listScrollEnabledSv = useSharedValue(0);
+  const isActivated = useSharedValue(false);
 
   const isLockedRef = useRef(false);
   const searchDragActiveRef = useRef(false);
@@ -215,6 +216,7 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
       .failOffsetX([-VERTICAL_PAN_FAIL_OFFSET_X, VERTICAL_PAN_FAIL_OFFSET_X])
       .onTouchesDown((e) => {
         'worklet';
+        isActivated.value = false;
         const t = e.allTouches[0];
         if (!t) return;
         panStartX.value = t.x;
@@ -223,13 +225,19 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
       .onTouchesMove((e, state) => {
         'worklet';
         if (locked.value) {
-          state.fail();
+          if (!isActivated.value) {
+            state.fail();
+            return;
+          }
           return;
         }
         const atTop = listScrollY.value <= AT_TOP_THRESHOLD_PX;
         const searchOpen = expanded.value > 0.001;
         if (!atTop && !searchOpen) {
-          state.fail();
+          if (!isActivated.value) {
+            state.fail();
+            return;
+          }
           return;
         }
         const t = e.allTouches[0];
@@ -239,13 +247,19 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
           listMaxScrollY.value >= 0 &&
           listScrollY.value >= listMaxScrollY.value - 3;
         if (!searchOpen && atEnd && movingUp) {
-          state.fail();
+          if (!isActivated.value) {
+            state.fail();
+            return;
+          }
           return;
         }
         const dx = Math.abs(t.x - panStartX.value);
         const dy = Math.abs(t.y - panStartY.value);
         if (shouldFailHorizontalPan(dx, dy)) {
-          state.fail();
+          if (!isActivated.value) {
+            state.fail();
+            return;
+          }
           return;
         }
         const minDy = atTop && !searchOpen ? 2 : SEARCH_DRAG_MIN_DY_PX;
@@ -256,6 +270,7 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
       })
       .onStart(() => {
         'worklet';
+        isActivated.value = true;
         searchDragActive.value = true;
         runOnJS(setSearchDragActiveJs)(true);
         runOnJS(setListScrollEnabledIfChanged)(false);
@@ -306,6 +321,7 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
     dragStartTopPullPx,
     expanded,
     topPullPx,
+    isActivated,
     listScrollY,
     listMaxScrollY,
     locked,
