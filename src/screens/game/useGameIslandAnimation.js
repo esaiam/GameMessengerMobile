@@ -13,10 +13,10 @@
  *   picker     + DISMISS / повт.TAP → collapsed
  *   gameExpanded + SWIPE_UP       → collapsed (если !dice busy)
  *   gameExpanded + SWIPE_UP       → bounce back (если dice busy)
- *   any        + kbVisible        → collapsed (через unmount из GameScreen)
+ *   gameExpanded + kbVisible/emoji  → shell unmount, FSM сохраняется; при закрытии — restore
  *
  * Animated.Value (useNativeDriver: false) — layout: boardDropAnim, handleWidthAnim,
- *   handleStretchAnim, middlePulseAnim, pickerHeightAnim.
+ *   handleStretchAnim, pickerHeightAnim.
  * Animated.Value (useNativeDriver: true) — transform/opacity: pickerIconAnims,
  *   boardContentFadeAnim.
  */
@@ -49,8 +49,6 @@ const BOTTOM_GAP = 68;
 
 export function useGameIslandAnimation({
   kbVisible,
-  // emojiPickerVisible — используется в GameScreen для условного рендера
-  // eslint-disable-next-line no-unused-vars
   emojiPickerVisible,
   showAnimDice,
   showAnimDiceRef,
@@ -70,7 +68,6 @@ export function useGameIslandAnimation({
   const islandStateRef = useRef(/** @type {IslandState} */ ('collapsed'));
 
   const [activeGameId, setActiveGameId] = useState(/** @type {string|null} */ (null));
-  const activeGameIdRef = useRef(/** @type {string|null} */ (null));
 
   const _transition = useCallback((/** @type {IslandState} */ next) => {
     islandStateRef.current = next;
@@ -82,8 +79,7 @@ export function useGameIslandAnimation({
   const boardDropAnim    = useRef(new Animated.Value(0)).current;
   const handleStretchAnim = useRef(new Animated.Value(0)).current;
   const handleWidthAnim  = useRef(new Animated.Value(0)).current;
-  const middlePulseAnim  = useRef(new Animated.Value(0)).current;
-  /** Высота pill в picker; в collapsed/gameExpanded используется animatedHandleH */
+  /** Высота нижней секции острова: collapsed ↔ picker */
   const pickerHeightAnim = useRef(new Animated.Value(ISLAND_COLLAPSED_H)).current;
 
   // ── Animated values (transform/opacity — useNativeDriver: true) ────────────
@@ -110,6 +106,8 @@ export function useGameIslandAnimation({
   const suppressAvailableHRef = useRef(false);
   const boardOpenRef       = useRef(false);
   const boardDropStartRef  = useRef(0);
+  /** Была открыта доска до скрытия shell (KB / emoji panel) */
+  const layoutObscuredRef  = useRef(false);
 
   // ── computeMaxSlide ────────────────────────────────────────────────────────
 
@@ -130,9 +128,8 @@ export function useGameIslandAnimation({
     boardDropAnim.stopAnimation();
     handleWidthAnim.stopAnimation();
     handleStretchAnim.stopAnimation();
-    middlePulseAnim.stopAnimation();
     boardRef.current?.pauseRendering();
-  }, [boardDropAnim, handleWidthAnim, handleStretchAnim, middlePulseAnim, boardRef, renderPausedRef]);
+  }, [boardDropAnim, handleWidthAnim, handleStretchAnim, boardRef, renderPausedRef]);
 
   // ── _resetPickerAnims ──────────────────────────────────────────────────────
 
@@ -149,11 +146,9 @@ export function useGameIslandAnimation({
   const runOpenSequence = useCallback((/** @type {string} */ gameId) => {
     suppressAvailableHRef.current = true;
     boardOpenRef.current = true;
-    activeGameIdRef.current = gameId;
     setActiveGameId(gameId);
     setBoardContentActive(true);
     _transition('gameExpanded');
-    middlePulseAnim.setValue(0);
     boardContentFadeAnim.setValue(0);
     handleStretchAnim.setValue(0);
 
@@ -213,7 +208,7 @@ export function useGameIslandAnimation({
     });
   }, [
     _transition,
-    boardDropAnim, handleStretchAnim, handleWidthAnim, middlePulseAnim,
+    boardDropAnim, handleStretchAnim, handleWidthAnim,
     boardContentFadeAnim,
     boardColRef, boardMountedRef,
     computeMaxSlide, setAvailableH, setBoardContentActive, setBoardMounted,
@@ -230,13 +225,14 @@ export function useGameIslandAnimation({
     handleStretchAnim.stopAnimation();
     handleWidthAnim.stopAnimation();
     boardDropAnim.stopAnimation();
-    middlePulseAnim.stopAnimation();
+    pickerHeightAnim.stopAnimation();
     handleStretchAnim.setValue(0);
-    middlePulseAnim.setValue(0);
+    pickerHeightAnim.setValue(ISLAND_COLLAPSED_H);
 
     const afterBoardCollapsed = () => {
       setBoardContentActive(false);
       _transition('collapsed');
+      pickerHeightAnim.setValue(ISLAND_COLLAPSED_H);
       Animated.timing(handleWidthAnim, {
         toValue: 0, duration: 280,
         easing: Easing.out(Easing.cubic), useNativeDriver: false,
@@ -267,7 +263,7 @@ export function useGameIslandAnimation({
     });
   }, [
     _transition,
-    boardDropAnim, handleStretchAnim, handleWidthAnim, middlePulseAnim, boardContentFadeAnim,
+    boardDropAnim, handleStretchAnim, handleWidthAnim, pickerHeightAnim, boardContentFadeAnim,
     computeMaxSlide, diceAnimatingRef, renderPausedRef, setBoardContentActive, showAnimDiceRef,
   ]);
 
@@ -396,7 +392,6 @@ export function useGameIslandAnimation({
       onPanResponderGrant: () => {
         handleStretchAnim.stopAnimation();
         handleWidthAnim.stopAnimation();
-        middlePulseAnim.stopAnimation();
         if (boardOpenRef.current) {
           boardDropAnim.stopAnimation((v) => { boardDropStartRef.current = v; });
         }
@@ -446,7 +441,6 @@ export function useGameIslandAnimation({
         boardDropAnim.setValue(maxSlideRef.current);
         handleWidthAnim.setValue(1);
         handleStretchAnim.setValue(0);
-        middlePulseAnim.setValue(0);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -458,6 +452,33 @@ export function useGameIslandAnimation({
     const t = setTimeout(() => computeMaxSlide(), 300);
     return () => clearTimeout(t);
   }, [kbVisible, computeMaxSlide]);
+
+  /** После KB/emoji: вернуть раскрытые нарды, не схлопывать в «длинный bar» */
+  useEffect(() => {
+    const obscured = kbVisible || emojiPickerVisible;
+    if (obscured) {
+      layoutObscuredRef.current =
+        islandStateRef.current === 'gameExpanded' && boardOpenRef.current;
+      return;
+    }
+    if (!layoutObscuredRef.current) return;
+    layoutObscuredRef.current = false;
+    if (islandStateRef.current !== 'gameExpanded') return;
+
+    boardOpenRef.current = true;
+    setBoardContentActive(true);
+    handleStretchAnim.setValue(0);
+    pickerHeightAnim.setValue(ISLAND_COLLAPSED_H);
+    handleWidthAnim.setValue(1);
+    boardContentFadeAnim.setValue(1);
+    boardDropAnim.setValue(maxSlideRef.current);
+
+    const t = setTimeout(() => {
+      computeMaxSlide();
+      boardDropAnim.setValue(maxSlideRef.current);
+    }, 320);
+    return () => clearTimeout(t);
+  }, [kbVisible, emojiPickerVisible, computeMaxSlide, setBoardContentActive]);
 
   useEffect(() => {
     const t = setTimeout(() => computeMaxSlide(), 0);
@@ -475,26 +496,20 @@ export function useGameIslandAnimation({
     boardDropAnim,
     handleStretchAnim,
     handleWidthAnim,
-    middlePulseAnim,
     pickerHeightAnim,
 
     // Animated values (native driver)
     pickerIconAnims,
     boardContentFadeAnim,
 
-    // Layout refs
+    // Layout refs (наружу — только то, что читает GameScreen)
     boardColTopYRef,
     chatInputTopYRef,
-    boardOpenRef,
     suppressAvailableHRef,
-    maxSlideRef,
-    boardDropStartRef,
 
     // Actions
-    tapIsland,
     tapGameIcon,
     dismissPicker,
-    runOpenSequence,
     runCloseSequence,
     computeMaxSlide,
     pauseJsForDiceThrow,

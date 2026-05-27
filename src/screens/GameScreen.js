@@ -20,12 +20,8 @@ import useGameScreenBootstrap from './game/useGameScreenBootstrap';
 import useGameKeyboardTransition from './game/useGameKeyboardTransition';
 import useGameDiceRemoteSync, { createDiceEqual } from './game/useGameDiceRemoteSync';
 import { resolveGameOpponentName } from './game/resolveGameOpponentName';
-import {
-  BOARD_TOP_GAP,
-  DEFAULT_PH,
-  MIN_PH,
-  BOARD_CHROME,
-} from './game/gameScreenConstants';
+import { BOARD_TOP_GAP } from './game/gameScreenConstants';
+import { gameRegistry } from './game/gameRegistry';
 import useGameDiceAnimComplete from './game/useGameDiceAnimComplete';
 import useGameBoardSwipe from './game/useGameBoardSwipe';
 import useGameBoardHandleStyles from './game/useGameBoardHandleStyles';
@@ -177,9 +173,6 @@ export default function GameScreen({ route, navigation }) {
   const [frostedHeaderH, setFrostedHeaderH] = useState(0);
   const boardColRef = useRef(null);
   const [availableH, setAvailableH] = useState(0);
-  const pointH = availableH > 0
-    ? Math.max(MIN_PH, Math.floor((availableH - BOARD_CHROME) / 2))
-    : DEFAULT_PH;
 
   const renderPausedRef = useRef(false);
   /** Не совмещать с renderPausedRef: pauseRendering() ставит ref в true и иначе остановит RAF в DiceThrow3D */
@@ -197,7 +190,6 @@ export default function GameScreen({ route, navigation }) {
     handleStretchAnim,
     handleWidthAnim,
     boardDropAnim,
-    middlePulseAnim,
     slidePan,
     suppressAvailableHRef,
     boardColTopYRef,
@@ -228,6 +220,12 @@ export default function GameScreen({ route, navigation }) {
     frostedHeaderH,
   });
   pauseJsForDiceThrowRef.current = pauseJsForDiceThrow;
+
+  const pointH = useMemo(() => {
+    const gameId = activeGameId ?? 'backgammon';
+    const entry = gameRegistry.find((g) => g.id === gameId) ?? gameRegistry[0];
+    return entry.computeLayout({ availableH, windowW }).pointH;
+  }, [activeGameId, availableH, windowW]);
 
   useGameDiceRemoteSync({
     boardMode,
@@ -360,7 +358,6 @@ export default function GameScreen({ route, navigation }) {
   const { stripWidthAnim, boardRenderW } = useGameBoardHandleStyles({
     handleStretchAnim,
     handleWidthAnim,
-    middlePulseAnim,
     boardColW,
     windowW,
     boardMaxW,
@@ -438,7 +435,6 @@ export default function GameScreen({ route, navigation }) {
             pickerIconAnims={pickerIconAnims}
             boardContentFadeAnim={boardContentFadeAnim}
             tapGameIcon={tapGameIcon}
-            dismissPicker={dismissPicker}
           />
         )}
 

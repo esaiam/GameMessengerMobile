@@ -123,7 +123,6 @@ export default function GameIslandShell({
   pickerIconAnims,
   boardContentFadeAnim,
   tapGameIcon,
-  dismissPicker,
 }) {
   const isExpanded = islandState === 'gameExpanded';
   const isPicker   = islandState === 'picker';

@@ -1,17 +1,14 @@
 import { useMemo } from 'react';
 import { Animated, Dimensions } from 'react-native';
-import {
-  DRAG_MAX_EXTRA_H,
-  HANDLE_NARROW_RATIO,
-  BOTTOM_R_COLLAPSED,
-  BOTTOM_R_FULL,
-  BOARD_SIDE_GAP,
-} from './gameScreenConstants';
+import { HANDLE_NARROW_RATIO, BOARD_SIDE_GAP } from './gameScreenConstants';
 
+/**
+ * Ширина острова (stripWidthAnim) и внутренняя ширина доски (boardRenderW).
+ * Legacy handle height / border-radius удалены вместе с GameBoardColumn.
+ */
 export default function useGameBoardHandleStyles({
   handleStretchAnim,
   handleWidthAnim,
-  middlePulseAnim,
   boardColW,
   windowW,
   boardMaxW,
@@ -22,18 +19,6 @@ export default function useGameBoardHandleStyles({
   }, [boardColW, windowW]);
 
   const narrowStripW = useMemo(() => Math.max(48, Math.floor(fullStripW / 5)), [fullStripW]);
-
-  const animatedHandleH = useMemo(
-    () =>
-      Animated.add(
-        28,
-        Animated.add(
-          Animated.multiply(handleStretchAnim, DRAG_MAX_EXTRA_H),
-          Animated.multiply(middlePulseAnim, DRAG_MAX_EXTRA_H * 0.5),
-        ),
-      ),
-    [handleStretchAnim, middlePulseAnim],
-  );
 
   const animatedHandleW = useMemo(
     () =>
@@ -53,36 +38,6 @@ export default function useGameBoardHandleStyles({
         extrapolate: 'clamp',
       }),
     [handleStretchAnim, narrowStripW],
-  );
-
-  const oneMinusHandleWidth = useMemo(
-    () =>
-      handleWidthAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0], extrapolate: 'clamp' }),
-    [handleWidthAnim],
-  );
-
-  const oneMinusStretch = useMemo(
-    () =>
-      handleStretchAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0], extrapolate: 'clamp' }),
-    [handleStretchAnim],
-  );
-
-  const bottomRDrag = useMemo(
-    () =>
-      Animated.add(
-        Animated.multiply(oneMinusStretch, BOTTOM_R_COLLAPSED),
-        Animated.multiply(handleStretchAnim, Animated.multiply(dragHandleW, 0.5)),
-      ),
-    [oneMinusStretch, handleStretchAnim, dragHandleW],
-  );
-
-  const bottomR = useMemo(
-    () =>
-      Animated.add(
-        Animated.multiply(oneMinusHandleWidth, bottomRDrag),
-        Animated.multiply(handleWidthAnim, BOTTOM_R_FULL),
-      ),
-    [oneMinusHandleWidth, bottomRDrag, handleWidthAnim],
   );
 
   const stripWidthAnim = useMemo(
@@ -111,12 +66,5 @@ export default function useGameBoardHandleStyles({
     return Math.floor(insetW);
   }, [boardColW, fullStripW, windowW, boardMaxW]);
 
-  return {
-    animatedHandleH,
-    animatedHandleW,
-    dragHandleW,
-    bottomR,
-    stripWidthAnim,
-    boardRenderW,
-  };
+  return { stripWidthAnim, boardRenderW };
 }
