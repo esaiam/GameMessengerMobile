@@ -13,7 +13,7 @@ import { RoomChatContainer } from '../components/chat/RoomChatContainer';
 import { V } from '../theme';
 import { createInitialGameState, shouldAutoEndTurn } from '../utils/gameLogic';
 import { preloadDiceSound, unloadDiceSound } from '../utils/diceSound';
-import { useBoardAnimation } from '../hooks/useBoardAnimation';
+import { useGameIslandAnimation } from './game/useGameIslandAnimation';
 import { useGameSession } from '../hooks/useGameSession';
 import { useBackgammonGame } from '../hooks/useBackgammonGame';
 import useGameScreenBootstrap from './game/useGameScreenBootstrap';
@@ -29,7 +29,7 @@ import {
 import useGameDiceAnimComplete from './game/useGameDiceAnimComplete';
 import useGameBoardSwipe from './game/useGameBoardSwipe';
 import useGameBoardHandleStyles from './game/useGameBoardHandleStyles';
-import GameBoardColumn from './game/GameBoardColumn';
+import GameIslandShell from './game/GameIslandShell';
 import { useMessengerScreenBackHandler } from '../lib/safeGoBack';
 
 export default function GameScreen({ route, navigation }) {
@@ -204,7 +204,17 @@ export default function GameScreen({ route, navigation }) {
     chatInputTopYRef,
     pauseJsForDiceThrow,
     computeMaxSlide,
-    runCloseSequence } = useBoardAnimation({
+    runCloseSequence,
+    islandState,
+    activeGameId,
+    pickerHeightAnim,
+    pickerIconAnims,
+    boardContentFadeAnim,
+    tapGameIcon,
+    dismissPicker,
+  } = useGameIslandAnimation({
+    kbVisible,
+    emojiPickerVisible,
     showAnimDice,
     showAnimDiceRef,
     diceAnimatingRef,
@@ -215,8 +225,8 @@ export default function GameScreen({ route, navigation }) {
     setAvailableH,
     setBoardMounted,
     setBoardContentActive,
-    kbVisible,
-    frostedHeaderH });
+    frostedHeaderH,
+  });
   pauseJsForDiceThrowRef.current = pauseJsForDiceThrow;
 
   useGameDiceRemoteSync({
@@ -347,7 +357,7 @@ export default function GameScreen({ route, navigation }) {
 
   const boardMaxW = isTabletLayout ? 720 : undefined;
   const [boardColW, setBoardColW] = useState(0);
-  const { animatedHandleH, bottomR, stripWidthAnim, boardRenderW } = useGameBoardHandleStyles({
+  const { stripWidthAnim, boardRenderW } = useGameBoardHandleStyles({
     handleStretchAnim,
     handleWidthAnim,
     middlePulseAnim,
@@ -365,9 +375,17 @@ export default function GameScreen({ route, navigation }) {
     >
       {/* Body: доска → ручка → чат */}
       <View style={[tw`flex-1`, { position: 'relative' }]}>
+        {/* Dismiss-оверлей: tap вне острова закрывает picker */}
+        {islandState === 'picker' && (
+          <TouchableOpacity
+            style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 9 }}
+            onPress={dismissPicker}
+            activeOpacity={1}
+          />
+        )}
         {/* Board column */}
         {showBackgammonBoard && !kbVisible && !emojiPickerVisible && (
-          <GameBoardColumn
+          <GameIslandShell
             boardColRef={boardColRef}
             boardTopOffset={boardTopOffset}
             boardColTopYRef={boardColTopYRef}
@@ -412,9 +430,15 @@ export default function GameScreen({ route, navigation }) {
             onSwipeHintComplete={markSwipeHintSeen}
             canEndTurn={canEndTurn}
             onEndTurn={handleEndTurn}
-            animatedHandleH={animatedHandleH}
-            bottomR={bottomR}
+            handleWidthAnim={handleWidthAnim}
             handleStretchAnim={handleStretchAnim}
+            islandState={islandState}
+            activeGameId={activeGameId}
+            pickerHeightAnim={pickerHeightAnim}
+            pickerIconAnims={pickerIconAnims}
+            boardContentFadeAnim={boardContentFadeAnim}
+            tapGameIcon={tapGameIcon}
+            dismissPicker={dismissPicker}
           />
         )}
 

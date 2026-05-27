@@ -528,7 +528,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
       <View
         style={[
           tw`flex-row items-center justify-between px-2 py-1`,
-          { borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden' }]}
+          { borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden', backgroundColor: '#000' }]}
       >
         <View style={tw`flex-row items-center`}>
           <TouchableOpacity
