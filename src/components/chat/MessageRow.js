@@ -165,7 +165,9 @@ const MessageRow = React.memo(
       item.player_name === env.ariaPeerName && item.aria_voice_message !== true;
     const ariaGeneratedAttachment =
       listExtra.isAriaChat && item.aria_attachment && !isAriaTyping ? item.aria_attachment : null;
-    const hasAriaImageAttachment = ariaGeneratedAttachment?.mime_type === 'image/png';
+    const hasAriaImageAttachment = String(
+      ariaGeneratedAttachment?.mime_type || '',
+    ).startsWith('image/');
 
     const timeMeta = (
       <>

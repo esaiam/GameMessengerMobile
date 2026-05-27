@@ -309,7 +309,10 @@ export default function ChatRoomScreen({ route, navigation }) {
             history });
 
           const aiNow = new Date().toISOString();
-          const replyText = reply || '—';
+          let replyText = reply || '—';
+          if (attachment?.mime_type?.startsWith('image/')) {
+            replyText = replyText.replace(/\n\n🖼\s*https?:\/\/\S+/i, '').trim() || 'Инфографика';
+          }
           try {
             const { error: ariaInsertError } = await supabase.from('aria_messages').insert({
               user_id,

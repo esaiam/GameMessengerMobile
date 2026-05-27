@@ -1,31 +1,45 @@
 import { Alert, Linking, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 
-/** Вложение из POST /message (file_base64, filename, mime_type, size_bytes). */
+/** Вложение из POST /message (file_base64, file_url, attachment{}, filename, mime_type). */
 export function parseAriaMessageAttachment(json) {
   if (!json || typeof json !== 'object') return null;
-  const b64 = json.file_base64;
-  if (typeof b64 !== 'string' || !b64.trim()) return null;
+  const nested =
+    json.attachment && typeof json.attachment === 'object' ? json.attachment : null;
+  const b64Raw = json.file_base64 ?? nested?.data_base64;
+  const b64 = typeof b64Raw === 'string' && b64Raw.trim() ? b64Raw.trim() : null;
+  const urlRaw = json.file_url ?? nested?.url;
+  const file_url = typeof urlRaw === 'string' && urlRaw.trim() ? urlRaw.trim() : null;
+  if (!b64 && !file_url) return null;
+
+  const mime =
+    (typeof json.mime_type === 'string' && json.mime_type.trim()) ||
+    (typeof nested?.mime_type === 'string' && nested.mime_type.trim()) ||
+    'application/octet-stream';
+
   return {
-    file_base64: b64.trim(),
+    ...(b64 ? { file_base64: b64 } : {}),
+    ...(file_url ? { file_url } : {}),
     filename:
-      typeof json.filename === 'string' && json.filename.trim()
-        ? json.filename.trim()
-        : 'file',
-    mime_type:
-      typeof json.mime_type === 'string' && json.mime_type.trim()
-        ? json.mime_type.trim()
-        : 'application/octet-stream',
+      (typeof json.filename === 'string' && json.filename.trim()) ||
+      (typeof nested?.filename === 'string' && nested.filename.trim()) ||
+      'file',
+    mime_type: mime,
     size_bytes: Number.isFinite(Number(json.size_bytes))
       ? Number(json.size_bytes)
-      : undefined };
+      : Number.isFinite(Number(nested?.size_bytes))
+        ? Number(nested.size_bytes)
+        : undefined };
 }
 
-/** data: URI для превью PNG в чате. */
+/** URI для превью картинки в чате (PNG/JPEG/WebP — URL или data:). */
 export function ariaAttachmentImageUri(attachment) {
-  if (!attachment?.file_base64) return null;
-  if (attachment.mime_type === 'image/png') {
-    return `data:image/png;base64,${attachment.file_base64}`;
+  if (!attachment) return null;
+  const mime = String(attachment.mime_type || '');
+  if (!mime.startsWith('image/')) return null;
+  if (attachment.file_url) return attachment.file_url;
+  if (attachment.file_base64) {
+    return `data:${mime};base64,${attachment.file_base64}`;
   }
   return null;
 }

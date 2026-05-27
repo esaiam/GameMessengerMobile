@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Keyboard, StyleSheet, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 import tw from 'twrnc';
@@ -46,6 +47,13 @@ export default function ChatsScreen({ route, navigation }) {
   const [searchFocused, setSearchFocused] = useState(false);
   const searchInputRef = useRef(null);
   const headerLayout = useMessengerHeaderLayout();
+
+  useFocusEffect(
+    useCallback(() => {
+      searchInputRef.current?.blur?.();
+      Keyboard.dismiss();
+    }, []),
+  );
 
   const { rows, removeRowsByRoomIds } = useChatsRoomsLoader(nickname);
 

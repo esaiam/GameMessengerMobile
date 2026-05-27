@@ -1,14 +1,9 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import TamagotchiScreen from '../components/tamagotchi/TamagotchiScreen';
 import { V } from '../theme';
 
 export default function PokerHubScreen() {
-  return (
-    <View style={styles.root}>
-      <TamagotchiScreen />
-    </View>
-  );
+  return <View style={styles.root} />;
 }
 
 const styles = StyleSheet.create({

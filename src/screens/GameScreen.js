@@ -4,7 +4,6 @@ import {
   View,
   TouchableOpacity,
   Alert,
-  Keyboard,
   useWindowDimensions,
 } from 'react-native';
 import tw from 'twrnc';
@@ -258,7 +257,6 @@ export default function GameScreen({ route, navigation }) {
     useCallback(() => {
       return () => {
         suppressAvailableHRef.current = false;
-        Keyboard.dismiss();
         setKbVisible(false);
       };
     }, [])

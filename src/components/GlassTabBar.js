@@ -29,7 +29,14 @@ function tabCenterLeft(layouts, index, size = HIGHLIGHT_SIZE) {
   return L.x + L.width / 2 - size / 2;
 }
 
-export default function GlassTabBar({ activeIndex, tabs, onTabPress, visible, bottomInset }) {
+export default function GlassTabBar({
+  activeIndex,
+  tabs,
+  onTabPress,
+  visible,
+  visibilityAnimated = false,
+  bottomInset,
+}) {
   const safeInsets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const tabBarHorizontalPad = 0.05 * windowWidth + 0.9 * TAB_BAR_LAYOUT.horizontalPad;
@@ -47,8 +54,13 @@ export default function GlassTabBar({ activeIndex, tabs, onTabPress, visible, bo
 
   useEffect(() => {
     runVisibilityRef.current?.stop?.();
+    const toValue = visible ? 0 : 1;
+    if (!visibilityAnimated) {
+      visibility.setValue(toValue);
+      return undefined;
+    }
     const anim = Animated.timing(visibility, {
-      toValue: visible ? 0 : 1,
+      toValue,
       duration: T_VISIBILITY,
       easing: Easing.inOut(Easing.cubic),
       useNativeDriver: false,
@@ -56,7 +68,7 @@ export default function GlassTabBar({ activeIndex, tabs, onTabPress, visible, bo
     runVisibilityRef.current = anim;
     anim.start();
     return () => anim.stop();
-  }, [visible, visibility]);
+  }, [visible, visibilityAnimated, visibility]);
 
   const getIconScale = (key) => {
     if (!iconScaleByKeyRef[key]) iconScaleByKeyRef[key] = new Animated.Value(1);

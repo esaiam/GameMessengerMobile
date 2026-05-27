@@ -45,6 +45,13 @@ const HIDE_TAB_BAR_ON = new Set([
   'Storage',
 ]);
 
+/** Скрытие/показ таббара с slide — только подэкраны профиля */
+const TAB_BAR_VISIBILITY_ANIMATED_ON = new Set([
+  'InviteFriends',
+  'BlockedContacts',
+  'Storage',
+]);
+
 function ChatsStackNavigator({ initialParams }) {
   return (
     <ChatsStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 200 }}>
@@ -116,6 +123,8 @@ export function MainTabs({ navigation, route }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const activeIndexRef = useRef(0);
   const [tabBarVisible, setTabBarVisible] = useState(true);
+  const [tabBarVisibilityAnimated, setTabBarVisibilityAnimated] = useState(false);
+  const prevDeepestRouteRef = useRef(null);
   const nickname = route.params?.nickname;
   const {
     registerMainTabsHandlers,
@@ -142,7 +151,13 @@ export function MainTabs({ navigation, route }) {
     (state) => {
       if (!state) return;
       const deepest = getDeepestRouteName(state);
+      const prevDeepest = prevDeepestRouteRef.current;
+      prevDeepestRouteRef.current = deepest;
       setTabBarVisible(!HIDE_TAB_BAR_ON.has(deepest));
+      setTabBarVisibilityAnimated(
+        TAB_BAR_VISIBILITY_ANIMATED_ON.has(deepest)
+          || TAB_BAR_VISIBILITY_ANIMATED_ON.has(prevDeepest),
+      );
       setPagerNativeScrollEnabled(isPagerNativeScrollEnabled({ navigationState: state }));
     },
     [setPagerNativeScrollEnabled],
@@ -206,6 +221,7 @@ export function MainTabs({ navigation, route }) {
           tabs={TABS}
           onTabPress={handleTabPress}
           visible={tabBarVisible}
+          visibilityAnimated={tabBarVisibilityAnimated}
         />
       </View>
   );

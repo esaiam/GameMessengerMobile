@@ -63,6 +63,7 @@ import useChatInlineMediaSend from './chat/useChatInlineMediaSend';
 import useChatClearHistory from './chat/useChatClearHistory';
 import useChatInputSettling from './chat/useChatInputSettling';
 import { formatDateKey } from './chat/chatMessageListFormat';
+import { useNavigation } from '@react-navigation/native';
 
 export default function Chat({
   roomId,
@@ -288,6 +289,7 @@ export default function Chat({
     emojiContentAnimatedStyle,
     emojiWobbleRotate,
     collapseEmojiForKeyboard,
+    releaseComposerKeyboard,
     toggleEmojiPicker,
     insertEmoji,
     prepareEmojiPanelGifSearch,
@@ -300,6 +302,17 @@ export default function Chat({
     setShowEmojiPicker,
     setText,
     emojiPanelGifSearchFocused });
+
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const addListener = navigation?.addListener;
+    if (typeof addListener !== 'function') return undefined;
+    const unsub = addListener('beforeRemove', () => {
+      releaseComposerKeyboard();
+    });
+    return unsub;
+  }, [navigation, releaseComposerKeyboard]);
 
   const reportComposerBaseHeight = useCallback((layoutH) => {
     if (typeof layoutH !== 'number' || layoutH <= 0) return;

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Keyboard, Animated, Platform } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import {
   useSharedValue,
   useAnimatedStyle,
@@ -18,6 +19,8 @@ import {
   resolveKeyboardPanelHeight,
   saveCachedKeyboardHeight,
   clampKeyboardHeight } from '../../lib/keyboardHeightCache';
+
+let composerKeyboardReleaseInFlight = false;
 
 /**
  * Клавиатура: `keyboardHeightLib` (UI thread) — сдвиг overlay-композера и нижний inset ленты.
@@ -132,6 +135,26 @@ export default function useChatComposerChrome({
     emojiPanelHeightShared.value = 0;
     setShowEmojiPicker(false);
   }, [setShowEmojiPicker]);
+
+  /** Уход с экрана чата: blur → emoji panel → dismiss (не блокирует navigation). */
+  const releaseComposerKeyboard = useCallback(() => {
+    inputRef.current?.blur?.();
+    collapseEmojiForKeyboard();
+    Keyboard.dismiss();
+    if (composerKeyboardReleaseInFlight) return;
+    composerKeyboardReleaseInFlight = true;
+    void KeyboardController.dismiss({ animated: false })
+      .catch(() => {})
+      .finally(() => {
+        composerKeyboardReleaseInFlight = false;
+      });
+  }, [inputRef, collapseEmojiForKeyboard]);
+
+  useEffect(() => {
+    return () => {
+      releaseComposerKeyboard();
+    };
+  }, [releaseComposerKeyboard]);
 
   const playEmojiWobble = useCallback(() => {
     emojiWobbleRotate.setValue(0);
@@ -294,6 +317,7 @@ export default function useChatComposerChrome({
     emojiContentAnimatedStyle,
     emojiWobbleRotate,
     collapseEmojiForKeyboard,
+    releaseComposerKeyboard,
     toggleEmojiPicker,
     insertEmoji,
     prepareEmojiPanelGifSearch,
