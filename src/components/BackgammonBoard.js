@@ -15,16 +15,11 @@ import {
   TouchableOpacity,
   LayoutAnimation,
   Image,
-  Platform,
   StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
-import SafeBlurView from './SafeBlurView';
 import tw from 'twrnc';
 import { V, boardPalette } from '../theme';
-
-/** Тинт поверх blur — как у GlassTabBar, из токена bgElevated */
-const GLASS_TINT = 'rgba(37, 42, 53, 0.4)';
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -75,6 +70,11 @@ const Checker = memo(function Checker({ player, size, isSelected }) {
   );
 });
 
+// Коэффициенты высоты треугольника для дуги окружности.
+// 6 позиций: от внешнего края (0) к центральному бару (5).
+// cos(i * π/14) даёт плавную дугу ~65°: [1.0, 0.975, 0.901, 0.781, 0.625, 0.433]
+const TRIANGLE_ARC = Array.from({ length: 6 }, (_, i) => Math.cos(i * Math.PI / 14));
+
 const Triangle = memo(function Triangle({
   index,
   isTop,
@@ -85,6 +85,7 @@ const Triangle = memo(function Triangle({
   isSelected,
   onPointPress,
   pointHeight,
+  triangleH,
   maxDisplay,
   pointWidth,
   checkerSize }) {
@@ -123,8 +124,8 @@ const Triangle = memo(function Triangle({
           borderLeftColor: 'transparent',
           borderRightColor: 'transparent',
           ...(isTop
-            ? { borderTopWidth: pointHeight * 0.8, borderTopColor: color }
-            : { borderBottomWidth: pointHeight * 0.8, borderBottomColor: color }),
+            ? { borderTopWidth: triangleH ?? pointHeight * 0.8, borderTopColor: color }
+            : { borderBottomWidth: triangleH ?? pointHeight * 0.8, borderBottomColor: color }),
           position: 'absolute',
           [isTop ? 'top' : 'bottom']: 0 }}
       />
@@ -411,7 +412,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
     return (
       <View style={{ position: 'relative', width: layoutBoardW, height: pointHeight }}>
         <View style={tw`flex-row`}>
-          {leftHalf.map((idx) => {
+          {leftHalf.map((idx, sliceIdx) => {
             const val = board[idx];
             const player = val > 0 ? 1 : val < 0 ? 2 : 0;
             const color = idx % 2 === 0 ? COLORS.darkTriangle : COLORS.lightTriangle;
@@ -427,6 +428,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
                 isSelected={selectedPoint === idx}
                 onPointPress={onPointPress}
                 pointHeight={pointHeight}
+                triangleH={pointHeight * 0.8 * TRIANGLE_ARC[sliceIdx]}
                 maxDisplay={maxVisible}
                 pointWidth={pointW}
                 checkerSize={checkerSize}
@@ -456,10 +458,11 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
             )}
           </TouchableOpacity>
 
-          {rightHalf.map((idx) => {
+          {rightHalf.map((idx, sliceIdx) => {
             const val = board[idx];
             const player = val > 0 ? 1 : val < 0 ? 2 : 0;
             const color = idx % 2 === 0 ? COLORS.darkTriangle : COLORS.lightTriangle;
+            // Правая половина: sliceIdx 0 — ближний к бару, 5 — внешний, дуга зеркальная
             return (
               <Triangle
                 key={idx}
@@ -472,6 +475,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
                 isSelected={selectedPoint === idx}
                 onPointPress={onPointPress}
                 pointHeight={pointHeight}
+                triangleH={pointHeight * 0.8 * TRIANGLE_ARC[5 - sliceIdx]}
                 maxDisplay={maxVisible}
                 pointWidth={pointW}
                 checkerSize={checkerSize}
@@ -505,31 +509,9 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: V.border }}
       >
-        <SafeBlurView
-          intensity={Platform.OS === 'ios' ? 52 : 40}
-          tint="dark"
-          blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
-          style={{ width: '100%', borderRadius: 12, overflow: 'hidden' }}
-        >
-          <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, {backgroundColor: GLASS_TINT}]} />
-          {/* Верхний блик «стекла» — тонкая линия, без градиента */}
-          <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: V.sectionBorder,
-              zIndex: 3 }}
-          />
-      <View style={{ width: '100%' }}>
-      <View
-        style={[
-          tw`flex-row items-center justify-between px-2 py-1`,
-          { borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden', backgroundColor: '#000' }]}
-      >
+        <View style={{ width: '100%', borderRadius: 12, overflow: 'hidden' }}>
+      {/* Верхний бар прозрачный — под ним виден остров; фишки и кнопка остаются непрозрачными */}
+      <View style={[tw`flex-row items-center justify-between px-2 py-1`, { backgroundColor: 'transparent' }]}>
         <View style={tw`flex-row items-center`}>
           <TouchableOpacity
             onPress={() => onBearOffPress(2)}
@@ -568,7 +550,11 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
             });
           }}
           collapsable={false}
-          style={{ position: 'relative', width: layoutBoardW || '100%' }}
+          style={{
+            position: 'relative',
+            width: layoutBoardW || '100%',
+            backgroundColor: boardPalette.bg,
+          }}
         >
         {!!layoutBoardW && pointW > 0 && checkerSize > 0 && (
           <>
@@ -668,8 +654,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
       </GestureDetector>
 
       {children}
-      </View>
-        </SafeBlurView>
+        </View>
       </View>
     </View>
   );

@@ -97,13 +97,13 @@ export const COMPOSER_LAYOUT = {
 
 export const COMPOSER_CAPSULE_RADIUS = COMPOSER_LAYOUT.innerHeight / 2;
 
-/** Поле нард: графит / серый в духе основного UI (Vault) */
+/** Поле нард: Muted Bronze — тёплый премиум-стол в духе gold/cream UI */
 export const boardPalette = {
-  bg: '#1A2030',
-  triangleDark: '#2B313D',
-  triangleLight: '#3D4654',
-  bar: '#252A35',
-  divider: '#0D0F14',
+  bg: '#1C1814',
+  triangleDark: '#34302A',
+  triangleLight: '#454038',
+  bar: '#28221C',
+  divider: '#141210',
   checkerLight: '#E8E4DA',
   checkerLightBorder: '#9E9789',
   checkerDark: '#14171D',

@@ -9,7 +9,7 @@
  *                  контент фейдится in после раскрытия
  *
  * Ключевая идея: outer Animated.View (width=stripWidthAnim) получает
- *   backgroundColor '#000', borderColor и borderRadius.
+ *   backgroundColor rgba(0,0,0,0.9), borderColor и borderRadius.
  *   Высота = boardDropAnim (board area) + effectiveHandleH (bottom section).
  *   Единое тело, нет отдельного "выпадающего бара".
  */
@@ -45,7 +45,8 @@ const ISLAND_ICON_SIZE    = 20;
 const PICKER_ICON_SIZE    = 24;
 const ISLAND_BORDER_W     = 1;
 const ISLAND_BORDER_COLOR = 'rgba(255,255,255,0.26)';
-const ISLAND_BG           = '#000';
+/** 90% непрозрачности — лёгкий просвет чата за островом */
+const ISLAND_BG           = 'rgba(0, 0, 0, 0.9)';
 const RADIUS_COLLAPSED    = ISLAND_COLLAPSED_H / 2; // pill
 const RADIUS_EXPANDED     = 14;                     // скруглённый прямоугольник
 const NUB_COLOR           = 'rgba(255,255,255,0.40)';
