@@ -8,8 +8,6 @@ import {
 
   TouchableOpacity,
 
-  Alert,
-
   StyleSheet,
 
   Platform,
@@ -69,6 +67,8 @@ import { UserAvatar } from '../components/UserAvatar';
 import ProfileAvatarModal from '../components/ProfileAvatarModal';
 
 import ProfileEditHandleModal from '../components/ProfileEditHandleModal';
+
+import ProfileActionSheet from '../components/ProfileActionSheet';
 
 import { useLocalAvatar } from '../context/LocalAvatarContext';
 
@@ -332,6 +332,12 @@ export default function ProfileScreen({ route, navigation }) {
   const [avatarModal, setAvatarModal] = useState(false);
 
   const [editHandleModal, setEditHandleModal] = useState(false);
+
+  const [actionSheet, setActionSheet] = useState(null);
+
+  const closeActionSheet = () => setActionSheet(null);
+
+  const showActionSheet = (config) => setActionSheet(config);
 
   const [dmPolicyLabel, setDmPolicyLabel] = useState(DM_POLICY_LABELS.everyone);
 
@@ -717,7 +723,15 @@ export default function ProfileScreen({ route, navigation }) {
 
       if (!perm.granted) {
 
-        Alert.alert('Доступ', 'Разрешите доступ к галерее в настройках устройства.');
+        showActionSheet({
+
+          title: 'Доступ',
+
+          message: 'Разрешите доступ к галерее в настройках устройства.',
+
+          options: [{ label: 'OK' }],
+
+          showCancel: false });
 
         return;
 
@@ -741,7 +755,15 @@ export default function ProfileScreen({ route, navigation }) {
 
     } catch {
 
-      Alert.alert('Ошибка', 'Не удалось выбрать фото.');
+      showActionSheet({
+
+        title: 'Ошибка',
+
+        message: 'Не удалось выбрать фото.',
+
+        options: [{ label: 'OK' }],
+
+        showCancel: false });
 
     }
 
@@ -763,45 +785,49 @@ export default function ProfileScreen({ route, navigation }) {
 
   const openDmPolicyPicker = () => {
 
-    Alert.alert('Кто может написать мне', 'Выберите вариант', [
+    showActionSheet({
 
-      {
+      title: 'Кто может написать мне',
 
-        text: DM_POLICY_LABELS.everyone,
+      message: 'Выберите вариант',
 
-        onPress: async () => {
+      options: [
 
-          await setDmPolicy('everyone');
+        {
 
-          setDmPolicyLabel(DM_POLICY_LABELS.everyone);
+          label: DM_POLICY_LABELS.everyone,
 
-        } },
+          onPress: async () => {
 
-      {
+            await setDmPolicy('everyone');
 
-        text: DM_POLICY_LABELS.contacts,
+            setDmPolicyLabel(DM_POLICY_LABELS.everyone);
 
-        onPress: async () => {
+          } },
 
-          await setDmPolicy('contacts');
+        {
 
-          setDmPolicyLabel(DM_POLICY_LABELS.contacts);
+          label: DM_POLICY_LABELS.contacts,
 
-        } },
+          onPress: async () => {
 
-      {
+            await setDmPolicy('contacts');
 
-        text: DM_POLICY_LABELS.nobody,
+            setDmPolicyLabel(DM_POLICY_LABELS.contacts);
 
-        onPress: async () => {
+          } },
 
-          await setDmPolicy('nobody');
+        {
 
-          setDmPolicyLabel(DM_POLICY_LABELS.nobody);
+          label: DM_POLICY_LABELS.nobody,
 
-        } },
+          onPress: async () => {
 
-      { text: 'Отмена', style: 'cancel' }]);
+            await setDmPolicy('nobody');
+
+            setDmPolicyLabel(DM_POLICY_LABELS.nobody);
+
+          } }] });
 
   };
 
@@ -813,15 +839,19 @@ export default function ProfileScreen({ route, navigation }) {
 
     if (perm.status === 'granted') {
 
-      Alert.alert('Уведомления', 'Push-уведомления включены.', [
+      showActionSheet({
 
-        {
+        title: 'Уведомления',
 
-          text: 'Настройки системы',
+        message: 'Push-уведомления включены.',
 
-          onPress: () => Linking.openSettings() },
+        options: [
 
-        { text: 'OK', style: 'cancel' }]);
+          { label: 'Настройки системы', onPress: () => Linking.openSettings() },
+
+          { label: 'OK' }],
+
+        showCancel: false });
 
       return;
 
@@ -829,19 +859,15 @@ export default function ProfileScreen({ route, navigation }) {
 
     if (perm.status === 'denied') {
 
-      Alert.alert(
+      showActionSheet({
 
-        'Уведомления',
+        title: 'Уведомления',
 
-        'Разрешение отклонено. Включите уведомления в настройках системы.',
+        message: 'Разрешение отклонено. Включите уведомления в настройках системы.',
 
-        [
+        options: [
 
-          { text: 'Открыть настройки', onPress: () => Linking.openSettings() },
-
-          { text: 'Отмена', style: 'cancel' }]
-
-      );
+          { label: 'Открыть настройки', onPress: () => Linking.openSettings() }] });
 
       return;
 
@@ -851,7 +877,15 @@ export default function ProfileScreen({ route, navigation }) {
 
     if (!uid) {
 
-      Alert.alert('Ошибка', 'Нет сессии.');
+      showActionSheet({
+
+        title: 'Ошибка',
+
+        message: 'Нет сессии.',
+
+        options: [{ label: 'OK' }],
+
+        showCancel: false });
 
       return;
 
@@ -863,11 +897,27 @@ export default function ProfileScreen({ route, navigation }) {
 
     if (token) {
 
-      Alert.alert('Готово', 'Уведомления включены.');
+      showActionSheet({
+
+        title: 'Готово',
+
+        message: 'Уведомления включены.',
+
+        options: [{ label: 'OK' }],
+
+        showCancel: false });
 
     } else {
 
-      Alert.alert('Не удалось', 'Разрешите уведомления или проверьте сеть.');
+      showActionSheet({
+
+        title: 'Не удалось',
+
+        message: 'Разрешите уведомления или проверьте сеть.',
+
+        options: [{ label: 'OK' }],
+
+        showCancel: false });
 
     }
 
@@ -877,33 +927,37 @@ export default function ProfileScreen({ route, navigation }) {
 
   const openAppearance = () => {
 
-    Alert.alert('Внешний вид', 'Обои в чатах', [
+    showActionSheet({
 
-      {
+      title: 'Внешний вид',
 
-        text: 'Включить обои',
+      message: 'Обои в чатах',
 
-        onPress: async () => {
+      options: [
 
-          await setChatWallpaperEnabled(true);
+        {
 
-          setWallpaperOn(true);
+          label: 'Включить обои',
 
-        } },
+          onPress: async () => {
 
-      {
+            await setChatWallpaperEnabled(true);
 
-        text: 'Выключить обои',
+            setWallpaperOn(true);
 
-        onPress: async () => {
+          } },
 
-          await setChatWallpaperEnabled(false);
+        {
 
-          setWallpaperOn(false);
+          label: 'Выключить обои',
 
-        } },
+          onPress: async () => {
 
-      { text: 'Отмена', style: 'cancel' }]);
+            await setChatWallpaperEnabled(false);
+
+            setWallpaperOn(false);
+
+          } }] });
 
   };
 
@@ -919,79 +973,103 @@ export default function ProfileScreen({ route, navigation }) {
 
 
 
+  const confirmDeleteAccount = async () => {
+
+    const uid = session?.user?.id;
+
+    if (!uid) {
+
+      showActionSheet({
+
+        title: 'Ошибка',
+
+        message: 'Нет сессии.',
+
+        options: [{ label: 'OK' }],
+
+        showCancel: false });
+
+      return;
+
+    }
+
+    try {
+
+      await supabase.from('profiles').delete().eq('id', uid);
+
+      await removeAvatar();
+
+      await clearNicknameFromStorage();
+
+      await AsyncStorage.removeItem('@vault_session_cache');
+
+      await supabase.auth.signOut();
+
+    } catch (e) {
+
+      showActionSheet({
+
+        title: 'Ошибка',
+
+        message: e?.message || 'Не удалось удалить аккаунт.',
+
+        options: [{ label: 'OK' }],
+
+        showCancel: false });
+
+    }
+
+  };
+
+
+
   const deleteAccount = () => {
 
-    Alert.alert(
+    showActionSheet({
 
-      'Удалить аккаунт',
+      title: 'Удалить аккаунт',
 
-      'Профиль и локальные данные будут удалены. Войти снова можно только с новым @handle.',
+      message:
 
-      [
+        'Профиль и локальные данные будут удалены. Войти снова можно только с новым @handle.',
 
-        { text: 'Отмена', style: 'cancel' },
+      options: [
 
         {
 
-          text: 'Удалить',
+          label: 'Удалить',
 
-          style: 'destructive',
+          destructive: true,
 
           onPress: () => {
 
-            Alert.alert(
+            setTimeout(
 
-              'Подтвердите',
+              () =>
 
-              'Это действие необратимо для вашего профиля в Vault.',
+                showActionSheet({
 
-              [
+                  title: 'Подтвердите',
 
-                { text: 'Отмена', style: 'cancel' },
+                  message: 'Это действие необратимо для вашего профиля в Vault.',
 
-                {
+                  options: [
 
-                  text: 'Удалить навсегда',
+                    {
 
-                  style: 'destructive',
+                      label: 'Удалить навсегда',
 
-                  onPress: async () => {
+                      destructive: true,
 
-                    const uid = session?.user?.id;
+                      onPress: confirmDeleteAccount }],
 
-                    if (!uid) {
+                }),
 
-                      Alert.alert('Ошибка', 'Нет сессии.');
-
-                      return;
-
-                    }
-
-                    try {
-
-                      await supabase.from('profiles').delete().eq('id', uid);
-
-                      await removeAvatar();
-
-                      await clearNicknameFromStorage();
-
-                      await AsyncStorage.removeItem('@vault_session_cache');
-
-                      await supabase.auth.signOut();
-
-                    } catch (e) {
-
-                      Alert.alert('Ошибка', e?.message || 'Не удалось удалить аккаунт.');
-
-                    }
-
-                  } }]
+              0,
 
             );
 
-          } }]
-
-    );
+          } }] });
 
   };
 
@@ -1276,6 +1354,24 @@ export default function ProfileScreen({ route, navigation }) {
         currentHandle={nickname}
 
         onSaved={onHandleSaved}
+
+      />
+
+
+
+      <ProfileActionSheet
+
+        visible={!!actionSheet}
+
+        onClose={closeActionSheet}
+
+        title={actionSheet?.title}
+
+        message={actionSheet?.message}
+
+        options={actionSheet?.options}
+
+        showCancel={actionSheet?.showCancel ?? true}
 
       />
 

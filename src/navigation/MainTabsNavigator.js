@@ -15,7 +15,7 @@ import StorageScreen from '../screens/StorageScreen';
 import PokerHubScreen from '../screens/PokerHubScreen';
 import ContactsScreen from '../screens/ContactsScreen';
 import ContactProfileScreen from '../screens/ContactProfileScreen';
-import { Search, Layers, User, Users } from '../icons/lucideIcons';
+import { MessageCircle, Layers, User, Users } from '../icons/lucideIcons';
 import { V } from '../theme';
 import { splitDetailApi } from '../context/SplitDetailContext';
 import {
@@ -30,7 +30,7 @@ const PokerStack = createNativeStackNavigator();
 const ProfileStack = createNativeStackNavigator();
 
 const TABS = [
-  { key: 'Chats',    name: 'Chats',    icon: (color) => <Search color={color} size={22} strokeWidth={1.5} />, activeTint: V.accentSage },
+  { key: 'Chats',    name: 'Chats',    icon: (color) => <MessageCircle color={color} size={22} strokeWidth={1.5} />, activeTint: V.accentSage },
   { key: 'Contacts', name: 'Contacts', icon: (color) => <Users  color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentSage },
   { key: 'Poker',    name: 'Poker',    icon: (color) => <Layers color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentGold },
   { key: 'Profile',  name: 'Profile',  icon: (color) => <User   color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentSage },

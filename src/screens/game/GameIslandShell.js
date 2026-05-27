@@ -48,7 +48,7 @@ const ISLAND_BORDER_COLOR = 'rgba(255,255,255,0.26)';
 /** 90% непрозрачности — лёгкий просвет чата за островом */
 const ISLAND_BG           = 'rgba(0, 0, 0, 0.9)';
 const RADIUS_COLLAPSED    = ISLAND_COLLAPSED_H / 2; // pill
-const RADIUS_EXPANDED     = 14;                     // скруглённый прямоугольник
+const RADIUS_EXPANDED     = 20;                     // скруглённый прямоугольник
 const NUB_COLOR           = 'rgba(255,255,255,0.40)';
 
 // ─── Component ───────────────────────────────────────────────────────────────

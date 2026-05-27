@@ -5,12 +5,15 @@ import {
   Dimensions,
   Easing,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import SafeBlurView from '../SafeBlurView';
 import {
   ChevronDown,
   Copy,
@@ -59,6 +62,42 @@ const ICON_PROPS = {
   size: 20,
   color: V.textSecondary,
   strokeWidth: 1.5 } as const;
+
+/** ~90% непрозрачности поверх blur (как плотное матовое стекло) */
+const GLASS_GRADIENT = ['rgba(13,15,20,0.9)', 'rgba(26,29,36,0.9)'] as const;
+const MENU_CARD_RADIUS = 20;
+
+function GlassPanel({
+  children,
+  style,
+  radius }: {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  radius: number;
+}) {
+  return (
+    <View style={[style, { borderRadius: radius, overflow: 'hidden' }]}>
+      <SafeBlurView
+        intensity={Platform.OS === 'ios' ? 48 : 32}
+        tint="dark"
+        blurReductionFactor={Platform.OS === 'android' ? 4.5 : 3.5}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <LinearGradient colors={[...GLASS_GRADIENT]} style={StyleSheet.absoluteFillObject} />
+      <View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            borderRadius: radius,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: V.border },
+        ]}
+      />
+      {children}
+    </View>
+  );
+}
 
 function ScalePress({
   children,
@@ -202,7 +241,7 @@ export default function MessageContextMenu({
           onPress={handleClose}
         />
         <Animated.View style={[styles.reactionsFloat, reactionsStyle, animStyle]}>
-          <View style={[styles.reactionsCard, { width: reactionsWidth }]}>
+          <GlassPanel style={[styles.reactionsCard, { width: reactionsWidth }]} radius={999}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -226,11 +265,11 @@ export default function MessageContextMenu({
                 </View>
               </ScalePress>
             </ScrollView>
-          </View>
+          </GlassPanel>
         </Animated.View>
 
         <Animated.View style={[styles.sheetWrap, menuStyle, animStyle, { }]}>
-          <View style={styles.sheet}>
+          <GlassPanel style={styles.sheet} radius={MENU_CARD_RADIUS}>
             <MenuRow
               icon={<Reply {...ICON_PROPS} />}
               label="Ответить"
@@ -271,7 +310,7 @@ export default function MessageContextMenu({
               danger
               onPress={() => run(onDelete)}
             />
-          </View>
+          </GlassPanel>
         </Animated.View>
       </View>
     </Modal>
@@ -308,21 +347,16 @@ const styles = StyleSheet.create({
   modalRoot: {
     flex: 1 },
   backdropTint: {
-    backgroundColor: 'rgba(0,0,0,0.45)' },
+    backgroundColor: 'rgba(0,0,0,0.25)' },
   sheetWrap: {
     position: 'absolute' },
   reactionsFloat: {
     position: 'absolute' },
   reactionsCard: {
-    borderRadius: 999,
     paddingVertical: 7,
-    paddingHorizontal: 5,
-    backgroundColor: V.bgElevated },
+    paddingHorizontal: 5 },
   sheet: {
-    width: '100%',
-    backgroundColor: V.bgElevated,
-    borderRadius: 16,
-    overflow: 'hidden' },
+    width: '100%' },
   reactionsScroll: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -347,7 +381,9 @@ const styles = StyleSheet.create({
     width: REACTION_CHEVRON,
     height: REACTION_CHEVRON,
     borderRadius: REACTION_CHEVRON / 2,
-    backgroundColor: V.bgSurface,
+    backgroundColor: V.glassNeutralBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
     justifyContent: 'center',
     alignItems: 'center' },
   row: {

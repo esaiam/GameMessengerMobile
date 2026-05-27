@@ -33,7 +33,7 @@ export default function ChatClearHistoryConfirmModal({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Закрыть"
-        style={[tw`flex-1 justify-center items-center px-6`, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
+        style={[tw`flex-1 justify-center items-center px-6`, { backgroundColor: 'rgba(0,0,0,0.225)' }]}
         onPress={confirmDisabled ? undefined : onClose}
       >
         <Pressable

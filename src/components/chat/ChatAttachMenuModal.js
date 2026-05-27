@@ -39,7 +39,7 @@ export default function ChatAttachMenuModal({
       onRequestClose={onClose}
     >
       <Pressable
-        style={[tw`flex-1 justify-end`, { backgroundColor: 'rgba(0,0,0,0.4)' }]}
+        style={[tw`flex-1 justify-end`, { backgroundColor: 'rgba(0,0,0,0.2)' }]}
         onPress={onClose}
       >
         <Pressable style={[tw`rounded-t-[20px] px-6 pt-4 pb-8`, { overflow: 'hidden' }]}>

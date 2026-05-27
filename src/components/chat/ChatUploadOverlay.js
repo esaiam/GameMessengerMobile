@@ -9,7 +9,7 @@ export default function ChatUploadOverlay({ visible }) {
     <View
       style={[
         tw`absolute inset-0 items-center justify-center z-50`,
-        { backgroundColor: 'rgba(0,0,0,0.35)' }]}
+        { backgroundColor: 'rgba(0,0,0,0.175)' }]}
     >
       <View style={[tw`rounded-[12px] p-5 items-center`, { backgroundColor: V.bgElevated }]}>
         <ActivityIndicator size="large" color={V.accentSage} />

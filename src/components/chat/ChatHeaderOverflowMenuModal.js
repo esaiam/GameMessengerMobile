@@ -20,7 +20,7 @@ export default function ChatHeaderOverflowMenuModal({
         accessibilityLabel="Закрыть меню"
         style={[
           tw`flex-1 justify-start items-end px-3`,
-          { backgroundColor: 'rgba(0,0,0,0.35)', paddingTop: insets.top + 10 }]}
+          { backgroundColor: 'rgba(0,0,0,0.175)', paddingTop: insets.top + 10 }]}
         onPress={onClose}
       >
         <Pressable onPress={() => {}} accessibilityRole="menu">

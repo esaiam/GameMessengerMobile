@@ -18,3 +18,9 @@ export const META_RESERVE_PX_EPHEMERAL_EXTRA = 40;
 export const VIDEO_FEED_TIME_OVERLAP_PX = 18;
 export const VIDEO_FEED_CIRCLE_IDLE = 200 + VIDEO_FEED_TIME_OVERLAP_PX;
 export const VIDEO_FEED_CIRCLE_ACTIVE = Math.round(VIDEO_FEED_CIRCLE_IDLE * (280 / 200));
+
+/** Реакции: оверлей у левого нижнего угла пузыря (как в Telegram). */
+export const REACTION_OVERLAY_LEFT = 8;
+export const REACTION_OVERLAY_BOTTOM = -8;
+/** Запас под строку, когда чипы выступают ниже пузыря */
+export const REACTION_OVERLAY_ROW_RESERVE = 12;

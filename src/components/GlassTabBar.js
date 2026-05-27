@@ -8,20 +8,21 @@ import {
   Easing,
   useWindowDimensions } from 'react-native';
 import SafeBlurView from './SafeBlurView';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { V, TAB_BAR_LAYOUT, TAB_BAR_CAPSULE_RADIUS, TAB_BAR_INNER_ROW_H } from '../theme';
+import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H } from '../theme';
 
 const DEFAULT_ACTIVE = V.accentSage;
 const DEFAULT_INACTIVE = V.textMuted;
-const HIGHLIGHT_SIZE = 44;
+const HIGHLIGHT_SIZE = TAB_BAR_LAYOUT.activeHighlightSize;
 const COMPRESS_SCALE = 0.36;
 const T_COMPRESS = 90;
 const T_MOVE = 140;
 const T_EXPAND = 100;
 const T_VISIBILITY = 240;
-/** Запас под safe area до первого onLayout */
 const TAB_BAR_HIDE_FALLBACK =
-  TAB_BAR_LAYOUT.topPad + TAB_BAR_INNER_ROW_H + TAB_BAR_LAYOUT.floatBottom + 48;
+  TAB_BAR_LAYOUT.topPad
+  + TAB_BAR_INNER_ROW_H
+  + TAB_BAR_LAYOUT.screenBottomGap
+  + 48;
 
 function tabCenterLeft(layouts, index, size = HIGHLIGHT_SIZE) {
   const L = layouts[index];
@@ -37,9 +38,11 @@ export default function GlassTabBar({
   visibilityAnimated = false,
   bottomInset,
 }) {
-  const safeInsets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const tabBarHorizontalPad = 0.05 * windowWidth + 0.9 * TAB_BAR_LAYOUT.horizontalPad;
+  const tabBarHorizontalPad =
+    0.05 * windowWidth
+    + 0.9 * TAB_BAR_LAYOUT.horizontalPad
+    + (TAB_BAR_LAYOUT.screenSideInsetExtra ?? 0);
   const [tabLayouts, setTabLayouts] = useState([]);
   const translateX = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
@@ -127,7 +130,7 @@ export default function GlassTabBar({
     anim.start(({ finished }) => { if (finished) settledIndexRef.current = idx; });
   }, [visible, activeIndex, layoutsReady, tabLayouts, translateX, scale]);
 
-  const bottomPad = Math.max(bottomInset ?? safeInsets.bottom, 10);
+  const screenBottomGap = bottomInset ?? TAB_BAR_LAYOUT.screenBottomGap;
   const activeTab = tabs[activeIndex];
   const highlightBg = activeTab?.name === 'Poker' ? V.gameBubbleBg : V.bgElevated;
   const slideY = visibility.interpolate({
@@ -153,7 +156,7 @@ export default function GlassTabBar({
           styles.shell,
           {
             paddingHorizontal: tabBarHorizontalPad,
-            paddingBottom: bottomPad + TAB_BAR_LAYOUT.floatBottom,
+            paddingBottom: screenBottomGap,
             paddingTop: TAB_BAR_LAYOUT.topPad,
             opacity: shellOpacity,
             transform: [{ translateY: slideY }],
@@ -164,7 +167,7 @@ export default function GlassTabBar({
         intensity={20}
         tint="dark"
         blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
-        style={styles.blurShell}
+        style={styles.tabBarShell}
       >
         <View style={styles.glassTint} pointerEvents="none" />
         <View style={styles.row}>
@@ -214,16 +217,19 @@ const styles = StyleSheet.create({
   shell: {
     backgroundColor: 'transparent',
   },
-  blurShell: {
-    borderRadius: TAB_BAR_CAPSULE_RADIUS,
+  tabBarShell: {
+    height: TAB_BAR_LAYOUT.shellHeight,
+    borderTopLeftRadius: TAB_BAR_LAYOUT.topCornerRadius,
+    borderTopRightRadius: TAB_BAR_LAYOUT.topCornerRadius,
+    borderBottomLeftRadius: TAB_BAR_LAYOUT.bottomCornerRadius,
+    borderBottomRightRadius: TAB_BAR_LAYOUT.bottomCornerRadius,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: V.border,
+    borderColor: V.tabBarShellBorder,
   },
   glassTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: V.bgElevated,
-    opacity: 0.22,
+    backgroundColor: V.tabBarGlassTintBg,
   },
   row: {
     position: 'relative',

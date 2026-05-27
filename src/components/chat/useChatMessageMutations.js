@@ -28,26 +28,46 @@ export default function useChatMessageMutations({
   chatSyncRef }) {
   const toggleReaction = useCallback(
     async (messageId, emoji) => {
-      const msg = messages.find((m) => m.id === messageId);
-      if (!msg) return;
-      const reactions = { ...(msg.reactions || {}) };
-      const users = reactions[emoji] || [];
-      if (users.includes(nickname)) {
-        reactions[emoji] = users.filter((u) => u !== nickname);
-        if (reactions[emoji].length === 0) delete reactions[emoji];
-      } else {
-        reactions[emoji] = [...users, nickname];
-      }
-      const { error } = await supabase.from('messages').update({ reactions }).eq('id', messageId);
+      let nextReactions;
+      let prevReactions;
+
+      setMessages((prev) => {
+        const msg = prev.find((m) => m.id === messageId);
+        if (!msg) return prev;
+        prevReactions = msg.reactions;
+        nextReactions = { ...(msg.reactions || {}) };
+        const users = nextReactions[emoji] || [];
+        if (users.includes(nickname)) {
+          nextReactions[emoji] = users.filter((u) => u !== nickname);
+          if (nextReactions[emoji].length === 0) delete nextReactions[emoji];
+        } else {
+          nextReactions[emoji] = [...users, nickname];
+        }
+        return prev.map((m) =>
+          m.id === messageId ? { ...m, reactions: nextReactions } : m,
+        );
+      });
+
+      if (!nextReactions) return;
+
+      const { error } = await supabase
+        .from('messages')
+        .update({ reactions: nextReactions })
+        .eq('id', messageId);
+
       if (error) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId ? { ...m, reactions: prevReactions } : m,
+          ),
+        );
         Alert.alert(
           'Ошибка',
           chatMutationErrorMessage(error, 'Не удалось поставить реакцию'),
         );
-        return;
       }
     },
-    [messages, nickname],
+    [nickname, setMessages],
   );
 
   const deleteAriaMessage = useCallback(

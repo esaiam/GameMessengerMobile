@@ -42,6 +42,11 @@ export const V = {
   /** Нейтральный фон стеклянного элемента (без sage-тинта) */
   glassNeutralBg: 'rgba(255,255,255,0.055)',
 
+  /** Тонкая белая обводка капсулы таб-бара */
+  tabBarShellBorder: 'rgba(255,255,255,0.14)',
+  /** Тинт таб-бара: тёмный серый, почти чёрный (поверх blur) */
+  tabBarGlassTintBg: 'rgba(16, 18, 24, 0.88)',
+
   dangerMuted: '#B56B6B' };
 
 /** Низ градиента затемнения ленты над композером (95%, rgb совпадает с `V.bgApp`). */
@@ -67,15 +72,24 @@ export const GAME_NO_OVERSCROLL_PROPS = {
  */
 export const TAB_BAR_LAYOUT = {
   horizontalPad: 14,
+  /** Доп. отступ капсулы таб-бара от краёв экрана с каждой стороны (к `GlassTabBar` formula). */
+  screenSideInsetExtra: 16,
   floatBottom: 4,
+  /** Зазор между нижней гранью капсулы таб-бара и низом экрана (`GlassTabBar`). */
+  screenBottomGap: 8,
   topPad: 8,
+  /** Высота стеклянной капсулы таб-бара (`GlassTabBar` / `SafeBlurView`). */
+  shellHeight: 52,
   rowPaddingH: 8,
-  rowPaddingV: 17,
-  iconSize: 22 };
+  rowPaddingV: 15,
+  iconSize: 22,
+  topCornerRadius: 32,
+  bottomCornerRadius: 32,
+  /** Круг подсветки активной вкладки (чуть меньше высоты ряда). */
+  activeHighlightSize: 44 };
 
-/** Высота внутреннего ряда таб-бара: вертикальные отступы + размер иконки */
-export const TAB_BAR_INNER_ROW_H =
-  TAB_BAR_LAYOUT.rowPaddingV * 2 + TAB_BAR_LAYOUT.iconSize;
+/** Высота капсулы таб-бара (совпадает с `shellHeight`). */
+export const TAB_BAR_INNER_ROW_H = TAB_BAR_LAYOUT.shellHeight;
 
 /** Pill: скругление капсулы таббара и элементов той же высоты */
 export const TAB_BAR_CAPSULE_RADIUS = TAB_BAR_INNER_ROW_H / 2;

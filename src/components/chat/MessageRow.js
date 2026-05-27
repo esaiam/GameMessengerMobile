@@ -29,7 +29,51 @@ import {
   META_RESERVE_PX_INCOMING,
   META_RESERVE_PX_OUTGOING,
   META_RESERVE_PX_EPHEMERAL_EXTRA,
-  VIDEO_FEED_CIRCLE_IDLE } from './messageBubbleLayoutConstants';
+  VIDEO_FEED_CIRCLE_IDLE,
+  REACTION_OVERLAY_ROW_RESERVE } from './messageBubbleLayoutConstants';
+
+const HEART_REACTION_EMOJI = '❤️';
+const DOUBLE_TAP_DELAY_MS = 200;
+
+/** Одиночный тап — отложенно; второй в окне — double (без срабатывания single). */
+function useDoubleTapPress(onSingleTap, onDoubleTap) {
+  const lastTapAtRef = useRef(0);
+  const pendingSingleRef = useRef(null);
+
+  useEffect(
+    () => () => {
+      if (pendingSingleRef.current != null) {
+        clearTimeout(pendingSingleRef.current);
+        pendingSingleRef.current = null;
+      }
+    },
+    [],
+  );
+
+  return useCallback(
+    (event) => {
+      const now = Date.now();
+      if (now - lastTapAtRef.current < DOUBLE_TAP_DELAY_MS) {
+        if (pendingSingleRef.current != null) {
+          clearTimeout(pendingSingleRef.current);
+          pendingSingleRef.current = null;
+        }
+        lastTapAtRef.current = 0;
+        onDoubleTap(event);
+        return;
+      }
+      lastTapAtRef.current = now;
+      if (pendingSingleRef.current != null) {
+        clearTimeout(pendingSingleRef.current);
+      }
+      pendingSingleRef.current = setTimeout(() => {
+        pendingSingleRef.current = null;
+        onSingleTap(event);
+      }, DOUBLE_TAP_DELAY_MS);
+    },
+    [onSingleTap, onDoubleTap],
+  );
+}
 
 /** Markdown для текстовых ответов Aria (не голосовых пузырей). Токены Vault. */
 const ARIA_BUBBLE_MARKDOWN_STYLES = {
@@ -96,6 +140,22 @@ const MessageRow = React.memo(
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       rowEnvRef.current.replyToMessage?.(item);
     }, [item]);
+    const fireHeartReaction = useCallback(() => {
+      if (listExtra.isAriaChat || listExtra.selectionMode) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      rowEnvRef.current.toggleReaction(item.id, HEART_REACTION_EMOJI);
+    }, [item.id, listExtra.isAriaChat, listExtra.selectionMode]);
+    const handleMessagePress = useDoubleTapPress(
+      (e) => onMessagePress(e, item),
+      fireHeartReaction,
+    );
+    const handleImagePress = useDoubleTapPress(
+      (e) => {
+        if (listExtra.selectionMode) onMessagePress(e, item);
+        else env.setFullScreenImage?.(item.media_url);
+      },
+      fireHeartReaction,
+    );
     const isMine = item.player_name === env.nickname;
     const replyMsg = env.getReplyMessage(item.reply_to);
     const isVideoMessage = item.message_type === 'video';
@@ -183,11 +243,55 @@ const MessageRow = React.memo(
       (isMine ? META_RESERVE_PX_OUTGOING : META_RESERVE_PX_INCOMING) +
       (isEphemeral ? META_RESERVE_PX_EPHEMERAL_EXTRA : 0);
 
+    const hasReactions =
+      !listExtra.isAriaChat &&
+      item.reactions &&
+      Object.keys(item.reactions).length > 0;
+    const bubbleAnchorStyle = {
+      position: 'relative',
+      alignSelf: isMine ? 'flex-end' : 'flex-start',
+      maxWidth: '100%',
+      ...(hasReactions && !isVideoMessage
+        ? { marginBottom: REACTION_OVERLAY_ROW_RESERVE }
+        : {}) };
+    const videoCircleAnchorStyle = {
+      position: 'relative',
+      alignSelf: 'flex-start',
+      ...(hasReactions && isVideoMessage
+        ? { marginBottom: REACTION_OVERLAY_ROW_RESERVE }
+        : {}) };
+    const reactionsBar = !listExtra.isAriaChat ? (
+      <ChatReactionsBar
+        reactions={item.reactions}
+        onReact={(emoji) =>
+          listExtra.selectionMode
+            ? onMessagePress(undefined, item)
+            : env.toggleReaction(item.id, emoji)
+        }
+      />
+    ) : null;
+
     const videoEdgeStripStyle = { flex: 1, alignSelf: 'stretch' };
     /* Клип круга — только внутри VideoMessage (Animated.View + overflow: hidden). Здесь без overflow: hidden — иначе предок expo-video ломает композицию вместе с нативным драйвером на строке. */
     const videoCircleChrome = {
       borderRadius: VIDEO_FEED_CIRCLE_IDLE / 2,
       ...(isEphemeral ? { borderWidth: 0.5, borderColor: V.accentGold } : {}) };
+    const videoCircleNode = (
+      <View style={videoCircleAnchorStyle}>
+        <Animated.View style={{ transform: [{ scale: bounceAnimVideo }] }}>
+          <View style={{ ...videoCircleChrome, alignSelf: 'flex-start' }}>
+            {isVideoRenderable
+              ? env.renderMessageContent(item, isMine)
+              : (
+                <ChatVideoPlaceholder
+                  onPress={() => listExtra.onUnlockVideo?.(item.id)}
+                />
+              )}
+          </View>
+        </Animated.View>
+        {reactionsBar}
+      </View>
+    );
     const videoTimeOverlayStyle = {
       position: 'absolute',
       bottom: 6,
@@ -266,43 +370,13 @@ const MessageRow = React.memo(
           >
             {isMine ? (
               <>
-                <Pressable
-                  style={videoEdgeStripStyle}
-                  onPress={(e) => onMessagePress(e, item)}
-                  onLongPress={emitMessageLongPress}
-                  delayLongPress={400}
-                />
-                <Animated.View style={{ transform: [{ scale: bounceAnimVideo }] }}>
-                  <View style={{ ...videoCircleChrome, alignSelf: 'flex-start' }}>
-                    {isVideoRenderable
-                      ? env.renderMessageContent(item, isMine)
-                      : (
-                        <ChatVideoPlaceholder
-                          onPress={() => listExtra.onUnlockVideo?.(item.id)}
-                        />
-                      )}
-                  </View>
-                </Animated.View>
+                <View style={videoEdgeStripStyle} />
+                {videoCircleNode}
               </>
             ) : (
               <>
-                <Animated.View style={{ transform: [{ scale: bounceAnimVideo }] }}>
-                  <View style={{ ...videoCircleChrome, alignSelf: 'flex-start' }}>
-                    {isVideoRenderable
-                      ? env.renderMessageContent(item, isMine)
-                      : (
-                        <ChatVideoPlaceholder
-                          onPress={() => listExtra.onUnlockVideo?.(item.id)}
-                        />
-                      )}
-                  </View>
-                </Animated.View>
-                <Pressable
-                  style={videoEdgeStripStyle}
-                  onPress={(e) => onMessagePress(e, item)}
-                  onLongPress={emitMessageLongPress}
-                  delayLongPress={400}
-                />
+                {videoCircleNode}
+                <View style={videoEdgeStripStyle} />
               </>
             )}
           </View>
@@ -342,14 +416,7 @@ const MessageRow = React.memo(
       <>
         <ChatReplyPreview replyMsg={replyMsg} />
         <View style={imageRowStyles.row}>
-          {isMine ? (
-            <Pressable
-              style={imageRowStyles.chromeHit}
-              onPress={(e) => onMessagePress(e, item)}
-              onLongPress={emitMessageLongPress}
-              delayLongPress={400}
-            />
-          ) : null}
+          {isMine ? <View style={imageRowStyles.chromeHit} /> : null}
           <ChatImageMessage
             uri={item.media_url}
             caption={item.text}
@@ -365,21 +432,11 @@ const MessageRow = React.memo(
             isEphemeral={isEphemeral}
             expiresAt={item.expires_at}
             isSelected={isSelected}
-            onPress={(e) => {
-              if (listExtra.selectionMode) onMessagePress(e, item);
-              else env.setFullScreenImage?.(item.media_url);
-            }}
-            onCaptionPress={(e) => onMessagePress(e, item)}
+            onPress={handleImagePress}
+            onCaptionPress={handleMessagePress}
             onLongPress={emitMessageLongPress}
           />
-          {!isMine ? (
-            <Pressable
-              style={imageRowStyles.chromeHit}
-              onPress={(e) => onMessagePress(e, item)}
-              onLongPress={emitMessageLongPress}
-              delayLongPress={400}
-            />
-          ) : null}
+          {!isMine ? <View style={imageRowStyles.chromeHit} /> : null}
         </View>
       </>
     ) : (
@@ -443,7 +500,12 @@ const MessageRow = React.memo(
             </View>
           </Animated.View>
         ) : isVideoMessage || isImageMessage ? (
-          <View>
+          <Pressable
+            onPress={handleMessagePress}
+            onLongPress={emitMessageLongPress}
+            delayLongPress={400}
+            style={{ width: '100%' }}
+          >
             <View
               style={[
                 tw`${isMine ? 'items-end' : 'items-start'} px-4`,
@@ -462,39 +524,24 @@ const MessageRow = React.memo(
                   {item.player_name}
                 </Text>
               )}
-              {isMine ? (
-                <View style={{ width: '100%', alignSelf: 'stretch' }}>
-                  <MessageBubbleSwipeWrap
-                    enabled={!listExtra.selectionMode}
-                    isMine
-                    onReply={fireReply}
+              <View style={bubbleAnchorStyle}>
+                <MessageBubbleSwipeWrap
+                  enabled={!listExtra.selectionMode}
+                  isMine={isMine}
+                  onReply={fireReply}
+                >
+                  <View
+                    style={{
+                      alignSelf: isMine ? 'flex-end' : 'flex-start',
+                      maxWidth: '100%' }}
                   >
-                    <View style={{ alignSelf: 'flex-end', width: '100%' }}>{bubbleInner}</View>
-                  </MessageBubbleSwipeWrap>
-                </View>
-              ) : (
-                <View style={{ width: '100%', alignSelf: 'stretch' }}>
-                  <MessageBubbleSwipeWrap
-                    enabled={!listExtra.selectionMode}
-                    isMine={false}
-                    onReply={fireReply}
-                  >
-                    <View style={{ alignSelf: 'flex-start', width: '100%' }}>{bubbleInner}</View>
-                  </MessageBubbleSwipeWrap>
-                </View>
-              )}
-              {!listExtra.isAriaChat ? (
-                <ChatReactionsBar
-                  reactions={item.reactions}
-                  onReact={(emoji) =>
-                    listExtra.selectionMode
-                      ? onMessagePress(undefined, item)
-                      : env.toggleReaction(item.id, emoji)
-                  }
-                />
-              ) : null}
+                    {bubbleInner}
+                  </View>
+                </MessageBubbleSwipeWrap>
+                {isImageMessage ? reactionsBar : null}
+              </View>
             </View>
-          </View>
+          </Pressable>
         ) : (
           <Animated.View
             style={{
@@ -502,7 +549,7 @@ const MessageRow = React.memo(
               transform: [{ scale: messageRowAnims.scale }] }}
           >
             <Pressable
-              onPress={(e) => onMessagePress(e, item)}
+              onPress={handleMessagePress}
               onLongPress={emitMessageLongPress}
               delayLongPress={400}
               style={{ width: '100%' }}
@@ -530,42 +577,45 @@ const MessageRow = React.memo(
                       {item.player_name}
                     </Text>
                   )}
-                  <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
-                    <MessageBubbleSwipeWrap
-                      enabled={!listExtra.selectionMode}
-                      isMine={isMine}
-                      onReply={fireReply}
-                    >
-                      {isImageMessage ? (
-                        <View style={{ alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
-                          {bubbleInner}
-                        </View>
-                      ) : isMine ? (
-                        <OutgoingBubble
-                          message={item}
-                          bubbleMaxW={bubbleMaxW}
-                          bubbleRadii={bubbleRadii}
-                          isEphemeral={isEphemeral}
-                          isSelected={false}
-                          selectionMode={listExtra.selectionMode}
-                          noPaddingBottom={hasAriaImageAttachment}
-                        >
-                          {bubbleInner}
-                        </OutgoingBubble>
-                      ) : (
-                        <BubbleMaterial
-                          bubbleMaxW={bubbleMaxW}
-                          alignSelf="flex-start"
-                          bubbleRadii={bubbleRadii}
-                          isEphemeral={isEphemeral}
-                          selectionMode={listExtra.selectionMode}
-                          noPaddingBottom={hasAriaImageAttachment}
-                        >
-                          {bubbleInner}
-                        </BubbleMaterial>
-                      )}
-                    </MessageBubbleSwipeWrap>
-                  </Animated.View>
+                  <View style={bubbleAnchorStyle}>
+                    <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
+                      <MessageBubbleSwipeWrap
+                        enabled={!listExtra.selectionMode}
+                        isMine={isMine}
+                        onReply={fireReply}
+                      >
+                        {isImageMessage ? (
+                          <View style={{ alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
+                            {bubbleInner}
+                          </View>
+                        ) : isMine ? (
+                          <OutgoingBubble
+                            message={item}
+                            bubbleMaxW={bubbleMaxW}
+                            bubbleRadii={bubbleRadii}
+                            isEphemeral={isEphemeral}
+                            isSelected={false}
+                            selectionMode={listExtra.selectionMode}
+                            noPaddingBottom={hasAriaImageAttachment}
+                          >
+                            {bubbleInner}
+                          </OutgoingBubble>
+                        ) : (
+                          <BubbleMaterial
+                            bubbleMaxW={bubbleMaxW}
+                            alignSelf="flex-start"
+                            bubbleRadii={bubbleRadii}
+                            isEphemeral={isEphemeral}
+                            selectionMode={listExtra.selectionMode}
+                            noPaddingBottom={hasAriaImageAttachment}
+                          >
+                            {bubbleInner}
+                          </BubbleMaterial>
+                        )}
+                      </MessageBubbleSwipeWrap>
+                    </Animated.View>
+                    {reactionsBar}
+                  </View>
                   {ariaGeneratedAttachment ? (
                     <View style={{ marginTop: 6, alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
                       <AriaGeneratedAttachment
@@ -579,16 +629,6 @@ const MessageRow = React.memo(
                         onImagePress={(uri) => env.setFullScreenImage?.(uri)}
                       />
                     </View>
-                  ) : null}
-                  {!listExtra.isAriaChat ? (
-                    <ChatReactionsBar
-                      reactions={item.reactions}
-                      onReact={(emoji) =>
-                        listExtra.selectionMode
-                          ? onMessagePress(undefined, item)
-                          : env.toggleReaction(item.id, emoji)
-                      }
-                    />
                   ) : null}
                 </View>
               </View>
