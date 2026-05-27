@@ -168,26 +168,27 @@ export function useGameIslandAnimation({
       setAvailableH(freshMaxH);
 
       /**
-       * Ширина и высота острова расширяются одновременно — плавный spring без bounce.
-       * damping высокий → критическое затухание, без колебаний.
-       * Ширина чуть быстрее (stiffness выше) — остров "расцветает" горизонтально,
-       * затем подтягивает высоту.
+       * Сначала остров расширяется в стороны (ширина), затем сразу вниз (высота).
+       * Оба spring без bounce (высокий damping).
        */
       Animated.parallel([
         Animated.spring(handleWidthAnim, {
           toValue: 1,
-          damping: 32,
-          stiffness: 260,
-          mass: 0.9,
+          damping: 25,
+          stiffness: 900,
+          mass: 0.35,
           useNativeDriver: false,
         }),
-        Animated.spring(boardDropAnim, {
-          toValue: freshMaxH,
-          damping: 38,
-          stiffness: 160,
-          mass: 1.1,
-          useNativeDriver: false,
-        }),
+        Animated.sequence([
+          Animated.delay(80),
+          Animated.spring(boardDropAnim, {
+            toValue: freshMaxH,
+            damping: 36,
+            stiffness: 180,
+            mass: 1.0,
+            useNativeDriver: false,
+          }),
+        ]),
       ]).start(({ finished }) => {
         if (!finished) return;
         suppressAvailableHRef.current = false;
