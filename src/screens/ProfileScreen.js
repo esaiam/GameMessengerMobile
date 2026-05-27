@@ -8,11 +8,10 @@ import {
   Platform,
   Linking,
   useWindowDimensions } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
   interpolate,
-  runOnUI,
-  scrollTo,
   useAnimatedRef,
   useAnimatedScrollHandler,
   useAnimatedStyle,
@@ -23,7 +22,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
 import tw from 'twrnc';
-import { TAB_OVERSCROLL_PROPS, V } from '../theme';
+import { V } from '../theme';
 import { supabase } from '../lib/supabase';
 import { useAuthGate } from '../context/AuthGateContext';
 import { useMainTabsNavigationOptional } from '../context/MainTabsNavigationContext';
@@ -46,6 +45,7 @@ import {
   setChatWallpaperEnabled,
   setDmPolicy } from '../lib/profileSettings';
 import { getBlockedPeers } from '../lib/blockedContacts';
+import { useAndroidTabOverscroll } from '../hooks/useAndroidTabOverscroll';
 
 const AVATAR_SIZE = 96;
 const AVATAR_MARGIN_TOP = -12;
@@ -55,22 +55,6 @@ const SCROLL_CONTENT_LIFT = 36;
 const ACTION_ROW_HEIGHT = 52;
 const COLLAPSE_DISTANCE = 132;
 const NAME_LINE_HEIGHT = 22;
-const SNAP_COLLAPSE_THRESHOLD = 0.42;
-const COLLAPSE_SNAP_ZONE_EXTRA = 12;
-
-function snapHeaderToOffset(offsetY, scrollRef) {
-  'worklet';
-  scrollTo(scrollRef, 0, offsetY, true);
-}
-
-function calcSnapTarget(y, vy) {
-  if (y < 0 || y > COLLAPSE_DISTANCE + COLLAPSE_SNAP_ZONE_EXTRA) return -1;
-  let target = (y / COLLAPSE_DISTANCE) >= SNAP_COLLAPSE_THRESHOLD ? 1 : 0;
-  if (Math.abs(vy) > 0.35) target = vy > 0 ? 1 : 0;
-  const offsetY = target * COLLAPSE_DISTANCE;
-  if (Math.abs(y - offsetY) < 2) return -1;
-  return offsetY;
-}
 
 function RowButton({ title, subtitle, onPress, variant = 'default' }) {
   const color =
@@ -150,12 +134,25 @@ export default function ProfileScreen({ route, navigation }) {
   const collapseP = useDerivedValue(() =>
     Math.min(Math.max(scrollY.value / COLLAPSE_DISTANCE, 0), 1));
   const scrollDragRef = useRef(false);
-  const dragVyRef = useRef(0);
 
   const mainTabsNav = useMainTabsNavigationOptional();
   const acquirePagerLock = mainTabsNav?.acquirePagerInteractionLock;
-  const releasePagerLock = mainTabsNav?.releasePagerInteractionLock;
   const resetPagerLock = mainTabsNav?.resetPagerInteractionLock;
+
+  const {
+    animatedStyle: bounceStyle,
+    wrapGesture,
+    overscrollProps,
+    scrollHandler: bounceScrollHandler,
+    maxScrollY,
+  } = useAndroidTabOverscroll({
+    scrollY,
+    acquirePagerLock,
+    releasePagerLock: resetPagerLock,
+    suppressTopBounce: true,
+  });
+
+  const scrollGesture = wrapGesture?.(Gesture.Native()) ?? Gesture.Native();
 
   const headerH = headerLayout.minHeight;
   const avatarTop = headerH + AVATAR_MARGIN_TOP;
@@ -177,6 +174,10 @@ export default function ProfileScreen({ route, navigation }) {
   const scrollSnapHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
+      maxScrollY.value = Math.max(
+        0,
+        e.contentSize.height - e.layoutMeasurement.height,
+      );
     },
   });
 
@@ -243,60 +244,33 @@ export default function ProfileScreen({ route, navigation }) {
     }, [refreshSettingsLabels, refreshBlockedCount]),
   );
 
-  const snapIfNeeded = useCallback((y, vy) => {
-    const offsetY = calcSnapTarget(y, vy);
-    if (offsetY < 0) return;
-    runOnUI((off) => {
-      'worklet';
-      snapHeaderToOffset(off, scrollRef);
-    })(offsetY);
-  }, [scrollRef]);
-
   const onScrollBeginDrag = useCallback(() => {
     scrollDragRef.current = true;
     acquirePagerLock?.();
   }, [acquirePagerLock]);
 
-  const onScrollEndDrag = useCallback(
-    (e) => {
-      const y = e.nativeEvent.contentOffset.y;
-      const vy = e.nativeEvent.velocity?.y ?? 0;
-      dragVyRef.current = vy;
-      const noMomentum = Math.abs(vy) < 0.15;
-      if (noMomentum) {
-        scrollDragRef.current = false;
-        releasePagerLock?.();
-        snapIfNeeded(y, vy);
-      }
-    },
-    [releasePagerLock, snapIfNeeded],
-  );
+  const onScrollEndDrag = useCallback(() => {
+    scrollDragRef.current = false;
+    resetPagerLock?.();
+  }, [resetPagerLock]);
 
-  const onMomentumScrollEnd = useCallback((e) => {
+  const onMomentumScrollEnd = useCallback(() => {
     if (scrollDragRef.current) {
       scrollDragRef.current = false;
-      releasePagerLock?.();
+      resetPagerLock?.();
     }
-    const y = e.nativeEvent.contentOffset.y;
-    const vy = dragVyRef.current;
-    dragVyRef.current = 0;
-    snapIfNeeded(y, vy);
-  }, [releasePagerLock, snapIfNeeded]);
+  }, [resetPagerLock]);
 
   useFocusEffect(
     useCallback(
       () => {
-        runOnUI(() => {
-          'worklet';
-          scrollY.value = 0;
-          scrollTo(scrollRef, 0, 0, false);
-        })();
         return () => {
           scrollDragRef.current = false;
           resetPagerLock?.();
+          scrollY.value = 0;
         };
       },
-      [resetPagerLock, scrollRef, scrollY],
+      [resetPagerLock, scrollY],
     ),
   );
 
@@ -452,7 +426,94 @@ export default function ProfileScreen({ route, navigation }) {
 
   return (
     <TabBackground>
-      <View style={[headerLayout.containerStyle, styles.headerBar]} />
+      <View style={{ flex: 1 }}>
+        <View style={[headerLayout.containerStyle, styles.headerBar]} />
+
+        <Animated.ScrollView
+            ref={scrollRef}
+            {...overscrollProps}
+            nestedScrollEnabled
+            scrollEventThrottle={16}
+            style={tw`flex-1`}
+            contentContainerStyle={[
+              tw`px-4`,
+              {
+                backgroundColor: 'transparent',
+                paddingTop: scrollTopPadding,
+                paddingBottom: COLLAPSE_DISTANCE + 16,
+              },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            onScroll={scrollSnapHandler}
+            onScrollBeginDrag={onScrollBeginDrag}
+            onScrollEndDrag={onScrollEndDrag}
+            onMomentumScrollEnd={onMomentumScrollEnd}
+          >
+            <View style={styles.actionsRow}>
+              <ProfileActionButton
+                icon={<Camera size={14} color={V.accentSage} strokeWidth={1.5} />}
+                label="Выбрать фото"
+                onPress={pickPhotoFromGallery}
+              />
+              <ProfileActionButton
+                icon={<Pencil size={14} color={V.accentSage} strokeWidth={1.5} />}
+                label="Изменить"
+                onPress={() => setEditHandleModal(true)}
+              />
+            </View>
+
+            <View style={tw`mb-7`} />
+
+            <Section title="ОСНОВНОЕ">
+              <RowButton title="Пригласить пользователя" onPress={openInvites} variant="primary" />
+            </Section>
+
+            <Section title="ПРИВАТНОСТЬ">
+              <RowButton
+                title="Кто может написать мне"
+                subtitle={dmPolicyLabel}
+                onPress={openDmPolicyPicker}
+              />
+              <RowButton
+                title="Заблокированные контакты"
+                subtitle={
+                  blockedCount > 0
+                    ? `${blockedCount} — нажмите, чтобы разблокировать`
+                    : 'Список пуст'
+                }
+                onPress={() => navigation.navigate('BlockedContacts')}
+              />
+            </Section>
+
+            <Section title="ПРИЛОЖЕНИЕ">
+              {__DEV__ && (
+                <RowButton
+                  title="Хранилище"
+                  subtitle="Кэш голоса и превью видео"
+                  onPress={() => navigation.navigate('Storage')}
+                  variant="primary"
+                />
+              )}
+              <RowButton
+                title="Уведомления"
+                subtitle={pushStatusLabel}
+                onPress={openNotifications}
+              />
+              <RowButton
+                title="Внешний вид"
+                subtitle={wallpaperOn ? 'Обои чата: включены' : 'Обои чата: выключены'}
+                onPress={openAppearance}
+              />
+            </Section>
+
+            <Section title="АККАУНТ">
+              <RowButton title="Выйти" onPress={logout} variant="danger" />
+              <RowButton title="Удалить аккаунт" onPress={deleteAccount} variant="danger" />
+            </Section>
+
+        </Animated.ScrollView>
+      </View>
 
       <View style={styles.floatingLayer} pointerEvents="box-none">
         <Animated.View
@@ -490,88 +551,6 @@ export default function ProfileScreen({ route, navigation }) {
           {displayName}
         </Animated.Text>
       </View>
-
-      <Animated.ScrollView
-        ref={scrollRef}
-        {...TAB_OVERSCROLL_PROPS}
-        style={tw`flex-1`}
-        contentContainerStyle={[
-          tw`px-4 pb-10`,
-          {
-            flexGrow: 1,
-            backgroundColor: 'transparent',
-            paddingTop: scrollTopPadding },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        onScroll={scrollSnapHandler}
-        onScrollBeginDrag={onScrollBeginDrag}
-        onScrollEndDrag={onScrollEndDrag}
-        onMomentumScrollEnd={onMomentumScrollEnd}
-      >
-        <View style={styles.actionsRow}>
-          <ProfileActionButton
-            icon={<Camera size={14} color={V.accentSage} strokeWidth={1.5} />}
-            label="Выбрать фото"
-            onPress={pickPhotoFromGallery}
-          />
-          <ProfileActionButton
-            icon={<Pencil size={14} color={V.accentSage} strokeWidth={1.5} />}
-            label="Изменить"
-            onPress={() => setEditHandleModal(true)}
-          />
-        </View>
-
-        <View style={tw`mb-7`} />
-
-        <Section title="ОСНОВНОЕ">
-          <RowButton title="Пригласить пользователя" onPress={openInvites} variant="primary" />
-        </Section>
-
-        <Section title="ПРИВАТНОСТЬ">
-          <RowButton
-            title="Кто может написать мне"
-            subtitle={dmPolicyLabel}
-            onPress={openDmPolicyPicker}
-          />
-          <RowButton
-            title="Заблокированные контакты"
-            subtitle={
-              blockedCount > 0
-                ? `${blockedCount} — нажмите, чтобы разблокировать`
-                : 'Список пуст'
-            }
-            onPress={() => navigation.navigate('BlockedContacts')}
-          />
-        </Section>
-
-        <Section title="ПРИЛОЖЕНИЕ">
-          {__DEV__ && (
-            <RowButton
-              title="Хранилище"
-              subtitle="Кэш голоса и превью видео"
-              onPress={() => navigation.navigate('Storage')}
-              variant="primary"
-            />
-          )}
-          <RowButton
-            title="Уведомления"
-            subtitle={pushStatusLabel}
-            onPress={openNotifications}
-          />
-          <RowButton
-            title="Внешний вид"
-            subtitle={wallpaperOn ? 'Обои чата: включены' : 'Обои чата: выключены'}
-            onPress={openAppearance}
-          />
-        </Section>
-
-        <Section title="АККАУНТ">
-          <RowButton title="Выйти" onPress={logout} variant="danger" />
-          <RowButton title="Удалить аккаунт" onPress={deleteAccount} variant="danger" />
-        </Section>
-
-      </Animated.ScrollView>
 
       <ProfileAvatarModal
         visible={avatarModal}

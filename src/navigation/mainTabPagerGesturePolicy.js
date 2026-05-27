@@ -1,7 +1,14 @@
 import { Platform } from 'react-native';
 
-/** Экраны, где нативный свайп PagerView мешает нардам / чату / профилю контакта. */
-export const PAGER_SWIPE_DISABLED_DEEPEST = new Set(['Room', 'ChatRoom', 'ContactProfile']);
+/** Экраны, где нативный свайп PagerView мешает нардам / чату / профилю контакта / подэкранам профиля. */
+export const PAGER_SWIPE_DISABLED_DEEPEST = new Set([
+  'Room',
+  'ChatRoom',
+  'ContactProfile',
+  'InviteFriends',
+  'BlockedContacts',
+  'Storage',
+]);
 
 /** Опции native-stack для ContactProfile: свайп вправо → pop (iOS native; Android — useContactProfileSwipeBack). */
 export const CONTACT_PROFILE_STACK_SCREEN_OPTIONS = {

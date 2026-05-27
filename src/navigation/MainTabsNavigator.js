@@ -36,7 +36,14 @@ const TABS = [
   { key: 'Profile',  name: 'Profile',  icon: (color) => <User   color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentSage },
 ];
 
-const HIDE_TAB_BAR_ON = new Set(['ChatRoom', 'Room', 'ContactProfile']);
+const HIDE_TAB_BAR_ON = new Set([
+  'ChatRoom',
+  'Room',
+  'ContactProfile',
+  'InviteFriends',
+  'BlockedContacts',
+  'Storage',
+]);
 
 function ChatsStackNavigator({ initialParams }) {
   return (

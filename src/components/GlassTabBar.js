@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -9,7 +9,7 @@ import {
   useWindowDimensions } from 'react-native';
 import SafeBlurView from './SafeBlurView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { V, TAB_BAR_LAYOUT, TAB_BAR_CAPSULE_RADIUS } from '../theme';
+import { V, TAB_BAR_LAYOUT, TAB_BAR_CAPSULE_RADIUS, TAB_BAR_INNER_ROW_H } from '../theme';
 
 const DEFAULT_ACTIVE = V.accentSage;
 const DEFAULT_INACTIVE = V.textMuted;
@@ -18,6 +18,10 @@ const COMPRESS_SCALE = 0.36;
 const T_COMPRESS = 90;
 const T_MOVE = 140;
 const T_EXPAND = 100;
+const T_VISIBILITY = 240;
+/** Запас под safe area до первого onLayout */
+const TAB_BAR_HIDE_FALLBACK =
+  TAB_BAR_LAYOUT.topPad + TAB_BAR_INNER_ROW_H + TAB_BAR_LAYOUT.floatBottom + 48;
 
 function tabCenterLeft(layouts, index, size = HIGHLIGHT_SIZE) {
   const L = layouts[index];
@@ -36,7 +40,23 @@ export default function GlassTabBar({ activeIndex, tabs, onTabPress, visible, bo
   const settledIndexRef = useRef(activeIndex);
   const layoutDoneRef = useRef(false);
   const runAnimRef = useRef(null);
+  const runVisibilityRef = useRef(null);
   const runIconAnimByKeyRef = useRef({}).current;
+  const visibility = useRef(new Animated.Value(visible ? 0 : 1)).current;
+  const [hideOffset, setHideOffset] = useState(TAB_BAR_HIDE_FALLBACK);
+
+  useEffect(() => {
+    runVisibilityRef.current?.stop?.();
+    const anim = Animated.timing(visibility, {
+      toValue: visible ? 0 : 1,
+      duration: T_VISIBILITY,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    });
+    runVisibilityRef.current = anim;
+    anim.start();
+    return () => anim.stop();
+  }, [visible, visibility]);
 
   const getIconScale = (key) => {
     if (!iconScaleByKeyRef[key]) iconScaleByKeyRef[key] = new Animated.Value(1);
@@ -95,22 +115,39 @@ export default function GlassTabBar({ activeIndex, tabs, onTabPress, visible, bo
     anim.start(({ finished }) => { if (finished) settledIndexRef.current = idx; });
   }, [visible, activeIndex, layoutsReady, tabLayouts, translateX, scale]);
 
-  if (!visible) return null;
-
   const bottomPad = Math.max(bottomInset ?? safeInsets.bottom, 10);
   const activeTab = tabs[activeIndex];
   const highlightBg = activeTab?.name === 'Poker' ? V.gameBubbleBg : V.bgElevated;
+  const slideY = visibility.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, hideOffset],
+  });
+  const shellOpacity = visibility.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 0.55, 0],
+  });
 
   return (
     <View
-      pointerEvents="box-none"
-      style={{
-        paddingHorizontal: tabBarHorizontalPad,
-        paddingBottom: bottomPad + TAB_BAR_LAYOUT.floatBottom,
-        paddingTop: TAB_BAR_LAYOUT.topPad,
-        backgroundColor: 'transparent',
-      }}
+      style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+      pointerEvents={visible ? 'box-none' : 'none'}
     >
+      <Animated.View
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 0 && Math.abs(h - hideOffset) > 1) setHideOffset(h);
+        }}
+        style={[
+          styles.shell,
+          {
+            paddingHorizontal: tabBarHorizontalPad,
+            paddingBottom: bottomPad + TAB_BAR_LAYOUT.floatBottom,
+            paddingTop: TAB_BAR_LAYOUT.topPad,
+            opacity: shellOpacity,
+            transform: [{ translateY: slideY }],
+          },
+        ]}
+      >
       <SafeBlurView
         intensity={20}
         tint="dark"
@@ -156,11 +193,15 @@ export default function GlassTabBar({ activeIndex, tabs, onTabPress, visible, bo
           })}
         </View>
       </SafeBlurView>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  shell: {
+    backgroundColor: 'transparent',
+  },
   blurShell: {
     borderRadius: TAB_BAR_CAPSULE_RADIUS,
     overflow: 'hidden',

@@ -109,7 +109,7 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
   const SEARCH_FIELD_H = SEARCH_FIELD_LAYOUT.chatsHeight;
   const SEARCH_REVEAL_RANGE_PX = SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX;
 
-  const expanded = useSharedValue(0);
+  const expanded = useSharedValue(1);
   const listScrollY = useSharedValue(0);
   const listMaxScrollY = useSharedValue(0);
   const locked = useSharedValue(false);
@@ -119,13 +119,13 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
   const panStartY = useSharedValue(0);
   const topPullPx = useSharedValue(0);
   const searchDragActive = useSharedValue(false);
-  const searchPointerOpen = useSharedValue(0);
-  const listScrollEnabledSv = useSharedValue(0);
+  const searchPointerOpen = useSharedValue(1);
+  const listScrollEnabledSv = useSharedValue(1);
   const isActivated = useSharedValue(false);
 
   const isLockedRef = useRef(false);
   const searchDragActiveRef = useRef(false);
-  const listScrollEnabledRef = useRef(false);
+  const listScrollEnabledRef = useRef(true);
 
   const setSearchDragActiveJs = useCallback((active) => {
     searchDragActiveRef.current = active;
