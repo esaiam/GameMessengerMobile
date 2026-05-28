@@ -40,6 +40,11 @@ import { useContactProfileSwipeBack } from '../hooks/useContactProfileSwipeBack'
 import { useContactProfileRoomMedia } from '../hooks/useContactProfileRoomMedia';
 import ContactProfileMediaSection from '../components/contactProfile/ContactProfileMediaSection';
 import ContactProfileMediaViewerModal from '../components/contactProfile/ContactProfileMediaViewerModal';
+import { formatRect, logMediaViewer } from '../components/contactProfile/mediaViewerDebugLog';
+import {
+  adjustMediaTransitionRectForScroll,
+  isValidMediaTransitionRect,
+} from '../components/contactProfile/mediaTransitionSource';
 
 export default function ContactProfileScreen({ route, navigation }) {
   const { peerName, contactOnline, roomId, nickname } = route.params || {};
@@ -53,11 +58,17 @@ export default function ContactProfileScreen({ route, navigation }) {
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [openedMediaId, setOpenedMediaId] = useState(null);
+  /** Плитка скрыта в сетке, пока viewer открыт / идёт close fly-out */
+  const [hiddenTileId, setHiddenTileId] = useState(null);
+  /** Rect плитки при open (hero transition source). */
   const [viewerOriginLayout, setViewerOriginLayout] = useState(null);
   const [viewerOpenEpoch, setViewerOpenEpoch] = useState(0);
-  const tileLayoutsRef = useRef(new Map());
-  const tileMeasureFnsRef = useRef(new Map());
+  const transitionSourcesRef = useRef(new Map());
+  const transitionMeasureFnsRef = useRef(new Map());
+  const profileScrollYRef = useRef(0);
+  const profileScrollYAtOpenRef = useRef(0);
   const mediaViewerRef = useRef(null);
+  const viewerOpeningRef = useRef(false);
   const [mediaSelectionMode, setMediaSelectionMode] = useState(false);
   const [selectedMediaIds, setSelectedMediaIds] = useState(() => new Set());
 
@@ -92,6 +103,9 @@ export default function ContactProfileScreen({ route, navigation }) {
     (item) => {
       if (!item?.id || !item.media_url) return;
       setViewerVisible(false);
+      setHiddenTileId(null);
+      setOpenedMediaId(null);
+      setViewerOriginLayout(null);
       setMediaSelectionMode(true);
       setSelectedMediaIds(new Set([item.id]));
     },
@@ -99,63 +113,137 @@ export default function ContactProfileScreen({ route, navigation }) {
   );
 
   const handleTileLayout = useCallback((id, layout) => {
-    tileLayoutsRef.current.set(id, layout);
+    if (isValidMediaTransitionRect(layout)) {
+      transitionSourcesRef.current.set(id, layout);
+    }
   }, []);
 
-  const handleRegisterTileMeasure = useCallback((id, fn) => {
-    if (fn) tileMeasureFnsRef.current.set(id, fn);
-    else tileMeasureFnsRef.current.delete(id);
+  const handleRegisterTransitionSource = useCallback((id, fn) => {
+    if (fn) transitionMeasureFnsRef.current.set(id, fn);
+    else transitionMeasureFnsRef.current.delete(id);
   }, []);
 
-  const getMediaOriginLayout = useCallback((itemId) => {
-    return tileLayoutsRef.current.get(itemId) ?? null;
+  const getTransitionSource = useCallback((itemId) => {
+    const rect = transitionSourcesRef.current.get(itemId);
+    return isValidMediaTransitionRect(rect) ? rect : null;
   }, []);
 
-  /** Замороженный rect ячейки для fly-out — без unhide плитки до конца анимации. */
-  const getCloseOriginLayout = useCallback(() => {
+  /** Свежий measureInWindow плитки перед close fly-out. */
+  const remeasureTransitionSource = useCallback((itemId) => {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (layout) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (isValidMediaTransitionRect(layout)) {
+          transitionSourcesRef.current.set(itemId, layout);
+          resolve(layout);
+          return;
+        }
+        resolve(getTransitionSource(itemId));
+      };
+      const timer = setTimeout(() => finish(getTransitionSource(itemId)), 120);
+      const measure = transitionMeasureFnsRef.current.get(itemId);
+      if (!measure) {
+        finish(getTransitionSource(itemId));
+        return;
+      }
+      try {
+        measure((layout) => finish(layout));
+      } catch {
+        finish(getTransitionSource(itemId));
+      }
+    });
+  }, [getTransitionSource]);
+
+  const rememberProfileScrollY = useCallback((e) => {
+    profileScrollYRef.current = e.nativeEvent.contentOffset.y;
+  }, []);
+
+  const wrapProfileScrollEnd = useCallback(
+    (handler) => (e) => {
+      rememberProfileScrollY(e);
+      handler?.(e);
+    },
+    [rememberProfileScrollY],
+  );
+
+  /** Window-rect ячейки с учётом скролла профиля с момента open. */
+  const getCloseTransitionSource = useCallback(() => {
     const mediaId = openedMediaId;
-    if (!mediaId) return viewerOriginLayout;
-    return tileLayoutsRef.current.get(mediaId) ?? viewerOriginLayout ?? null;
-  }, [openedMediaId, viewerOriginLayout]);
+    const base =
+      (mediaId ? getTransitionSource(mediaId) : null) ??
+      (isValidMediaTransitionRect(viewerOriginLayout) ? viewerOriginLayout : null);
+    if (!base) return null;
+    const scrollDelta = profileScrollYRef.current - profileScrollYAtOpenRef.current;
+    return adjustMediaTransitionRectForScroll(base, scrollDelta);
+  }, [openedMediaId, viewerOriginLayout, getTransitionSource]);
 
   const handleMediaPress = useCallback(
     (item, layout) => {
       if (!item?.media_url) return;
+      if (viewerVisible || viewerOpeningRef.current) return;
       if (mediaSelectionMode) {
         toggleMediaSelection(item.id);
         return;
       }
-      const measured = layout ?? tileLayoutsRef.current.get(item.id) ?? null;
-      if (measured) tileLayoutsRef.current.set(item.id, measured);
+      const measured = layout ?? getTransitionSource(item.id);
+      if (isValidMediaTransitionRect(measured)) {
+        transitionSourcesRef.current.set(item.id, measured);
+      }
       const idx = viewerItems.findIndex((m) => m.id === item.id);
       if (idx < 0) return;
+
+      viewerOpeningRef.current = true;
       setViewerIndex(idx);
       setViewerOriginLayout(measured);
       setOpenedMediaId(item.id);
+      setHiddenTileId(item.id);
+      profileScrollYAtOpenRef.current = profileScrollYRef.current;
+      logMediaViewer('screen', 'openPress', {
+        id: item.id,
+        idx,
+        rect: formatRect(measured),
+      });
+
       setViewerOpenEpoch((e) => e + 1);
       setViewerVisible(true);
+      viewerOpeningRef.current = false;
+      logMediaViewer('screen', 'openVisible', { id: item.id });
     },
-    [viewerItems, mediaSelectionMode, toggleMediaSelection],
+    [viewerItems, viewerVisible, mediaSelectionMode, toggleMediaSelection, getTransitionSource],
   );
 
-  const closeMediaViewer = useCallback(() => {
+  const handoffMediaViewerTile = useCallback(() => {
+    logMediaViewer('screen', 'unhideTile', { wasHidden: hiddenTileId });
+    setHiddenTileId(null);
+  }, [hiddenTileId]);
+
+  const dismissMediaViewer = useCallback(() => {
+    logMediaViewer('screen', 'dismissModal', { openedMediaId });
+    viewerOpeningRef.current = false;
     setViewerVisible(false);
-    requestAnimationFrame(() => {
-      setOpenedMediaId(null);
-      setViewerOriginLayout(null);
-    });
-  }, []);
+    setOpenedMediaId(null);
+    setViewerOriginLayout(null);
+  }, [openedMediaId]);
 
   const handleViewerIndexChange = useCallback(
     (nextIndex) => {
-      setViewerIndex(nextIndex);
       const id = viewerItems[nextIndex]?.id;
+      logMediaViewer('screen', 'indexChange', {
+        nextIndex,
+        id,
+        rect: formatRect(id ? getTransitionSource(id) : null),
+      });
+      setViewerIndex(nextIndex);
       if (!id) return;
       setOpenedMediaId(id);
-      const layout = tileLayoutsRef.current.get(id);
+      setHiddenTileId(id);
+      const layout = getTransitionSource(id);
       if (layout) setViewerOriginLayout(layout);
     },
-    [viewerItems],
+    [viewerItems, getTransitionSource],
   );
 
   const handleDeleteSelectedMedia = useCallback(() => {
@@ -421,8 +509,8 @@ export default function ContactProfileScreen({ route, navigation }) {
           showsVerticalScrollIndicator={false}
           onScroll={scrollSnapHandler}
           onScrollBeginDrag={onScrollBeginDrag}
-          onScrollEndDrag={onScrollEndDrag}
-          onMomentumScrollEnd={onMomentumScrollEnd}
+          onScrollEndDrag={wrapProfileScrollEnd(onScrollEndDrag)}
+          onMomentumScrollEnd={wrapProfileScrollEnd(onMomentumScrollEnd)}
         >
           <View style={styles.actionsRow}>
             <ActionButton
@@ -467,11 +555,11 @@ export default function ContactProfileScreen({ route, navigation }) {
             roomId={roomId}
             selectionMode={mediaSelectionMode}
             selectedIds={selectedMediaIds}
-            openedMediaId={viewerVisible ? openedMediaId : null}
+            hiddenTileId={hiddenTileId}
             onMediaPress={handleMediaPress}
             onMediaLongPress={handleMediaLongPress}
             onTileLayout={handleTileLayout}
-            onRegisterMeasure={handleRegisterTileMeasure}
+            onRegisterTransitionSource={handleRegisterTransitionSource}
           />
         </Animated.ScrollView>
       </View>
@@ -534,12 +622,14 @@ export default function ContactProfileScreen({ route, navigation }) {
         visible={viewerVisible}
         items={viewerItems}
         viewIndex={viewerIndex}
-        initialOriginLayout={viewerOriginLayout}
+        initialTransitionSource={viewerOriginLayout}
+        getTransitionSource={getTransitionSource}
+        remeasureTransitionSource={remeasureTransitionSource}
+        getCloseTransitionSource={getCloseTransitionSource}
         openEpoch={viewerOpenEpoch}
-        getOriginLayout={getMediaOriginLayout}
-        onClose={closeMediaViewer}
+        onHandoff={handoffMediaViewerTile}
+        onClose={dismissMediaViewer}
         onIndexChange={handleViewerIndexChange}
-        getCloseOriginLayout={getCloseOriginLayout}
       />
     </TabBackground>
   );

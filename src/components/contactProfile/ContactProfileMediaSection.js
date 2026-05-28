@@ -35,7 +35,7 @@ function MediaTile({
   onPress,
   onLongPress,
   onTileLayout,
-  onRegisterMeasure,
+  onRegisterTransitionSource,
 }) {
   const tileRef = useRef(null);
   const isVideo = item.message_type === 'video';
@@ -95,10 +95,10 @@ function MediaTile({
   );
 
   useEffect(() => {
-    if (!onRegisterMeasure) return undefined;
-    onRegisterMeasure(item.id, measureNow);
-    return () => onRegisterMeasure(item.id, null);
-  }, [item.id, measureNow, onRegisterMeasure]);
+    if (!onRegisterTransitionSource) return undefined;
+    onRegisterTransitionSource(item.id, measureNow);
+    return () => onRegisterTransitionSource(item.id, null);
+  }, [item.id, measureNow, onRegisterTransitionSource]);
 
   const handlePress = useCallback(() => {
     measureNow((layout) => {
@@ -113,6 +113,7 @@ function MediaTile({
       onLongPress={() => onLongPress?.(item)}
       delayLongPress={380}
       disabled={!item.media_url}
+      pointerEvents={isHiddenInGrid ? 'none' : 'auto'}
       accessibilityRole="button"
       accessibilityLabel={
         selectionMode
@@ -132,9 +133,18 @@ function MediaTile({
           { backgroundColor: V.bgElevated },
         ]}
       >
-        {!isHiddenInGrid && thumbUri ? (
-          <Image source={{ uri: thumbUri }} style={styles.tileImage} resizeMode="cover" />
-        ) : null}
+        {thumbUri ? (
+          <View pointerEvents="none" style={styles.tileImage}>
+            <Image
+              source={{ uri: thumbUri }}
+              style={[styles.mediaFill, isHiddenInGrid && styles.tileThumbHidden]}
+              resizeMode="cover"
+              fadeDuration={0}
+            />
+          </View>
+        ) : (
+          <View pointerEvents="none" style={styles.tileImage} />
+        )}
         {!isHiddenInGrid && thumbLoading ? (
           <View style={styles.tileLoader}>
             <ActivityIndicator size="small" color={V.accentSage} />
@@ -164,11 +174,11 @@ function MediaRow({
   items,
   selectionMode,
   selectedIds,
-  openedMediaId,
+  hiddenTileId,
   onMediaPress,
   onMediaLongPress,
   onTileLayout,
-  onRegisterMeasure,
+  onRegisterTransitionSource,
 }) {
   const slots = [...items];
   while (slots.length < COLS) {
@@ -184,11 +194,11 @@ function MediaRow({
             item={item}
             selectionMode={selectionMode}
             isSelected={selectedIds.has(item.id)}
-            isHiddenInGrid={openedMediaId === item.id}
+            isHiddenInGrid={hiddenTileId === item.id}
             onPress={onMediaPress}
             onLongPress={onMediaLongPress}
             onTileLayout={onTileLayout}
-            onRegisterMeasure={onRegisterMeasure}
+            onRegisterTransitionSource={onRegisterTransitionSource}
           />
         ) : (
           <View key={`empty-${i}`} style={styles.tile} />
@@ -204,11 +214,11 @@ export default function ContactProfileMediaSection({
   roomId,
   selectionMode,
   selectedIds,
-  openedMediaId,
+  hiddenTileId,
   onMediaPress,
   onMediaLongPress,
   onTileLayout,
-  onRegisterMeasure,
+  onRegisterTransitionSource,
 }) {
   const rows = [];
   for (let i = 0; i < items.length; i += COLS) {
@@ -248,11 +258,11 @@ export default function ContactProfileMediaSection({
             items={row}
             selectionMode={selectionMode}
             selectedIds={selectedIds}
-            openedMediaId={openedMediaId}
+            hiddenTileId={hiddenTileId}
             onMediaPress={onMediaPress}
             onMediaLongPress={onMediaLongPress}
             onTileLayout={onTileLayout}
-            onRegisterMeasure={onRegisterMeasure}
+            onRegisterTransitionSource={onRegisterTransitionSource}
           />
         ))}
       </View>
@@ -293,6 +303,13 @@ const styles = StyleSheet.create({
   },
   tileImage: {
     ...StyleSheet.absoluteFillObject,
+  },
+  mediaFill: {
+    width: '100%',
+    height: '100%',
+  },
+  tileThumbHidden: {
+    opacity: 0,
   },
   tileLoader: {
     ...StyleSheet.absoluteFillObject,
