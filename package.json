@@ -17,7 +17,7 @@
     "db:migrate:apply": "powershell -ExecutionPolicy Bypass -File scripts/apply-supabase-migrations.ps1",
     "knockout-compass": "node scripts/knockout-compass-bg.mjs",
     "tint-compass": "node scripts/tint-compass-to-board.mjs",
-    "postinstall": "node scripts/patch-libsodium-windows.js"
+    "postinstall": "node scripts/patch-libsodium-windows.js && node scripts/patch-video-audio-extractor-sdk54.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.1.0",

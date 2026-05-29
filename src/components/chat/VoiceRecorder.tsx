@@ -420,19 +420,21 @@ function VoiceRecorder({
     if (s === 'IDLE') return;
     const d = durRef.current;
     const caps = [...ampsRef.current];
+    const pausedUri = s === 'PAUSED' ? savedUriRef.current : null;
+    const pausedTrim = s === 'PAUSED' ? { ...pausedTrimRef.current } : null;
     setAmps(caps);
     go('IDLE');
     resetAnim();
     try {
       if (s === 'PAUSED') {
-        if (savedUriRef.current) {
-          const { s: ts, e: te } = pausedTrimRef.current;
+        if (pausedUri) {
+          const { s: ts, e: te } = pausedTrim ?? { s: 0, e: 1 };
           const span = Math.max(TRIM_MIN_SPAN, te - ts);
           const effSec = Math.round(d * span);
           if (effSec < MIN_RECORDING_SEC) return;
           const wf = buildWaveform40FromAmps(caps, ts, te);
           try {
-            const sendUri = await trimVoiceMessageFile(savedUriRef.current, d, { start: ts, end: te });
+            const sendUri = await trimVoiceMessageFile(pausedUri, d, { start: ts, end: te });
             onSendAudio(sendUri, effSec, wf);
           } catch (e) {
             console.warn('[VoiceRecorder] trim/send PAUSED:', e);

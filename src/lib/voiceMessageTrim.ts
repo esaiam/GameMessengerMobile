@@ -1,8 +1,32 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo';
-import { File as ExpoFile, Paths } from 'expo-file-system';
+import { File as ExpoFile } from 'expo-file-system';
+import { cacheDirectory } from 'expo-file-system/legacy';
 
 const TRIM_FULL_EPS = 0.002;
+
+/** MediaMuxer / MediaExtractor на Android — plain path или content://, не Expo `file:/`. */
+function toNativeMediaPath(uri: string): string {
+  if (!uri) return uri;
+  if (uri.startsWith('content://')) return uri;
+  if (uri.startsWith('file://')) {
+    const path = uri.slice(7);
+    try {
+      return decodeURIComponent(path);
+    } catch {
+      return path;
+    }
+  }
+  if (uri.startsWith('file:/')) {
+    const path = uri.slice(5);
+    try {
+      return decodeURIComponent(path);
+    } catch {
+      return path;
+    }
+  }
+  return uri;
+}
 
 export const VOICE_TRIM_NATIVE_UNAVAILABLE = 'native_trim_unavailable';
 
@@ -25,12 +49,6 @@ type VoiceTrimNativeModule = {
 
 function getVoiceTrimNativeModule(): VoiceTrimNativeModule | null {
   return requireOptionalNativeModule<VoiceTrimNativeModule>('ExpoVideoAudioExtractor');
-}
-
-/** Нативный модуль есть в dev/release-сборке (не Expo Go и не старый APK). */
-export function isVoiceTrimNativeAvailable(): boolean {
-  if (Platform.OS === 'web') return false;
-  return getVoiceTrimNativeModule() != null;
 }
 
 /** Нужна ли нативная обрезка (ручки не на полном диапазоне). */
@@ -73,15 +91,26 @@ export async function trimVoiceMessageFile(
 
   const startSec = s * totalDurationSec;
   const durationSec = span * totalDurationSec;
-  const dest = new ExpoFile(Paths.cache, `voice-trim-${Date.now()}.m4a`);
+  const cache = cacheDirectory;
+  if (!cache) {
+    throw new Error('cache_unavailable');
+  }
+  const fileName = `voice-trim-${Date.now()}.m4a`;
+  const outputUri = `${cache}${fileName}`;
+  const outputPath = toNativeMediaPath(outputUri);
+  const sourcePath = toNativeMediaPath(sourceUri);
 
   await native.extractAudio({
-    video: sourceUri,
-    output: dest.uri,
+    video: sourcePath,
+    output: outputPath,
     format: 'm4a',
     start: startSec,
     duration: durationSec,
   });
 
-  return dest.uri;
+  const outFile = new ExpoFile(outputUri);
+  if (!outFile.exists) {
+    throw new Error('trim_output_missing');
+  }
+  return outputUri;
 }
