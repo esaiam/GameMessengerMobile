@@ -497,24 +497,6 @@ export default function ProfileScreen({ route, navigation }) {
 
 
 
-  const refreshBlockedCount = useCallback(async () => {
-
-    if (!nickname) {
-
-      setBlockedCount(0);
-
-      return;
-
-    }
-
-    const blocked = await getBlockedPeers(nickname);
-
-    setBlockedCount(blocked.size);
-
-  }, [nickname]);
-
-
-
   const refreshSettingsLabels = useCallback(async () => {
 
     const [policy, wallpaper, perm, blocked] = await Promise.all([
@@ -547,27 +529,13 @@ export default function ProfileScreen({ route, navigation }) {
 
 
 
-  const settingsLoadedRef = useRef(false);
-
-
-
   useFocusEffect(
 
     useCallback(() => {
 
-      if (!settingsLoadedRef.current) {
+      refreshSettingsLabels();
 
-        settingsLoadedRef.current = true;
-
-        refreshSettingsLabels();
-
-        return;
-
-      }
-
-      refreshBlockedCount();
-
-    }, [refreshSettingsLabels, refreshBlockedCount]),
+    }, [refreshSettingsLabels]),
 
   );
 

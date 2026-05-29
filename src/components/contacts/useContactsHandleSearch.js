@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { sanitizeHandleSlug, HANDLE_RE } from '../../lib/handleProfile';
-import { HANDLE_PREFIX_DEBOUNCE_MS } from './contactsDrawerConstants';
+
+const HANDLE_PREFIX_DEBOUNCE_MS = 350;
 
 export default function useContactsHandleSearch(nickname, searchQ) {
   const [handleResults, setHandleResults] = useState([]);

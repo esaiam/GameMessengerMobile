@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { InteractionManager } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { getBlockedPeers } from '../../lib/blockedContacts';
 
@@ -48,6 +50,18 @@ export default function useContactsList(nickname) {
     }
     fetchContacts();
   }, [nickname, fetchContacts]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!nickname) return undefined;
+      const cached = contactsByNickname.get(nickname);
+      if (cached?.length) setContacts(cached);
+      const task = InteractionManager.runAfterInteractions(() => {
+        fetchContacts();
+      });
+      return () => task.cancel?.();
+    }, [nickname, fetchContacts]),
+  );
 
   const filterContacts = useCallback(
     (searchQ) => {

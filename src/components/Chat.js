@@ -96,7 +96,7 @@ export default function Chat({
   showAnimDice = false,
   /** false в `RoomChatContainer` (нарды) — без вертикального bounce ленты */
   overscrollEnabled = true }) {
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const inputBarRef = useRef(null);
   const lastComposerLayoutHRef = useRef(0);

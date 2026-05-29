@@ -14,7 +14,7 @@ import SafeBlurView from '../SafeBlurView';
 import tw from 'twrnc';
 import { Search, UserPlus } from '../../icons/lucideIcons';
 import {
-  SEARCH_CHATS_CAPSULE_RADIUS,
+  SEARCH_CONTACTS_CAPSULE_RADIUS,
   SEARCH_FIELD_LAYOUT,
   V,
 } from '../../theme';
@@ -94,7 +94,7 @@ export default function ContactsCollapsibleSearchField({
               tw`flex-row items-center`,
               {
                 minHeight: searchFieldHeight,
-                borderRadius: SEARCH_CHATS_CAPSULE_RADIUS,
+                borderRadius: SEARCH_CONTACTS_CAPSULE_RADIUS,
                 overflow: 'hidden',
                 paddingLeft: SEARCH_FIELD_LAYOUT.rowPaddingH,
                 paddingRight: 0,

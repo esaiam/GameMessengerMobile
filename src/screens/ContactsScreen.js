@@ -256,7 +256,6 @@ export default function ContactsScreen({ route, navigation }) {
               containerStyle={headerLayout.containerStyle}
               searchIconStyle={iconStyle}
               onOpenSearch={onOpenSearch}
-              onOpenInvite={openInviteFriends}
             />
           </View>
         </Animated.View>
