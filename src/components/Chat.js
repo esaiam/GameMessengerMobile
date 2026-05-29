@@ -805,6 +805,7 @@ export default function Chat({
             onVoiceRecorderOpen={onVoiceRecorderOpen}
             handleVideoRecorded={handleVideoRecorded}
             handleVideoSendError={handleVideoSendError}
+            allowVideoRecording={!isAriaChat}
             collapseEmojiForKeyboard={collapseEmojiForKeyboard}
             picInlineVisible={picInline.active}
             picInlineNeedsQuery={picInline.needsQuery}

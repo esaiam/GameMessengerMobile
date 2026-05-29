@@ -47,6 +47,8 @@ interface VideoRecorderProps {
 }
 
 const MAX_DURATION_MS = 60_000;
+/** Короче — тихий discard (случайный tap). */
+const MIN_RECORDING_MS = 1000;
 /** Диаметр круга превью над кнопкой */
 const INLINE_CIRCLE = 168;
 /** Совпадает с VoiceRecorder (слот под капсулой) */
@@ -83,6 +85,8 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
     const recordingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
     const elapsedInterval = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTime = useRef(0);
+    const onRecordingChangeRef = useRef(onRecordingChange);
+    onRecordingChangeRef.current = onRecordingChange;
 
     useEffect(() => {
       if (!inlineVisible) setCameraSurfaceReady(false);
@@ -104,6 +108,22 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       }
     }, []);
 
+    /** После video record — как post-voice в VoiceRecorder (playback / следующая запись). */
+    const restorePlaybackAudioSession = useCallback(async () => {
+      try {
+        if (Platform.OS === 'ios') {
+          await setIsAudioActiveAsync(true);
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            interruptionMode: 'mixWithOthers',
+            allowsRecording: false,
+            shouldRouteThroughEarpiece: false });
+        }
+      } catch {
+        /* ignore */
+      }
+    }, []);
+
     const clearRecordingTimers = useCallback(() => {
       progressAnimation.current?.stop();
       if (elapsedInterval.current) {
@@ -115,6 +135,26 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
         recordingTimeout.current = null;
       }
     }, []);
+
+    useEffect(() => {
+      return () => {
+        abortOpeningRef.current = true;
+        discardResultRef.current = true;
+        cameraReadyPromiseResolveRef.current?.();
+        cameraReadyPromiseResolveRef.current = null;
+        clearRecordingTimers();
+        try {
+          cameraRef.current?.stopRecording();
+        } catch {
+          /* ignore */
+        }
+        if (isRecordingNativeRef.current) {
+          isRecordingNativeRef.current = false;
+          onRecordingChangeRef.current?.(false);
+        }
+        void restorePlaybackAudioSession();
+      };
+    }, [clearRecordingTimers, restorePlaybackAudioSession]);
 
     const runRecordSession = useCallback(async () => {
       if (!cameraRef.current) return;
@@ -176,7 +216,9 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
           return;
         }
 
-        if (result?.uri) {
+        const recordedMs = Date.now() - startTime.current;
+
+        if (result?.uri && recordedMs >= MIN_RECORDING_MS) {
           // Показываем сообщение немедленно с локальным URI (оптимистичный UI)
           onVideoRecorded?.(result.uri);
           setInlineVisible(false);
@@ -189,6 +231,8 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
             Alert.alert('Ошибка', 'Не удалось отправить видео. Попробуй ещё раз.');
             console.error('VideoRecorder: ошибка отправки', e);
           }
+        } else {
+          setInlineVisible(false);
         }
       } catch (e) {
         clearRecordingTimers();
@@ -209,11 +253,16 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
         stopAnimAppliedRef.current = false;
         setInlineVisible(false);
         console.warn('VideoRecorder: ошибка записи', e);
+      } finally {
+        await restorePlaybackAudioSession();
       }
     }, [
       clearRecordingTimers,
       progressAnim,
       onRecordingChange,
+      onVideoRecorded,
+      onVideoSendError,
+      restorePlaybackAudioSession,
       circleScale,
       circleTranslateX,
       circleTranslateY,
@@ -255,11 +304,13 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       });
       if (abortOpeningRef.current) {
         setInlineVisible(false);
+        await restorePlaybackAudioSession();
         return;
       }
       if (!cameraReadyRef.current) {
         setInlineVisible(false);
         Alert.alert('Камера', 'Сессия камеры не успела запуститься. Попробуй ещё раз.');
+        await restorePlaybackAudioSession();
         return;
       }
 
@@ -270,6 +321,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       requestCameraPermission,
       requestMicPermission,
       prepareRecordingAudioSession,
+      restorePlaybackAudioSession,
       runRecordSession,
       progressAnim,
       onOpen]);
@@ -317,12 +369,14 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
           circleTranslateY.setValue(0);
           progressAnim.setValue(0);
           setInlineVisible(false);
+          void restorePlaybackAudioSession();
         }
       },
       [
         clearRecordingTimers,
         progressAnim,
         onRecordingChange,
+        restorePlaybackAudioSession,
         circleScale,
         circleTranslateX,
         circleTranslateY],

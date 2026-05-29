@@ -69,6 +69,8 @@ const BAR_COUNT = 40;
 const TRIM_HANDLE_W = 10;
 const TRIM_HANDLE_H = 34;
 const TRIM_MIN_SPAN = 0.06;
+/** Короче — тихий discard (случайный tap). */
+const MIN_RECORDING_SEC = 1;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type RS = 'IDLE' | 'RECORDING' | 'LOCKED' | 'PAUSED';
@@ -81,6 +83,8 @@ interface Props {
   onOpen?: () => void;
   onVideoRecorded?: (localUri: string) => void;
   onVideoSendError?: () => void;
+  /** false — только голос (чат Aria: без upload video). */
+  allowVideoRecording?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -153,7 +157,8 @@ function VoiceRecorder({
   sendMediaMessage,
   onOpen,
   onVideoRecorded,
-  onVideoSendError }: Props) {
+  onVideoSendError,
+  allowVideoRecording = true }: Props) {
   const [state, setState] = useState<RS>('IDLE');
   const [dur, setDur] = useState(0);
   const [amps, setAmps] = useState<number[]>([]);
@@ -176,10 +181,14 @@ function VoiceRecorder({
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** true когда таймер сработал и запись инициирована */
   const isHoldingRef = useRef(false);
+  /** Отпустили до фактического старта record() — doStart не должен начинать запись */
+  const holdCancelledRef = useRef(false);
   /** Защита от повторного запуска анимации падения → doLock */
   const lockDropArmedRef = useRef(false);
   const videoLockArmedRef = useRef(false);
   const videoRecorderRef = useRef<VideoRecorderHandle>(null);
+  const onRecordingChangeRef = useRef(onRecordingChange);
+  onRecordingChangeRef.current = onRecordingChange;
 
   const recorder = useAudioRecorder({
     ...RecordingPresets.HIGH_QUALITY,
@@ -213,6 +222,11 @@ function VoiceRecorder({
 
   // ── Mode morph (audio ↔ video) ──────────────────────────────────────────────
   const modeMorphSV = useSharedValue(mediaMode === 'video' ? 1 : 0);
+  useEffect(() => {
+    if (!allowVideoRecording && mediaMode !== 'audio') {
+      setMediaMode('audio');
+    }
+  }, [allowVideoRecording, mediaMode]);
   useEffect(() => {
     // Only morph when user toggles modes in IDLE (recording state forces mic anyway).
     modeMorphSV.value = withTiming(mediaMode === 'video' ? 1 : 0, {
@@ -280,11 +294,10 @@ function VoiceRecorder({
     }
   }, [state, dotOp]);
 
-  // ── Video: mirror audio button animations (lift/overlay) ────────────────────
+  // ── Video: mirror audio button lift (overlay — только в VideoRecorder) ───────
   useEffect(() => {
     const active = isVideoRecording || isVideoLocked;
     if (active) {
-      overlayOp.value = withTiming(1, { duration: 150 });
       recordLiftSV.value = withSpring(RECORD_LIFT, { damping: 14, stiffness: 140 });
       micDragSV.value = isVideoLocked ? 0 : 1;
       railSV.value = 0;
@@ -357,8 +370,14 @@ function VoiceRecorder({
 
   // ── Audio actions ───────────────────────────────────────────────────────────
   const doStart = useCallback(async () => {
+    const abortIfHoldReleased = () => {
+      if (!holdCancelledRef.current && isHoldingRef.current) return false;
+      pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
+      return true;
+    };
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (abortIfHoldReleased()) return;
       if (!perm.granted) {
         Alert.alert('Нет доступа', 'Разрешите доступ к микрофону');
         pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
@@ -370,7 +389,9 @@ function VoiceRecorder({
         interruptionMode: 'doNotMix',
         allowsRecording: true,
         shouldRouteThroughEarpiece: false });
+      if (abortIfHoldReleased()) return;
       await recorder.prepareToRecordAsync();
+      if (abortIfHoldReleased() || stateRef.current !== 'IDLE') return;
       recorder.record();
       ampsRef.current = [];
       lastMeterRef.current = 0;
@@ -403,13 +424,13 @@ function VoiceRecorder({
     resetAnim();
     try {
       if (s === 'PAUSED') {
-        // Recorder was already stopped in doPause; just send the saved URI
         if (savedUriRef.current) {
           const { s: ts, e: te } = pausedTrimRef.current;
           const span = Math.max(TRIM_MIN_SPAN, te - ts);
-          const eff = Math.max(1, Math.round(d * span));
+          const effSec = Math.round(d * span);
+          if (effSec < MIN_RECORDING_SEC) return;
           const wf = buildWaveform40FromAmps(caps, ts, te);
-          onSendAudio(savedUriRef.current, eff, wf);
+          onSendAudio(savedUriRef.current, effSec, wf);
         }
         return;
       }
@@ -419,6 +440,7 @@ function VoiceRecorder({
         interruptionMode: 'mixWithOthers',
         allowsRecording: false,
         shouldRouteThroughEarpiece: false });
+      if (d < MIN_RECORDING_SEC) return;
       const uri = recorder.uri;
       if (uri) onSendAudio(uri, d, buildWaveform40FromAmps(caps, 0, 1));
     } catch (e) {
@@ -526,6 +548,30 @@ function VoiceRecorder({
     }
   }, []);
 
+  useEffect(() => {
+    return () => {
+      holdCancelledRef.current = true;
+      isHoldingRef.current = false;
+      clearHoldTimer();
+      const s = stateRef.current;
+      void (async () => {
+        try {
+          if (s === 'RECORDING' || s === 'LOCKED') {
+            await recorder.stop();
+            await setAudioModeAsync({
+              playsInSilentMode: true,
+              interruptionMode: 'mixWithOthers',
+              allowsRecording: false,
+              shouldRouteThroughEarpiece: false });
+          }
+        } catch {
+          /* ignore */
+        }
+      })();
+      onRecordingChangeRef.current?.(false);
+    };
+  }, [recorder, clearHoldTimer]);
+
   const pressDown = useCallback(() => {
     pressSV.value = withTiming(0.93, { duration: 80 });
   }, [pressSV]);
@@ -540,6 +586,7 @@ function VoiceRecorder({
     // Don't start a new hold if already recording/locked/paused
     if (stateRef.current !== 'IDLE') return;
     isHoldingRef.current = false;
+    holdCancelledRef.current = false;
     lockDropArmedRef.current = false;
     lockLatchSV.value = 0;
     lockGesturesOffSV.value = 0;
@@ -548,16 +595,16 @@ function VoiceRecorder({
     tySV.value = 0;
     holdTimerRef.current = setTimeout(() => {
       holdTimerRef.current = null;
-      if (stateRef.current !== 'IDLE') return; // guard
+      if (holdCancelledRef.current || stateRef.current !== 'IDLE') return;
       isHoldingRef.current = true;
       triggerRecordStartHaptic();
-      if (mediaMode === 'video') {
+      if (allowVideoRecording && mediaMode === 'video') {
         void videoRecorderRef.current?.beginInlineHold();
       } else {
         void doStart();
       }
     }, 220);
-  }, [clearHoldTimer, txSV, tySV, railSV, lockLatchSV, lockGesturesOffSV, doStart, mediaMode]);
+  }, [clearHoldTimer, txSV, tySV, railSV, lockLatchSV, lockGesturesOffSV, doStart, mediaMode, allowVideoRecording]);
 
   const sendPanToVideo = useCallback((tx: number, ty: number) => {
     videoRecorderRef.current?.onPanUpdate(tx, ty);
@@ -568,6 +615,7 @@ function VoiceRecorder({
       // До старта записи: сдвиг >14px — отменить ожидание удержания (как в PanResponder)
       if (!isHoldingRef.current && holdTimerRef.current !== null &&
           (Math.abs(projTx) > 14 || Math.abs(rawDy) > 14)) {
+        holdCancelledRef.current = true;
         clearHoldTimer();
         railSV.value = 0;
         txSV.value = 0;
@@ -602,7 +650,8 @@ function VoiceRecorder({
     (projTx: number, rail: number, maxSlideX: number) => {
       clearHoldTimer();
       if (!isHoldingRef.current) {
-        if (stateRef.current === 'IDLE') {
+        holdCancelledRef.current = true;
+        if (stateRef.current === 'IDLE' && allowVideoRecording) {
           if (mediaMode === 'video') {
             setMediaMode('audio');
           } else {
@@ -628,7 +677,10 @@ function VoiceRecorder({
       }
       // Already locked/paused — finger lift doesn't stop recording
       if (s === 'LOCKED' || s === 'PAUSED') return;
-      if (s === 'IDLE') return; // doStart still in flight (race); it will handle itself
+      if (s === 'IDLE') {
+        holdCancelledRef.current = true;
+        return;
+      }
       // Анимация закрепления — не интерпретировать отпускание как «отправить»
       if (lockDropArmedRef.current) return;
       // Отмена только если не «чисто вертикальный» рельс (вверх — замок, не отмена по X)
@@ -637,7 +689,7 @@ function VoiceRecorder({
       if (canCancelBySlide && projTx < -need) void doCancel();
       else void doSend();
     },
-    [clearHoldTimer, doCancel, doSend, mediaMode],
+    [clearHoldTimer, doCancel, doSend, mediaMode, allowVideoRecording],
   );
 
   // ── Gesture: minDistance(0) — сразу тянется за пальцем; корень не должен remount
@@ -787,6 +839,8 @@ function VoiceRecorder({
   });
 
   const isMicActive = state === 'RECORDING' || state === 'LOCKED' || isVideoRecording || isVideoLocked;
+  /** Overlay капсулы — только audio; video рисует свой в VideoRecorder */
+  const isAudioOverlayActive = state === 'RECORDING' || state === 'LOCKED';
   useEffect(() => {
     isMicActiveSV.value = isMicActive ? 1 : 0;
   }, [isMicActive, isMicActiveSV]);
@@ -815,23 +869,30 @@ function VoiceRecorder({
                 styles.micCircle,
                 isMicActive ? styles.micCircleRecording : styles.micCircleIdle]}
             >
-              {/* Icon morph: Mic ↔ Video (only meaningful in IDLE) */}
-              <View style={styles.micIconStack} pointerEvents="none">
-                <Animated.View style={[styles.micIconAbs, micIconMicAnimStyle]}>
-                  <Mic
-                    size={MIC_ICON_SPEC}
-                    color={MIC_ICON_ON_SAGE}
-                    strokeWidth={1.5}
-                  />
-                </Animated.View>
-                <Animated.View style={[styles.micIconAbs, micIconVideoAnimStyle]}>
-                  <VideoIcon
-                    size={MIC_ICON_SPEC}
-                    color={MIC_ICON_ON_SAGE}
-                    strokeWidth={1.5}
-                  />
-                </Animated.View>
-              </View>
+              {allowVideoRecording ? (
+                <View style={styles.micIconStack} pointerEvents="none">
+                  <Animated.View style={[styles.micIconAbs, micIconMicAnimStyle]}>
+                    <Mic
+                      size={MIC_ICON_SPEC}
+                      color={MIC_ICON_ON_SAGE}
+                      strokeWidth={1.5}
+                    />
+                  </Animated.View>
+                  <Animated.View style={[styles.micIconAbs, micIconVideoAnimStyle]}>
+                    <VideoIcon
+                      size={MIC_ICON_SPEC}
+                      color={MIC_ICON_ON_SAGE}
+                      strokeWidth={1.5}
+                    />
+                  </Animated.View>
+                </View>
+              ) : (
+                <Mic
+                  size={MIC_ICON_SPEC}
+                  color={MIC_ICON_ON_SAGE}
+                  strokeWidth={1.5}
+                />
+              )}
             </View>
           </View>
         </Animated.View>
@@ -877,24 +938,6 @@ function VoiceRecorder({
           </View>
         </Animated.View>
       ) : null}
-      {isVideoLocked ? (
-        <View
-          pointerEvents="box-none"
-          style={[styles.lockAbove, styles.lockAboveLocked]}
-        >
-          <TouchableOpacity
-            onPress={() => {
-              setIsVideoLocked(false);
-              videoRecorderRef.current?.cancelLocked();
-            }}
-            style={[styles.floatingIconCircle, styles.pauseAboveBtn]}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            accessibilityLabel="Отмена видео"
-          >
-            <Trash2 size={16} color={V.dangerMuted} strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
-      ) : null}
       {state === 'LOCKED' ? (
         <View
           pointerEvents="box-none"
@@ -912,10 +955,10 @@ function VoiceRecorder({
       ) : null}
 
       <Animated.View
-        pointerEvents={isMicActive ? 'auto' : 'none'}
+        pointerEvents={isAudioOverlayActive ? 'auto' : 'none'}
         style={[styles.overlay, overlayAnimStyle]}
       >
-        {isMicActive ? (
+        {isAudioOverlayActive ? (
           <>
             <View style={styles.timerRow}>
               <Animated.View style={[styles.dot, dotAnimStyle]} />
@@ -949,20 +992,22 @@ function VoiceRecorder({
       </Animated.View>
 
     </View>
-    <VideoRecorder
-      ref={videoRecorderRef}
-      uploadMedia={uploadMedia}
-      sendMediaMessage={sendMediaMessage}
-      onOpen={onOpen}
-      onVideoRecorded={onVideoRecorded}
-      onVideoSendError={onVideoSendError}
-      onRecordingChange={(active) => {
-        setIsVideoRecording(active);
-        if (!active) setIsVideoLocked(false);
-        onRecordingChange?.(active);
-      }}
-      cancelActive={cancelActive}
-    />
+    {allowVideoRecording ? (
+      <VideoRecorder
+        ref={videoRecorderRef}
+        uploadMedia={uploadMedia}
+        sendMediaMessage={sendMediaMessage}
+        onOpen={onOpen}
+        onVideoRecorded={onVideoRecorded}
+        onVideoSendError={onVideoSendError}
+        onRecordingChange={(active) => {
+          setIsVideoRecording(active);
+          if (!active) setIsVideoLocked(false);
+          onRecordingChange?.(active);
+        }}
+        cancelActive={cancelActive}
+      />
+    ) : null}
     <View
       pointerEvents="box-none"
       style={[styles.micAfterVideoLayer, micLayerAboveVideo && styles.micAfterVideoLayerOnTop]}
