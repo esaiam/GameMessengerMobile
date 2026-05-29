@@ -31,9 +31,14 @@ export default function ChatOverlays({
   overflowMenuVisible,
   onCloseOverflowMenu,
   onClearHistory,
+  onDeleteChatFromList,
   clearHistoryConfirmVisible,
   onCloseClearHistoryConfirm,
   onConfirmClearHistory,
+  deleteChatConfirmVisible,
+  onCloseDeleteChatConfirm,
+  onConfirmDeleteChat,
+  deleteChatConfirmDisabled,
   showAttachMenu,
   onCloseAttachMenu,
   takePhoto,
@@ -81,12 +86,23 @@ export default function ChatOverlays({
         visible={overflowMenuVisible}
         onClose={onCloseOverflowMenu}
         onClearHistory={onClearHistory}
+        onDeleteChat={onDeleteChatFromList}
       />
       <ChatClearHistoryConfirmModal
         uiReady={uiReady}
         visible={clearHistoryConfirmVisible}
         onClose={onCloseClearHistoryConfirm}
         onConfirm={onConfirmClearHistory}
+      />
+      <ChatClearHistoryConfirmModal
+        uiReady={uiReady}
+        visible={deleteChatConfirmVisible}
+        confirmDisabled={deleteChatConfirmDisabled}
+        onClose={onCloseDeleteChatConfirm}
+        onConfirm={onConfirmDeleteChat}
+        title="Удалить чат?"
+        description="Чат исчезнет из списка. Сообщения скроются согласно выбранному варианту."
+        confirmLabel="Удалить"
       />
       <ChatAttachMenuModal
         uiReady={uiReady}

@@ -8,17 +8,22 @@ import {
   Platform,
   ActivityIndicator,
   BackHandler,
+  Share,
   useWindowDimensions,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, MessageCircle, User, X, Trash2 } from '../icons/lucideIcons';
+import { ArrowLeft, EllipsisVertical, MessageCircle, User, X, Trash2 } from '../icons/lucideIcons';
 import { UserAvatar } from '../components/UserAvatar';
 import { GAME_NO_OVERSCROLL_PROPS, V } from '../theme';
 import TabBackground from '../components/TabBackground';
-import { useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
+import {
+  MESSENGER_HEADER_CONTENT_MIN_HEIGHT,
+  useMessengerHeaderLayout,
+} from '../components/MessengerHeaderLayout';
+import { ICON_SELECTION_ACTION } from '../components/ChatRoomHeader';
 import {
   PROFILE_AVATAR_SIZE,
   PROFILE_COLLAPSE_DISTANCE,
@@ -31,6 +36,9 @@ import {
 } from '../lib/blockedContacts';
 import { hideChatRoom } from '../lib/hiddenChats';
 import { hideAllRoomMessagesForMe, hideMessagesForMe } from '../lib/hideRoomMessagesForMe';
+import { getContactAlias, setContactAlias } from '../lib/contactAliases';
+import { supabase } from '../lib/supabase';
+import { clearContactsListCache } from '../components/contacts/useContactsList';
 import { loadDialogsCache, saveDialogsCache } from '../utils/dialogsCache';
 import {
   leaveContactProfileAfterDestructiveAction,
@@ -40,7 +48,8 @@ import { useContactProfileSwipeBack } from '../hooks/useContactProfileSwipeBack'
 import { useContactProfileRoomMedia } from '../hooks/useContactProfileRoomMedia';
 import ContactProfileMediaSection from '../components/contactProfile/ContactProfileMediaSection';
 import ContactProfileMediaViewerModal from '../components/contactProfile/ContactProfileMediaViewerModal';
-import { formatRect, logMediaViewer } from '../components/contactProfile/mediaViewerDebugLog';
+import ContactProfileOverflowMenuModal from '../components/contactProfile/ContactProfileOverflowMenuModal';
+import ContactProfileEditContactModal from '../components/contactProfile/ContactProfileEditContactModal';
 import {
   adjustMediaTransitionRectForScroll,
   isValidMediaTransitionRect,
@@ -71,6 +80,9 @@ export default function ContactProfileScreen({ route, navigation }) {
   const viewerOpeningRef = useRef(false);
   const [mediaSelectionMode, setMediaSelectionMode] = useState(false);
   const [selectedMediaIds, setSelectedMediaIds] = useState(() => new Set());
+  const [overflowMenuVisible, setOverflowMenuVisible] = useState(false);
+  const [editContactVisible, setEditContactVisible] = useState(false);
+  const [localDisplayName, setLocalDisplayName] = useState('');
 
   const viewerItems = useMemo(
     () =>
@@ -201,41 +213,28 @@ export default function ContactProfileScreen({ route, navigation }) {
       setOpenedMediaId(item.id);
       setHiddenTileId(item.id);
       profileScrollYAtOpenRef.current = profileScrollYRef.current;
-      logMediaViewer('screen', 'openPress', {
-        id: item.id,
-        idx,
-        rect: formatRect(measured),
-      });
 
       setViewerOpenEpoch((e) => e + 1);
       setViewerVisible(true);
       viewerOpeningRef.current = false;
-      logMediaViewer('screen', 'openVisible', { id: item.id });
     },
     [viewerItems, viewerVisible, mediaSelectionMode, toggleMediaSelection, getTransitionSource],
   );
 
   const handoffMediaViewerTile = useCallback(() => {
-    logMediaViewer('screen', 'unhideTile', { wasHidden: hiddenTileId });
     setHiddenTileId(null);
-  }, [hiddenTileId]);
+  }, []);
 
   const dismissMediaViewer = useCallback(() => {
-    logMediaViewer('screen', 'dismissModal', { openedMediaId });
     viewerOpeningRef.current = false;
     setViewerVisible(false);
     setOpenedMediaId(null);
     setViewerOriginLayout(null);
-  }, [openedMediaId]);
+  }, []);
 
   const handleViewerIndexChange = useCallback(
     (nextIndex) => {
       const id = viewerItems[nextIndex]?.id;
-      logMediaViewer('screen', 'indexChange', {
-        nextIndex,
-        id,
-        rect: formatRect(id ? getTransitionSource(id) : null),
-      });
       setViewerIndex(nextIndex);
       if (!id) return;
       setOpenedMediaId(id);
@@ -324,6 +323,14 @@ export default function ContactProfileScreen({ route, navigation }) {
     isBlocked(nickname, peerName).then(setBlocked);
   }, [nickname, peerName]);
 
+  useEffect(() => {
+    if (!nickname || !peerName) {
+      setLocalDisplayName('');
+      return;
+    }
+    getContactAlias(nickname, peerName).then(setLocalDisplayName);
+  }, [nickname, peerName]);
+
   const goBackToChat = useCallback(() => {
     safeGoBackFromContactProfile(navigation);
   }, [navigation]);
@@ -342,9 +349,9 @@ export default function ContactProfileScreen({ route, navigation }) {
     await saveDialogsCache(nickname, next);
   }, [nickname, roomId]);
 
-  const runDeleteConversation = useCallback(async () => {
+  const runDeleteContact = useCallback(async () => {
     if (!roomId || !nickname) {
-      Alert.alert('Ошибка', 'Нет комнаты для удаления переписки.');
+      Alert.alert('Ошибка', 'Нет комнаты для удаления контакта.');
       return;
     }
     setBusy(true);
@@ -352,24 +359,66 @@ export default function ContactProfileScreen({ route, navigation }) {
       await hideAllRoomMessagesForMe({ roomId, nickname });
       await hideChatRoom(nickname, roomId);
       await pruneDialogsCache();
+      clearContactsListCache(nickname);
       leaveContactProfileAfterDestructiveAction(navigation);
     } catch (e) {
-      Alert.alert('Ошибка', e?.message || 'Не удалось удалить переписку');
+      Alert.alert('Ошибка', e?.message || 'Не удалось удалить контакт');
     } finally {
       setBusy(false);
     }
   }, [roomId, nickname, navigation, pruneDialogsCache]);
 
-  const handleDeleteConversation = () => {
+  const handleDeleteContact = () => {
     Alert.alert(
-      'Удалить переписку',
-      'Переписка будет удалена только у вас.',
+      'Удалить контакт',
+      'Контакт и переписка будут скрыты только у вас.',
       [
         { text: 'Отмена', style: 'cancel' },
-        { text: 'Удалить', style: 'destructive', onPress: runDeleteConversation },
+        { text: 'Удалить', style: 'destructive', onPress: runDeleteContact },
       ],
     );
   };
+
+  const handleShareContact = useCallback(async () => {
+    if (!peerName) return;
+    let message = `Контакт в Vault Messenger: ${peerName}`;
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('handle')
+        .eq('id', peerName)
+        .maybeSingle();
+      const handle = typeof data?.handle === 'string' ? data.handle.trim() : '';
+      if (handle) message = `Контакт в Vault Messenger: @${handle}`;
+    } catch {
+      /* share fallback */
+    }
+    try {
+      await Share.share({ message });
+    } catch {
+      /* user dismissed */
+    }
+  }, [peerName]);
+
+  const handleEditContact = useCallback(() => {
+    setEditContactVisible(true);
+  }, []);
+
+  const handleSaveContactAlias = useCallback(
+    async (alias) => {
+      if (!nickname || !peerName) return;
+      setBusy(true);
+      try {
+        await setContactAlias(nickname, peerName, alias);
+        setLocalDisplayName(alias);
+      } catch (e) {
+        Alert.alert('Ошибка', e?.message || 'Не удалось сохранить имя');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [nickname, peerName],
+  );
 
   const runBlock = useCallback(async () => {
     if (!peerName || !nickname) return;
@@ -423,7 +472,7 @@ export default function ContactProfileScreen({ route, navigation }) {
     );
   };
 
-  const displayName = peerName || '—';
+  const displayName = localDisplayName || peerName || '—';
 
   const minScrollContentHeight =
     screenH - headerLayout.minHeight + PROFILE_COLLAPSE_DISTANCE + 32;
@@ -446,9 +495,11 @@ export default function ContactProfileScreen({ route, navigation }) {
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityRole="button"
                   accessibilityLabel="Отменить выделение"
-                  style={styles.headerSide}
+                  style={styles.headerBackTouch}
                 >
-                  <X size={22} color={V.textPrimary} strokeWidth={1.5} />
+                  <View style={styles.headerIconWrap}>
+                    <X size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
+                  </View>
                 </TouchableOpacity>
                 <Text style={[styles.headerSelectionCount, { color: V.textPrimary }]}>
                   {selectedMediaIds.size}
@@ -460,14 +511,14 @@ export default function ContactProfileScreen({ route, navigation }) {
                   accessibilityRole="button"
                   accessibilityLabel="Удалить выбранное"
                   style={[
-                    styles.headerSideRight,
-                    selectedMediaIds.size === 0 && styles.headerActionDisabled,
+                    styles.headerSelectionDeleteTouch,
+                    (busy || selectedMediaIds.size === 0) && styles.headerActionDisabled,
                   ]}
                 >
                   {busy ? (
                     <ActivityIndicator size="small" color={V.accentSage} />
                   ) : (
-                    <Trash2 size={22} color={V.textPrimary} strokeWidth={1.5} />
+                    <Trash2 size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
                   )}
                 </TouchableOpacity>
               </>
@@ -479,12 +530,38 @@ export default function ContactProfileScreen({ route, navigation }) {
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityRole="button"
                   accessibilityLabel="Назад"
-                  style={styles.headerSide}
+                  style={[styles.headerBackTouch, busy && styles.headerActionDisabled]}
                 >
-                  <ArrowLeft size={22} color={V.textPrimary} strokeWidth={1.5} />
+                  <View style={styles.headerIconWrap}>
+                    <ArrowLeft
+                      size={ICON_SELECTION_ACTION}
+                      color={V.textPrimary}
+                      strokeWidth={1.5}
+                    />
+                  </View>
                 </TouchableOpacity>
-                <View style={styles.headerSideRight}>
-                  {busy ? <ActivityIndicator size="small" color={V.accentSage} /> : null}
+                <View style={styles.headerMenuSlot}>
+                  <TouchableOpacity
+                    onPress={() => setOverflowMenuVisible(true)}
+                    disabled={busy}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Меню профиля"
+                    style={[
+                      styles.headerMenuTouch,
+                      busy && styles.headerActionDisabled,
+                    ]}
+                  >
+                    {busy ? (
+                      <ActivityIndicator size="small" color={V.accentSage} />
+                    ) : (
+                      <EllipsisVertical
+                        size={ICON_SELECTION_ACTION}
+                        color={V.textPrimary}
+                        strokeWidth={1.5}
+                      />
+                    )}
+                  </TouchableOpacity>
                 </View>
               </>
             )}
@@ -528,26 +605,6 @@ export default function ContactProfileScreen({ route, navigation }) {
           </View>
 
           <View style={styles.sectionSpacer} />
-
-          <View
-            style={[
-              styles.dangerCard,
-              { backgroundColor: V.bgSurface, borderColor: V.border },
-            ]}
-          >
-            <DangerRow
-              label={blocked ? 'Разблокировать' : 'Заблокировать'}
-              onPress={handleBlock}
-              disabled={busy}
-            />
-            <View style={[styles.separator, { backgroundColor: V.border }]} />
-            <DangerRow
-              label="Удалить переписку"
-              onPress={handleDeleteConversation}
-              disabled={busy || !roomId}
-              last
-            />
-          </View>
 
           <ContactProfileMediaSection
             items={mediaItems}
@@ -617,6 +674,22 @@ export default function ContactProfileScreen({ route, navigation }) {
           </View>
         </Animated.View>
       </View>
+      <ContactProfileOverflowMenuModal
+        visible={overflowMenuVisible}
+        onClose={() => setOverflowMenuVisible(false)}
+        blocked={blocked}
+        onShare={handleShareContact}
+        onBlock={handleBlock}
+        onEdit={handleEditContact}
+        onDeleteContact={handleDeleteContact}
+        deleteDisabled={busy || !roomId}
+      />
+      <ContactProfileEditContactModal
+        visible={editContactVisible}
+        initialName={localDisplayName || peerName || ''}
+        onClose={() => setEditContactVisible(false)}
+        onSave={handleSaveContactAlias}
+      />
       <ContactProfileMediaViewerModal
         ref={mediaViewerRef}
         visible={viewerVisible}
@@ -665,19 +738,6 @@ function ActionButton({ icon, label, onPress, disabled }) {
   );
 }
 
-function DangerRow({ label, onPress, disabled }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.7}
-      style={[styles.dangerRow, disabled && styles.disabled]}
-    >
-      <Text style={[styles.dangerLabel, { color: V.dangerMuted }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
@@ -691,20 +751,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headerSide: {
-    width: 36,
-    alignItems: 'flex-start',
+  headerBackTouch: {
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -10,
+    marginRight: 1,
+  },
+  headerIconWrap: {
+    width: ICON_SELECTION_ACTION + 8,
+    height: ICON_SELECTION_ACTION + 8,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  headerSideRight: {
-    width: 36,
-    alignItems: 'flex-end',
+  headerMenuSlot: {
+    width: ICON_SELECTION_ACTION,
+    height: MESSENGER_HEADER_CONTENT_MIN_HEIGHT,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerMenuTouch: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerSelectionDeleteTouch: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: ICON_SELECTION_ACTION + 12,
   },
   headerSelectionCount: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 17,
+    fontSize: 18,
+    lineHeight: 26,
     fontWeight: '500',
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
@@ -773,24 +856,6 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontSize: 11,
-    fontWeight: '400',
-    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
-  },
-  dangerCard: {
-    alignSelf: 'stretch',
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-  },
-  dangerRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  dangerLabel: {
-    fontSize: 14,
     fontWeight: '400',
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },

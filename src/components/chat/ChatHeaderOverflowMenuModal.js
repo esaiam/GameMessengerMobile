@@ -9,7 +9,8 @@ export default function ChatHeaderOverflowMenuModal({
   uiReady,
   visible,
   onClose,
-  onClearHistory }) {
+  onClearHistory,
+  onDeleteChat }) {
   const insets = useSafeAreaInsets();
   if (!uiReady) return null;
 
@@ -47,6 +48,27 @@ export default function ChatHeaderOverflowMenuModal({
                 Очистить переписку
               </Text>
             </Pressable>
+
+            {typeof onDeleteChat === 'function' ? (
+              <>
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: V.border }} />
+                <Pressable
+                  accessibilityRole="menuitem"
+                  accessibilityLabel="Удалить чат"
+                  onPress={() => {
+                    onClose();
+                    onDeleteChat();
+                  }}
+                  style={({ pressed }) => [
+                    tw`px-4 py-3.5`,
+                    pressed && { backgroundColor: V.hoverBg }]}
+                >
+                  <Text style={[tw`text-[15px]`, { color: V.dangerMuted, fontWeight: '400' }]}>
+                    Удалить чат
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
           </View>
         </Pressable>
       </Pressable>

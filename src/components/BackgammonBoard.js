@@ -554,6 +554,8 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
             position: 'relative',
             width: layoutBoardW || '100%',
             backgroundColor: boardPalette.bg,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: boardPalette.rim,
           }}
         >
         {!!layoutBoardW && pointW > 0 && checkerSize > 0 && (

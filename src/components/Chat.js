@@ -64,6 +64,7 @@ import useChatClearHistory from './chat/useChatClearHistory';
 import useChatInputSettling from './chat/useChatInputSettling';
 import { formatDateKey } from './chat/chatMessageListFormat';
 import { useNavigation } from '@react-navigation/native';
+import { deleteChatsFromList } from '../lib/hideRoomMessagesForDelete';
 
 export default function Chat({
   roomId,
@@ -127,6 +128,8 @@ export default function Chat({
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [overflowMenuVisible, setOverflowMenuVisible] = useState(false);
   const [clearHistoryConfirmVisible, setClearHistoryConfirmVisible] = useState(false);
+  const [deleteChatConfirmVisible, setDeleteChatConfirmVisible] = useState(false);
+  const [deleteChatInProgress, setDeleteChatInProgress] = useState(false);
 
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -463,6 +466,33 @@ export default function Chat({
     [executeClearHistoryCore],
   );
 
+  const closeDeleteChatConfirm = useCallback(() => {
+    if (deleteChatInProgress) return;
+    setDeleteChatConfirmVisible(false);
+  }, [deleteChatInProgress]);
+
+  const confirmDeleteChatFromList = useCallback(
+    async (deleteForEveryone) => {
+      if (!roomId || !nickname || deleteChatInProgress) return;
+      setDeleteChatInProgress(true);
+      try {
+        await deleteChatsFromList({
+          nickname,
+          roomIds: [roomId],
+          peerByRoomId: new Map([[roomId, otherPlayerName ?? null]]),
+          deleteForEveryone: !!deleteForEveryone,
+        });
+        setDeleteChatConfirmVisible(false);
+        navigation?.goBack?.();
+      } catch (e) {
+        Alert.alert('Ошибка', e?.message || 'Не удалось удалить чат');
+      } finally {
+        setDeleteChatInProgress(false);
+      }
+    },
+    [roomId, nickname, deleteChatInProgress, otherPlayerName, navigation],
+  );
+
   useChatRoomEffects({
     roomId,
     nickname,
@@ -684,9 +714,14 @@ export default function Chat({
         overflowMenuVisible={overflowMenuVisible}
         onCloseOverflowMenu={() => setOverflowMenuVisible(false)}
         onClearHistory={() => setClearHistoryConfirmVisible(true)}
+        onDeleteChatFromList={() => setDeleteChatConfirmVisible(true)}
         clearHistoryConfirmVisible={clearHistoryConfirmVisible}
         onCloseClearHistoryConfirm={() => setClearHistoryConfirmVisible(false)}
         onConfirmClearHistory={executeClearHistory}
+        deleteChatConfirmVisible={deleteChatConfirmVisible}
+        onCloseDeleteChatConfirm={closeDeleteChatConfirm}
+        onConfirmDeleteChat={confirmDeleteChatFromList}
+        deleteChatConfirmDisabled={deleteChatInProgress}
         showAttachMenu={showAttachMenu}
         onCloseAttachMenu={() => setShowAttachMenu(false)}
         takePhoto={takePhoto}

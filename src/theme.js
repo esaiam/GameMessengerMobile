@@ -113,14 +113,16 @@ export const COMPOSER_CAPSULE_RADIUS = COMPOSER_LAYOUT.innerHeight / 2;
 
 /** Поле нард: Muted Bronze — тёплый премиум-стол в духе gold/cream UI */
 export const boardPalette = {
-  bg: '#1C1814',
-  triangleDark: '#34302A',
-  triangleLight: '#454038',
-  bar: '#28221C',
-  divider: '#141210',
+  bg: '#2E2822',
+  triangleDark: '#4D463C',
+  triangleLight: '#655C4E',
+  bar: '#3C3530',
+  divider: '#1F1B16',
   checkerLight: '#E8E4DA',
   checkerLightBorder: '#9E9789',
-  checkerDark: '#14171D',
-  checkerDarkBorder: '#5A5750',
+  checkerDark: '#1A1E26',
+  checkerDarkBorder: '#6A6560',
+  /** Hairline вокруг поля на тёмном Game Island */
+  rim: 'rgba(201, 168, 76, 0.16)',
   handle: '#252A35',
   handlePressed: '#323848' };
