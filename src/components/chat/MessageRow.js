@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 import { View, Text, Animated, Pressable } from 'react-native';
-import Markdown from 'react-native-markdown-display';
 import tw from 'twrnc';
 import { V } from '../../theme';
 import { Mic } from '../../icons/lucideIcons';
@@ -19,6 +18,7 @@ import { ARIA_MESSAGE_TYPING } from '../../lib/aria';
 import { isGifMediaUrl } from '../../lib/isGifMediaUrl';
 import { AriaTypingDots } from './AriaChatUi';
 import AriaGeneratedAttachment from './AriaGeneratedAttachment';
+import { LinkifyMessageText } from './linkifyMessageText';
 import {
   MESSAGE_ROW_SELECTION_BG,
   BUBBLE_RADIUS,
@@ -82,46 +82,6 @@ function useDoubleTapPress(onSingleTap, onDoubleTap) {
     [onSingleTap, onDoubleTap],
   );
 }
-
-/** Markdown для текстовых ответов Aria (не голосовых пузырей). Токены Vault. */
-const ARIA_BUBBLE_MARKDOWN_STYLES = {
-  body: {
-    color: V.inBubbleText,
-    fontSize: MSG_TEXT_SIZE,
-    fontWeight: '400',
-    lineHeight: MSG_LINE_HEIGHT,
-    backgroundColor: 'transparent' },
-  paragraph: {
-    marginTop: 0,
-    marginBottom: 4 },
-  strong: {
-    color: V.accentSage,
-    fontWeight: '500'
-  },
-  heading1: {
-    flexDirection: 'row',
-    fontSize: 18,
-    color: V.accentSage,
-    fontWeight: '500'
-  },
-  heading2: {
-    flexDirection: 'row',
-    fontSize: 17,
-    color: V.accentSage,
-    fontWeight: '500'
-  },
-  heading3: {
-    flexDirection: 'row',
-    fontSize: MSG_TEXT_SIZE,
-    color: V.accentSage,
-    fontWeight: '500'
-  },
-  bullet_list: {
-    paddingLeft: 8 },
-  ordered_list: {
-    paddingLeft: 8 },
-  list_item: {
-    marginBottom: 2 } };
 
 const MessageRow = React.memo(
   function MessageRow({
@@ -230,8 +190,13 @@ const MessageRow = React.memo(
     const legacyTimeColor = isMine
       ? 'rgba(186, 222, 218, 0.52)'
       : 'rgba(168, 162, 152, 0.58)';
-    const useAriaMarkdown =
-      item.player_name === env.ariaPeerName && item.aria_voice_message !== true;
+    const ariaTextBodyStyle = {
+      fontSize: MSG_TEXT_SIZE,
+      fontWeight: '400',
+      lineHeight: MSG_LINE_HEIGHT,
+      color: textBodyColor };
+    /** Aria: plain text + кликабельные URL, без markdown-оформления. */
+    const useAriaLinks = listExtra.isAriaChat && !item.aria_voice_message;
     const ariaGeneratedAttachment =
       listExtra.isAriaChat && item.aria_attachment && !isAriaTyping ? item.aria_attachment : null;
     const hasAriaImageAttachment = String(
@@ -342,18 +307,10 @@ const MessageRow = React.memo(
                 {item.text}
               </Text>
             </View>
-          ) : useAriaMarkdown ? (
-            <Markdown style={ARIA_BUBBLE_MARKDOWN_STYLES}>{item.text || ''}</Markdown>
+          ) : useAriaLinks ? (
+            <LinkifyMessageText text={item.text} style={ariaTextBodyStyle} />
           ) : (
-            <Text
-              style={{
-                fontSize: MSG_TEXT_SIZE,
-                fontWeight: '400',
-                lineHeight: MSG_LINE_HEIGHT,
-                color: textBodyColor}}
-            >
-              {item.text}
-            </Text>
+            <Text style={ariaTextBodyStyle}>{item.text}</Text>
           )}
           <View
             style={{
