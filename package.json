@@ -45,6 +45,7 @@
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-video": "~3.0.16",
+    "expo-video-audio-extractor": "^0.1.0",
     "expo-video-thumbnails": "~10.0.8",
     "lucide-react-native": "^1.7.0",
     "react": "19.1.0",

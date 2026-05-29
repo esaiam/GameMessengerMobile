@@ -31,6 +31,7 @@ import {
 import { Mic, Lock, Unlock, SendHorizontal, Trash2, Pause, Play, Video as VideoIcon } from '../../icons/lucideIcons';
 import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import { setAudioModeAsync } from '../../utils/audioMode';
+import { trimVoiceMessageFile, VOICE_TRIM_NATIVE_UNAVAILABLE } from '../../lib/voiceMessageTrim';
 import { pauseDiceSound } from '../../utils/diceSound';
 import { triggerRecordStartHaptic } from '../../utils/recordStartHaptic';
 import VideoRecorder, { type VideoRecorderHandle } from './VideoRecorder';
@@ -430,7 +431,21 @@ function VoiceRecorder({
           const effSec = Math.round(d * span);
           if (effSec < MIN_RECORDING_SEC) return;
           const wf = buildWaveform40FromAmps(caps, ts, te);
-          onSendAudio(savedUriRef.current, effSec, wf);
+          try {
+            const sendUri = await trimVoiceMessageFile(savedUriRef.current, d, { start: ts, end: te });
+            onSendAudio(sendUri, effSec, wf);
+          } catch (e) {
+            console.warn('[VoiceRecorder] trim/send PAUSED:', e);
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg === VOICE_TRIM_NATIVE_UNAVAILABLE) {
+              Alert.alert(
+                'Нужна пересборка',
+                'Обрезка голоса работает только в dev/release-сборке с нативным модулем.\n\nnpx expo run:android\nили\nnpx expo run:ios',
+              );
+            } else {
+              Alert.alert('Ошибка', 'Не удалось обрезать голосовое. Попробуй ещё раз.');
+            }
+          }
         }
         return;
       }
