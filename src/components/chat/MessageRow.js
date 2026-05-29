@@ -260,6 +260,7 @@ const MessageRow = React.memo(
               ? env.renderMessageContent(item, isMine)
               : (
                 <ChatVideoPlaceholder
+                  isUploading={item._isOptimistic === true}
                   onPress={() => listExtra.onUnlockVideo?.(item.id)}
                 />
               )}

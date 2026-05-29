@@ -85,6 +85,7 @@ export function createRenderMessageContent({
             messageId={item.id}
             activeVideoId={pe.activeVideoId}
             wasActivated={activatedVideoIdsRef.current.has(item.id)}
+            isUploading={item._isOptimistic === true}
             onActivate={(id) => {
               if (id) activatedVideoIdsRef.current.add(id);
               setActiveVideoId(id);

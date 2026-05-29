@@ -44,6 +44,8 @@ interface VideoRecorderProps {
   onVideoRecorded?: (localUri: string) => void;
   /** Вызывается если загрузка/отправка провалились — для отката оптимистичного сообщения */
   onVideoSendError?: () => void;
+  /** Upload + INSERT успешны — снять спиннер с optimistic-пузыря */
+  onVideoUploadFinished?: () => void;
 }
 
 const MAX_DURATION_MS = 60_000;
@@ -55,7 +57,7 @@ const INLINE_CIRCLE = 168;
 const MIC_OUTER = 47;
 
 const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
-  function VideoRecorder({ uploadMedia, sendMediaMessage, onOpen, onRecordingChange, cancelActive, onVideoRecorded, onVideoSendError }, ref) {
+  function VideoRecorder({ uploadMedia, sendMediaMessage, onOpen, onRecordingChange, cancelActive, onVideoRecorded, onVideoSendError, onVideoUploadFinished }, ref) {
     const insets = useSafeAreaInsets();
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const [micPermission, requestMicPermission] = useMicrophonePermissions();
@@ -225,6 +227,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
           try {
             const url = await uploadMedia(result.uri, 'video', 'mp4', 'video/mp4');
             await sendMediaMessage('video', url);
+            onVideoUploadFinished?.();
           } catch (e) {
             // Откатываем оптимистичное сообщение
             onVideoSendError?.();
@@ -262,6 +265,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       onRecordingChange,
       onVideoRecorded,
       onVideoSendError,
+      onVideoUploadFinished,
       restorePlaybackAudioSession,
       circleScale,
       circleTranslateX,

@@ -69,6 +69,7 @@ export default function ChatComposer({
   onVoiceRecorderOpen,
   handleVideoRecorded,
   handleVideoSendError,
+  handleVideoUploadFinished,
   /** false — только голос (чат Aria). */
   allowVideoRecording = true,
   /** Только текст + эмодзи (чат Aria: без вложений). */
@@ -447,6 +448,7 @@ export default function ChatComposer({
               onOpen={onVoiceRecorderOpen}
               onVideoRecorded={handleVideoRecorded}
               onVideoSendError={handleVideoSendError}
+              onVideoUploadFinished={handleVideoUploadFinished}
               allowVideoRecording={allowVideoRecording}
             />
           )}

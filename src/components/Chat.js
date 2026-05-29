@@ -423,7 +423,8 @@ export default function Chat({
     optimisticVideoTempIdRef,
     pendingVideoActiveIdMigrationRef,
     handleVideoRecorded,
-    handleVideoSendError } = useChatOptimisticVideo({
+    handleVideoSendError,
+    handleVideoUploadFinished } = useChatOptimisticVideo({
     roomId,
     nickname,
     setMessages,
@@ -805,6 +806,7 @@ export default function Chat({
             onVoiceRecorderOpen={onVoiceRecorderOpen}
             handleVideoRecorded={handleVideoRecorded}
             handleVideoSendError={handleVideoSendError}
+            handleVideoUploadFinished={handleVideoUploadFinished}
             collapseEmojiForKeyboard={collapseEmojiForKeyboard}
             picInlineVisible={picInline.active}
             picInlineNeedsQuery={picInline.needsQuery}

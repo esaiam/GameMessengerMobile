@@ -1,13 +1,14 @@
 import React from 'react';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, ActivityIndicator } from 'react-native';
 import { V } from '../../theme';
 import { VIDEO_FEED_CIRCLE_IDLE } from './messageBubbleLayoutConstants';
 
-export default function ChatVideoPlaceholder({ onPress }) {
+export default function ChatVideoPlaceholder({ onPress, isUploading = false }) {
   const r = VIDEO_FEED_CIRCLE_IDLE / 2;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={isUploading ? undefined : onPress}
+      disabled={isUploading}
       style={{
         width: VIDEO_FEED_CIRCLE_IDLE,
         height: VIDEO_FEED_CIRCLE_IDLE,
@@ -16,7 +17,11 @@ export default function ChatVideoPlaceholder({ onPress }) {
         alignItems: 'center',
         justifyContent: 'center' }}
     >
-      <Text style={{ fontSize: 32 }}>🎥</Text>
+      {isUploading ? (
+        <ActivityIndicator size="small" color={V.accentSage} />
+      ) : (
+        <Text style={{ fontSize: 32 }}>🎥</Text>
+      )}
     </Pressable>
   );
 }

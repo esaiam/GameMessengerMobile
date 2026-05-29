@@ -52,9 +52,19 @@ export default function useChatOptimisticVideo({
     setMessages((prev) => prev.filter((m) => m.id !== tempId));
   }, [setMessages]);
 
+  /** Upload + INSERT в БД прошли — убираем спиннер, temp id ждёт realtime. */
+  const handleVideoUploadFinished = useCallback(() => {
+    const tempId = optimisticVideoTempIdRef.current;
+    if (!tempId) return;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === tempId ? { ...m, _isOptimistic: false } : m)),
+    );
+  }, [setMessages]);
+
   return {
     optimisticVideoTempIdRef,
     pendingVideoActiveIdMigrationRef,
     handleVideoRecorded,
-    handleVideoSendError };
+    handleVideoSendError,
+    handleVideoUploadFinished };
 }

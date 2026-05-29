@@ -84,6 +84,7 @@ interface Props {
   onOpen?: () => void;
   onVideoRecorded?: (localUri: string) => void;
   onVideoSendError?: () => void;
+  onVideoUploadFinished?: () => void;
   /** false — только голос (чат Aria: без upload video). */
   allowVideoRecording?: boolean;
 }
@@ -159,6 +160,7 @@ function VoiceRecorder({
   onOpen,
   onVideoRecorded,
   onVideoSendError,
+  onVideoUploadFinished,
   allowVideoRecording = true }: Props) {
   const [state, setState] = useState<RS>('IDLE');
   const [dur, setDur] = useState(0);
@@ -1017,6 +1019,7 @@ function VoiceRecorder({
         onOpen={onOpen}
         onVideoRecorded={onVideoRecorded}
         onVideoSendError={onVideoSendError}
+        onVideoUploadFinished={onVideoUploadFinished}
         onRecordingChange={(active) => {
           setIsVideoRecording(active);
           if (!active) setIsVideoLocked(false);
