@@ -7,40 +7,44 @@ import { Check } from '../../icons/lucideIcons';
 import { V } from '../../theme';
 import { ARIA_CHATS_PREVIEW_TEXT } from '../../screens/chats/chatsConstants';
 import { messagePreview, messagePreviewAsync } from '../../screens/chats/chatsPreviewCache';
-import { formatChatListTime, getInitials } from '../../screens/chats/chatsFormat';
+import { formatChatListTime } from '../../screens/chats/chatsFormat';
+import { VaultAvatarShell, VaultEmptyAvatar } from '../VaultAvatarShell';
 import { useChatsListRowRipple } from './useChatsListRowRipple';
 
-const AVATAR_SIZE = 56;
+const AVATAR_CIRCLE_SIZE = 52;
+const AVATAR_SLOT_SIZE = 56;
 const SELECTION_BADGE_SIZE = 20;
 
+/** Внутренняя область под фото: border 1.5 внутри. */
+const ARIA_LIST_IMAGE_SIZE = AVATAR_CIRCLE_SIZE - 3;
+
 function Avatar({ name }) {
+  return <VaultEmptyAvatar name={name} size={AVATAR_CIRCLE_SIZE} />;
+}
+
+function AriaListAvatar() {
   return (
-    <View
-      style={[
-        {
-          width: AVATAR_SIZE,
-          height: AVATAR_SIZE,
-          borderRadius: AVATAR_SIZE / 2,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: V.outBubbleBg,
-        },
-      ]}
-    >
-      <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>
-        {getInitials(name)}
-      </Text>
+    <VaultAvatarShell size={AVATAR_CIRCLE_SIZE}>
+      <AriaGradientAvatar size={ARIA_LIST_IMAGE_SIZE} />
+    </VaultAvatarShell>
+  );
+}
+
+function AiBadge() {
+  return (
+    <View style={styles.aiBadge}>
+      <Text style={styles.aiBadgeText}>AI</Text>
     </View>
   );
 }
 
 function AvatarWithSelectionBadge({ isSelected, children }) {
   return (
-    <View style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
+    <View style={styles.avatarSlot}>
       {children}
       {isSelected ? (
         <View style={styles.selectionBadge}>
-          <Check size={12} color={V.bgApp} strokeWidth={2.5} />
+          <Check size={12} color={V.bgChatsScreen} strokeWidth={2.5} />
         </View>
       ) : null}
     </View>
@@ -48,6 +52,32 @@ function AvatarWithSelectionBadge({ isSelected, children }) {
 }
 
 const styles = StyleSheet.create({
+  avatarSlot: {
+    width: AVATAR_SLOT_SIZE,
+    height: AVATAR_SLOT_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  row: {
+    paddingVertical: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+    overflow: 'hidden',
+  },
+  aiBadge: {
+    marginLeft: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 20,
+    backgroundColor: 'rgba(90,158,154,0.12)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(90,158,154,0.25)',
+  },
+  aiBadgeText: {
+    fontSize: 8,
+    fontWeight: '500',
+    color: 'rgba(90,158,154,0.8)',
+  },
   selectionBadge: {
     position: 'absolute',
     right: 0,
@@ -59,7 +89,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: V.bgApp,
+    borderColor: V.bgChatsScreen,
   },
 });
 
@@ -95,10 +125,7 @@ const ChatsListRow = React.memo(
       useChatsListRowRipple(onPress);
 
     return (
-      <View
-        style={[tw`pt-0 pb-5`, { overflow: 'hidden' }]}
-        onLayout={onLayout}
-      >
+      <View style={styles.row} onLayout={onLayout}>
         <Pressable
           onPressIn={selectionMode ? undefined : onPressIn}
           onPress={onRowPress}
@@ -109,11 +136,7 @@ const ChatsListRow = React.memo(
           {rippleOverlay}
           <View style={tw`flex-row items-center`}>
             <AvatarWithSelectionBadge isSelected={isSelected}>
-              {item.isAria ? (
-                <AriaGradientAvatar size={AVATAR_SIZE} />
-              ) : (
-                <Avatar name={item.contactName} />
-              )}
+              {item.isAria ? <AriaListAvatar /> : <Avatar name={item.contactName} />}
             </AvatarWithSelectionBadge>
             <View style={tw`flex-1 ml-3`}>
               <View style={tw`flex-row items-center justify-between`}>
@@ -124,16 +147,7 @@ const ChatsListRow = React.memo(
                   >
                     {item.contactName}
                   </Text>
-                  {item.isAria ? (
-                    <Text
-                      style={[
-                        tw`text-[10px] font-medium ml-1.5`,
-                        { color: V.accentSage, opacity: 0.8 },
-                      ]}
-                    >
-                      AI
-                    </Text>
-                  ) : null}
+                  {item.isAria ? <AiBadge /> : null}
                 </View>
                 <Text style={[tw`text-[10px]`, { color: V.textMuted }]}>
                   {formatChatListTime(ts)}

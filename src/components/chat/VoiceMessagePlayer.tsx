@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     marginRight: 12,
-    backgroundColor: V.accentSage,
+    backgroundColor: V.voicePlayBtnBg,
     alignItems: 'center',
     justifyContent: 'center' },
   rightCol: {

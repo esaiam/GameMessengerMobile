@@ -1,27 +1,27 @@
 import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { V } from '../../theme';
-import BubbleLinearGradient from './BubbleLinearGradient';
 
-const BUBBLE_EDGE_SOFT = 'rgba(110, 195, 185, 0.07)';
-
-const outgoingBubbleStyles = StyleSheet.create({
+const outgoingNeu = StyleSheet.create({
   outer: {
     alignSelf: 'flex-end' },
-  inner: {
+  shell: {
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4 },
+  gradient: {
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth * 1.5,
-    borderColor: BUBBLE_EDGE_SOFT },
-  gloss: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.04)' },
-  shade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '38%',
-    backgroundColor: 'rgba(0,0,0,0.03)' },
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.22)',
+    borderLeftWidth: 0.5,
+    borderLeftColor: 'rgba(255,255,255,0.15)',
+    borderRightWidth: 0.5,
+    borderRightColor: 'rgba(0,0,0,0.2)',
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0,0,0,0.35)' },
   pressable: {
     minWidth: 60,
     paddingHorizontal: 10,
@@ -44,39 +44,43 @@ function OutgoingBubble({
   const hasHandlers = !!onPress || !!onLongPress;
   return (
     <View
-      style={[outgoingBubbleStyles.outer, { maxWidth: bubbleMaxW }]}
+      style={[outgoingNeu.outer, { maxWidth: bubbleMaxW }]}
       collapsable={false}
       testID={message?.id ? `outgoing-bubble-${message.id}` : undefined}
     >
-      <View style={[bubbleRadii, outgoingBubbleStyles.inner]} collapsable={false}>
-        <BubbleLinearGradient colors={V.outBubbleGradient} />
-        <View pointerEvents="none" style={outgoingBubbleStyles.gloss} />
-        <View pointerEvents="none" style={outgoingBubbleStyles.shade} />
-        {hasHandlers ? (
-          <Pressable
-            onPress={onPress}
-            onLongPress={onLongPress}
-            delayLongPress={400}
-            style={({ pressed }) => [
-              outgoingBubbleStyles.pressable,
-              noPaddingBottom && { paddingBottom: 0 },
-              { opacity: pressed && !selectionMode ? 0.88 : 1 },
-              isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
-              isSelected && { borderWidth: 2, borderColor: V.accentSage }]}
-          >
-            {children}
-          </Pressable>
-        ) : (
-          <View
-            style={[
-              outgoingBubbleStyles.pressable,
-              noPaddingBottom && { paddingBottom: 0 },
-              isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
-              isSelected && { borderWidth: 2, borderColor: V.accentSage }]}
-          >
-            {children}
-          </View>
-        )}
+      <View style={[bubbleRadii, outgoingNeu.shell]} collapsable={false}>
+        <LinearGradient
+          colors={['rgba(90,168,162,0.95)', 'rgba(55,115,110,0.9)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[bubbleRadii, outgoingNeu.gradient]}
+        >
+          {hasHandlers ? (
+            <Pressable
+              onPress={onPress}
+              onLongPress={onLongPress}
+              delayLongPress={400}
+              style={({ pressed }) => [
+                outgoingNeu.pressable,
+                noPaddingBottom && { paddingBottom: 0 },
+                { opacity: pressed && !selectionMode ? 0.88 : 1 },
+                isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
+                isSelected && { borderWidth: 2, borderColor: V.accentSage }]}
+            >
+              {children}
+            </Pressable>
+          ) : (
+            <View
+              style={[
+                outgoingNeu.pressable,
+                noPaddingBottom && { paddingBottom: 0 },
+                isEphemeral && { borderWidth: 0.5, borderColor: V.accentGold },
+                isSelected && { borderWidth: 2, borderColor: V.accentSage }]}
+            >
+              {children}
+            </View>
+          )}
+        </LinearGradient>
       </View>
     </View>
   );

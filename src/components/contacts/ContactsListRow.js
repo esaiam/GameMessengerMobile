@@ -3,28 +3,13 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import tw from 'twrnc';
 import { V } from '../../theme';
-import { getInitials } from '../../screens/chats/chatsFormat';
+import { VaultEmptyAvatar } from '../VaultAvatarShell';
 import { useChatsListRowRipple } from '../chats/useChatsListRowRipple';
 
-const AVATAR_SIZE = 56;
+const AVATAR_CIRCLE_SIZE = 52;
 
 function ContactAvatar({ name }) {
-  return (
-    <View
-      style={{
-        width: AVATAR_SIZE,
-        height: AVATAR_SIZE,
-        borderRadius: AVATAR_SIZE / 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: V.outBubbleBg,
-      }}
-    >
-      <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>
-        {getInitials(name)}
-      </Text>
-    </View>
-  );
+  return <VaultEmptyAvatar name={name} size={AVATAR_CIRCLE_SIZE} />;
 }
 
 const ContactsListRow = React.memo(

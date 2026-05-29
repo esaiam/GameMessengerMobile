@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const MESSENGER_HEADER_CONTENT_MIN_HEIGHT = 42;
 export const MESSENGER_HEADER_PADDING_TOP_OFFSET = 10;
-export const MESSENGER_HEADER_PADDING_BOTTOM = 3;
+export const MESSENGER_HEADER_PADDING_BOTTOM = 8;
 export const MESSENGER_HEADER_PADDING_HORIZONTAL = 16;
 
 export function getMessengerHeaderLayout(insetsTop, topPaddingOverride) {
@@ -31,6 +31,8 @@ export function useMessengerHeaderLayout({ topPaddingOverride } = {}) {
     const layout = getMessengerHeaderLayout(insets.top, topPaddingOverride);
     return {
       ...layout,
+      /** Продление blur/фона шапки вверх (status bar), контент не смещается */
+      blurExtendTop: insets.top || 0,
       containerStyle: {
         paddingTop: layout.paddingTop,
         paddingBottom: layout.paddingBottom,

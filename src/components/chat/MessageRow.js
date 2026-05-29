@@ -78,7 +78,7 @@ function useDoubleTapPress(onSingleTap, onDoubleTap) {
 /** Markdown для текстовых ответов Aria (не голосовых пузырей). Токены Vault. */
 const ARIA_BUBBLE_MARKDOWN_STYLES = {
   body: {
-    color: V.textPrimary,
+    color: V.inBubbleText,
     fontSize: MSG_TEXT_SIZE,
     fontWeight: '400',
     lineHeight: MSG_LINE_HEIGHT,
@@ -217,10 +217,11 @@ const MessageRow = React.memo(
       (item.aria_voice_message === true ||
         !item.message_type ||
         item.message_type === 'text');
-    const timeColor = isMine
+    const textTimeColor = isMine ? V.outBubbleTime : V.inBubbleTime;
+    const textBodyColor = isMine ? V.outBubbleText : V.inBubbleText;
+    const legacyTimeColor = isMine
       ? 'rgba(186, 222, 218, 0.52)'
       : 'rgba(168, 162, 152, 0.58)';
-    const bodyColor = V.textPrimary;
     const useAriaMarkdown =
       item.player_name === env.ariaPeerName && item.aria_voice_message !== true;
     const ariaGeneratedAttachment =
@@ -229,7 +230,7 @@ const MessageRow = React.memo(
       ariaGeneratedAttachment?.mime_type || '',
     ).startsWith('image/');
 
-    const timeMeta = (
+    const renderTimeMeta = (timeColor) => (
       <>
         {isEphemeral && <ChatEphemeralCountdown expiresAt={item.expires_at} />}
         <Text style={{ fontSize: TS_TEXT_SIZE, color: timeColor, fontWeight: '400' }}>
@@ -238,6 +239,8 @@ const MessageRow = React.memo(
         <ChatReadCheck isRead={!!item.read_at} isMine={isMine} />
       </>
     );
+    const textTimeMeta = renderTimeMeta(textTimeColor);
+    const legacyTimeMeta = renderTimeMeta(legacyTimeColor);
 
     const metaReservePx =
       (isMine ? META_RESERVE_PX_OUTGOING : META_RESERVE_PX_INCOMING) +
@@ -326,7 +329,7 @@ const MessageRow = React.memo(
                   fontSize: MSG_TEXT_SIZE,
                   fontWeight: '400',
                   lineHeight: MSG_LINE_HEIGHT,
-                  color: bodyColor}}
+                  color: textBodyColor}}
               >
                 {item.text}
               </Text>
@@ -339,7 +342,7 @@ const MessageRow = React.memo(
                 fontSize: MSG_TEXT_SIZE,
                 fontWeight: '400',
                 lineHeight: MSG_LINE_HEIGHT,
-                color: bodyColor}}
+                color: textBodyColor}}
             >
               {item.text}
             </Text>
@@ -353,7 +356,7 @@ const MessageRow = React.memo(
               alignItems: 'center',
               gap: 2 }}
           >
-            {timeMeta}
+            {textTimeMeta}
           </View>
         </View>
       </>
@@ -381,7 +384,7 @@ const MessageRow = React.memo(
             )}
           </View>
           <View style={videoTimeOverlayStyle} pointerEvents="none">
-            {timeMeta}
+            {legacyTimeMeta}
           </View>
         </View>
       </>
@@ -409,7 +412,7 @@ const MessageRow = React.memo(
           </Text>
         ) : null}
         <View style={tw`flex-row items-center justify-end mt-0.5 gap-1`}>
-          {timeMeta}
+          {legacyTimeMeta}
         </View>
       </>
     ) : isImageMessage ? (
@@ -444,7 +447,7 @@ const MessageRow = React.memo(
         <ChatReplyPreview replyMsg={replyMsg} />
         {env.renderMessageContent(item, isMine)}
         <View style={tw`flex-row items-center justify-end mt-0.5 gap-1`}>
-          {timeMeta}
+          {legacyTimeMeta}
         </View>
       </>
     );

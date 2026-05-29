@@ -97,6 +97,9 @@ function computeListScrollEnabled(atTop, open, drag) {
   return !(atTop && !open);
 }
 
+/** Отступ между нижней гранью шапки и верхней гранью поля поиска. */
+export const CHATS_SEARCH_HEADER_GAP_PX = 4;
+
 /** Отступ под полем поиска до списка. */
 export const CHATS_SEARCH_BOTTOM_SPACING_PX = 20;
 
@@ -107,7 +110,8 @@ export const CHATS_SEARCH_BOTTOM_SPACING_PX = 20;
  */
 export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
   const SEARCH_FIELD_H = SEARCH_FIELD_LAYOUT.chatsHeight;
-  const SEARCH_REVEAL_RANGE_PX = SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX;
+  const SEARCH_REVEAL_RANGE_PX =
+    CHATS_SEARCH_HEADER_GAP_PX + SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX;
 
   const expanded = useSharedValue(1);
   const listScrollY = useSharedValue(0);
@@ -381,6 +385,8 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
   return {
     SEARCH_FIELD_H,
     SEARCH_REVEAL_RANGE_PX,
+    expanded,
+    topPullPx,
     setSearchShown,
     listScrollY,
     listMaxScrollY,

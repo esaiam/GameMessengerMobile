@@ -172,7 +172,7 @@ function useAndroidTabBounceGesture({
     };
   }, [bounceGesture]);
 
-  return { androidBounce, bounceGesture, animatedStyle, wrapGesture };
+  return { androidBounce, bounceGesture, animatedStyle, wrapGesture, overscrollY };
 }
 
 /**

@@ -11,6 +11,7 @@ import Animated from 'react-native-reanimated';
 import SafeBlurView from '../SafeBlurView';
 import tw from 'twrnc';
 import { Search } from '../../icons/lucideIcons';
+import { CHATS_SEARCH_HEADER_GAP_PX } from '../../hooks/useChatsSearchReveal';
 import {
   SEARCH_CHATS_CAPSULE_RADIUS,
   SEARCH_FIELD_LAYOUT,
@@ -31,7 +32,7 @@ export default function ChatsCollapsibleSearchField({
 }) {
   return (
     <Animated.View animatedProps={wrapAnimatedProps} style={wrapStyle}>
-      <Animated.View style={innerStyle}>
+      <Animated.View style={[innerStyle, styles.searchInner]}>
         <View style={{ marginBottom: searchBottomSpacingPx }}>
           <SafeBlurView
             intensity={28}
@@ -94,3 +95,9 @@ export default function ChatsCollapsibleSearchField({
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  searchInner: {
+    marginTop: CHATS_SEARCH_HEADER_GAP_PX,
+  },
+});

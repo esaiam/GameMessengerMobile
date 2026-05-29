@@ -1,10 +1,14 @@
 export const V = {
   bgApp: '#0D0F14',
+  /** Фон экрана списка чатов (Aurora Glass) */
+  bgChatsScreen: '#080c14',
   bgSurface: '#1A1D24',
   bgElevated: '#252A35',
   border: 'rgba(255,255,255,0.06)',
 
   accentSage: '#5A9E9A',
+  /** Круг play/pause на голосовом (темнее accentSage, в тон исходящему пузырю) */
+  voicePlayBtnBg: '#37736E',
   accentGold: '#C9A84C',
 
   textPrimary: '#E8E4DA',
@@ -12,16 +16,23 @@ export const V = {
   textMuted: '#5A5750',
   textGhost: '#3E3D39',
 
-  /** Исходящий пузырь — тёмная бирюза (тон accentSage) */
-  outBubbleBg: '#1E3F3D',
-  /** Входящий пузырь — нейтральный серый (как bgElevated), без градиента */
-  inBubbleBg: '#252A35',
-  /** Вертикальный градиент исходящего пузыря (LinearGradient) */
-  outBubbleGradient: ['#153532', '#1E3F3D', '#265A56'],
-  /** Текст в исходящем пузыре (Design.mdc) */
-  outBubbleText: '#E8E4DA',
-  /** Текст во входящем пузыре (тело сообщения — см. V.textPrimary в MessageRow) */
-  inBubbleText: '#E8E4DA',
+  /** Входящий пузырь — полупрозрачный нейтральный (legacy, картинки) */
+  inBubbleBg: 'rgba(255,255,255,0.07)',
+  /** Градиент входящего пузыря (neumorphism, TL → BR; лёгкая прозрачность) */
+  inBubbleFillTL: 'rgba(48, 55, 66, 0.75)',
+  inBubbleFillBR: 'rgba(22, 25, 31, 0.88)',
+  /** Исходящий пузырь — sage с прозрачностью */
+  outBubbleBg: 'rgba(72,130,126,0.85)',
+  /** Обводка текстовых пузырей */
+  bubbleStroke: 'rgba(255,255,255,0.12)',
+  /** Текст во входящем пузыре */
+  inBubbleText: 'rgba(255,255,255,0.85)',
+  /** Текст в исходящем пузыре */
+  outBubbleText: 'rgba(255,255,255,0.95)',
+  /** Время во входящем пузыре */
+  inBubbleTime: 'rgba(255,255,255,0.35)',
+  /** Время в исходящем пузыре */
+  outBubbleTime: 'rgba(255,255,255,0.5)',
   gameBubbleBg: '#2A2415',
   gameCardBg: '#0F2020',
 
@@ -29,6 +40,8 @@ export const V = {
   btnPrimaryHover: '#1F3535',
 
   sageBorder: 'rgba(90,158,154,0.2)',
+  /** Подпись SECURE SPACE, кольца аватаров в списках */
+  sageMuted: 'rgba(90,158,154,0.6)',
   sageFocus: 'rgba(90,158,154,0.4)',
   sageSubtle: 'rgba(90,158,154,0.04)',
   hoverBg: 'rgba(255,255,255,0.02)',
@@ -47,7 +60,12 @@ export const V = {
   /** Тинт таб-бара: тёмный серый, почти чёрный (поверх blur) */
   tabBarGlassTintBg: 'rgba(16, 18, 24, 0.88)',
 
-  dangerMuted: '#B56B6B' };
+  dangerMuted: '#B56B6B',
+
+  /** Пустой аватар (списки, профиль, шапка чата) — непрозрачные эквиваленты rgba на bgChatsScreen */
+  vaultAvatarFill: '#171B22',
+  vaultAvatarInitial: '#A2A4A7',
+  vaultAvatarBorder: '#262930' };
 
 /** Низ градиента затемнения ленты над композером (95%, rgb совпадает с `V.bgApp`). */
 export const chatListBottomFadeBottom = 'rgba(13, 15, 20, 0.95)';
