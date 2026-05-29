@@ -15,7 +15,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: V.bgApp,
+    backgroundColor: V.bgChatsScreen,
   },
   placeholder: {
     color: V.textMuted,

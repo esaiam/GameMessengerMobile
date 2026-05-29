@@ -187,7 +187,7 @@ export function MainTabs({ navigation, route }) {
   const initialParams = { nickname };
 
   return (
-    <View style={{ flex: 1, backgroundColor: V.bgApp }}>
+    <View style={{ flex: 1, backgroundColor: V.bgChatsScreen }}>
         <PagerView
           ref={pagerRef}
           style={{ flex: 1 }}

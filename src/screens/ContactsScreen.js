@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1,
-    backgroundColor: V.bgApp,
+    backgroundColor: V.bgChatsScreen,
   },
   headerOverlay: {
     position: 'absolute',
@@ -281,6 +281,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 2,
-    backgroundColor: V.bgApp,
+    backgroundColor: 'transparent',
   },
 });
