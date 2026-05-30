@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import type { GestureResponderEvent, LayoutChangeEvent } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 import {
   View,
   StyleSheet,
@@ -16,73 +16,24 @@ import { File as ExpoFile } from 'expo-file-system';
 import { V } from '../../theme';
 import { recordFileAccess } from '../../storage/CacheManager';
 import {
-  VIDEO_FEED_CIRCLE_IDLE,
-  VIDEO_FEED_CIRCLE_ACTIVE } from './messageBubbleLayoutConstants';
-const IDLE_WARMUP_TEXTURE = require('../../../assets/chat-room-wallpaper.jpg');
-
-interface VideoMessageProps {
-  url: string;
-  messageId: string;
-  activeVideoId: string | null;
-  wasActivated: boolean;
-  onActivate: (id: string | null) => void;
-  onLongPress?: (event: GestureResponderEvent) => void;
-  /** Optimistic video: upload в Supabase ещё идёт */
-  isUploading?: boolean;
-}
-
-const CIRCLE_IDLE = VIDEO_FEED_CIRCLE_IDLE;
-const CIRCLE_ACTIVE = VIDEO_FEED_CIRCLE_ACTIVE;
-const R_IDLE = CIRCLE_IDLE / 2;
-const R_ACTIVE = CIRCLE_ACTIVE / 2;
-/** Свежий локальный mp4 часто шлёт ложный playToEnd до стабильной длительности — не закрываем UI сразу после старта. */
-const PLAY_TO_END_GRACE_MS = 550;
-const MEANINGFUL_PROGRESS = { minDur: 0.06, minTime: 0.012 };
-
-/** Кольцо прогресса в viewBox 0…100 — центр линии на краю видеокруга. */
-const RING_C = 50;
-const RING_STROKE = 1.75;
-const RING_R = RING_C - RING_STROKE / 2;
-const KNOB_R = 3.25;
-/** Центр knob снаружи диска — не пересекается с маской видео. */
-const KNOB_ORBIT_R = RING_R + KNOB_R * 0.55;
-const RING_CIRC = 2 * Math.PI * RING_R;
-const RING_TRACK = 'rgba(255,255,255,0.16)';
-const RING_HIT_INNER_RATIO = 0.72;
-const SCRUB_SEEK_INTERVAL_MS = 120;
-
-function runOnPlayer(
-  player: { status: string } | null | undefined,
-  isAllowed: () => boolean,
-  op: () => void,
-) {
-  if (!player || !isAllowed()) return;
-  try {
-    if (player.status === 'idle' || player.status === 'error') return;
-    op();
-  } catch {
-    /* native player released */
-  }
-}
-
-function touchToProgress01(locationX: number, locationY: number, width: number, height: number) {
-  const cx = width / 2;
-  const cy = height / 2;
-  const angle = Math.atan2(locationY - cy, locationX - cx);
-  let p = (angle + Math.PI / 2) / (2 * Math.PI);
-  if (p < 0) p += 1;
-  return Math.min(1, Math.max(0, p));
-}
-
-function isNearRingEdge(locationX: number, locationY: number, width: number, height: number) {
-  if (width <= 0 || height <= 0) return false;
-  const cx = width / 2;
-  const cy = height / 2;
-  const dist = Math.hypot(locationX - cx, locationY - cy);
-  const outerR = Math.min(width, height) / 2;
-  const innerR = outerR * RING_HIT_INNER_RATIO;
-  return dist >= innerR && dist <= outerR + 14;
-}
+  CIRCLE_IDLE,
+  CIRCLE_ACTIVE,
+  R_IDLE,
+  R_ACTIVE,
+  PLAY_TO_END_GRACE_MS,
+  MEANINGFUL_PROGRESS,
+  RING_C,
+  RING_STROKE,
+  RING_R,
+  KNOB_R,
+  KNOB_ORBIT_R,
+  RING_CIRC,
+  RING_TRACK,
+  SCRUB_SEEK_INTERVAL_MS,
+  IDLE_WARMUP_TEXTURE,
+} from './videoMessageConstants';
+import { isNearRingEdge, runOnPlayer, touchToProgress01 } from './videoMessageGeometry';
+import type { VideoMessageProps } from './videoMessageTypes';
 
 export default function VideoMessage({ url, messageId, activeVideoId, wasActivated, onActivate, onLongPress, isUploading = false }: VideoMessageProps) {
   const isActive = activeVideoId === messageId;
