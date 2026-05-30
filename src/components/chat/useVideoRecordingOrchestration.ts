@@ -8,7 +8,7 @@ import {
   type SharedValue,
 } from 'react-native-reanimated';
 import type { VideoRecorderHandle } from './VideoRecorder';
-import { RECORD_LIFT, SPRING_RAIL_RETURN } from './voiceRecorderConstants';
+import { RECORD_LIFT, RECORD_LIFT_SPRING, RECORD_OVERLAY_MS, RECORD_ROLLBACK_MS, SPRING_RAIL_RETURN } from './voiceRecorderConstants';
 import type { VoiceRecordingState } from './useVoiceRecordingPipeline';
 
 export interface VideoRecordingAnimSync {
@@ -82,13 +82,14 @@ export function useVideoRecordingOrchestration({
   useEffect(() => {
     const active = isVideoRecording || isVideoLocked;
     if (active) {
-      recordLiftSV.value = withSpring(RECORD_LIFT, { damping: 14, stiffness: 140 });
+      recordLiftSV.value = withSpring(RECORD_LIFT, RECORD_LIFT_SPRING);
       micDragSV.value = isVideoLocked ? 0 : 1;
       railSV.value = 0;
       lockFallSV.value = 0;
       lockLatchSV.value = 0;
       lockGesturesOffSV.value = isVideoLocked ? 1 : 0;
       lockDropArmedRef.current = false;
+      overlayOp.value = withTiming(1, { duration: RECORD_OVERLAY_MS });
     } else {
       if (
         stateRef.current === 'RECORDING' ||
@@ -97,8 +98,8 @@ export function useVideoRecordingOrchestration({
       ) {
         return;
       }
-      overlayOp.value = withTiming(0, { duration: 150 });
-      recordLiftSV.value = withSpring(1, { damping: 14, stiffness: 140, overshootClamping: true });
+      overlayOp.value = withTiming(0, { duration: RECORD_ROLLBACK_MS });
+      recordLiftSV.value = withSpring(1, { ...RECORD_LIFT_SPRING, overshootClamping: true });
       micDragSV.value = 0;
       railSV.value = 0;
       txSV.value = withSpring(0, SPRING_RAIL_RETURN);
@@ -156,6 +157,15 @@ export function useVideoRecordingOrchestration({
     [onRecordingChange],
   );
 
+  const beginOptimisticVideoHold = useCallback(() => {
+    setIsVideoRecording(true);
+  }, []);
+
+  const rollbackOptimisticVideoHold = useCallback(() => {
+    setIsVideoRecording(false);
+    setIsVideoLocked(false);
+  }, []);
+
   const micLayerAboveVideo =
     mediaMode === 'video' && (isVideoRecording || isVideoLocked);
 
@@ -172,6 +182,8 @@ export function useVideoRecordingOrchestration({
     isVideoLockedRef,
     isVideoRecordingRef,
     onVideoRecordingChange,
+    beginOptimisticVideoHold,
+    rollbackOptimisticVideoHold,
     micLayerAboveVideo,
     showVideoLockFloat,
   };

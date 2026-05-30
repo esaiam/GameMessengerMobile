@@ -33,3 +33,19 @@ export const TRIM_HANDLE_H = 34;
 export const TRIM_MIN_SPAN = 0.06;
 /** Короче — тихий discard (случайный tap). */
 export const MIN_RECORDING_SEC = 1;
+
+/** Audio-only: lift кнопки до commit записи. Video — lift вместе с камерой на HOLD_DELAY_MS. */
+export const AUDIO_LIFT_PREVIEW_MS = 50;
+/** Hold-to-record: задержка до commit (haptic + запись / камера). */
+export const HOLD_DELAY_MS = 120;
+/** Сдвиг пальца во время hold-таймера отменяет запись. */
+export const HOLD_DRIFT_CANCEL_PX = 12;
+/** Press-down: duration / scale */
+export const PRESS_DOWN_MS = 35;
+export const PRESS_DOWN_SCALE = 0.97;
+export const PRESS_UP_SPRING = { damping: 12, stiffness: 200 } as const;
+/** Lift кнопки при записи */
+export const RECORD_LIFT_SPRING = { damping: 18, stiffness: 240 } as const;
+export const RECORD_OVERLAY_MS = 80;
+/** Откат chrome при failed prepare / denied permission */
+export const RECORD_ROLLBACK_MS = 120;

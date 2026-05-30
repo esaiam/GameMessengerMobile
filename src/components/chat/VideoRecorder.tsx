@@ -26,7 +26,8 @@ import SafeBlurView from '../SafeBlurView';
 const CAMERA_WARMUP_TEXTURE = require('../../../assets/chat-room-wallpaper.jpg');
 
 export interface VideoRecorderHandle {
-  beginInlineHold: () => Promise<void>;
+  /** false — permission/camera не стартовали (optimistic UI откатить). */
+  beginInlineHold: () => Promise<boolean>;
   endInlineHold: (opts: { cancelSlide: boolean }) => void;
   onPanUpdate: (tx: number, ty: number) => void;
   lock: () => void;
@@ -275,7 +276,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       uploadMedia,
       sendMediaMessage]);
 
-    const openRecorder = useCallback(async () => {
+    const openRecorder = useCallback(async (): Promise<boolean> => {
       onOpen?.();
       abortOpeningRef.current = false;
       discardResultRef.current = false;
@@ -283,12 +284,12 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       const mic = micPermission?.granted ? true : (await requestMicPermission()).granted;
       if (!cam || !mic) {
         Alert.alert('Разрешения', 'Для записи видео нужен доступ к камере и микрофону.', [{ text: 'OK' }]);
-        return;
+        return false;
       }
-      if (abortOpeningRef.current) return;
+      if (abortOpeningRef.current) return false;
 
       await prepareRecordingAudioSession();
-      if (abortOpeningRef.current) return;
+      if (abortOpeningRef.current) return false;
 
       cameraReadyRef.current = false;
       setCameraSurfaceReady(false);
@@ -311,16 +312,17 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       if (abortOpeningRef.current) {
         setInlineVisible(false);
         await restorePlaybackAudioSession();
-        return;
+        return false;
       }
       if (!cameraReadyRef.current) {
         setInlineVisible(false);
         Alert.alert('Камера', 'Сессия камеры не успела запуститься. Попробуй ещё раз.');
         await restorePlaybackAudioSession();
-        return;
+        return false;
       }
 
-      await runRecordSession();
+      void runRecordSession();
+      return true;
     }, [
       cameraPermission,
       micPermission,

@@ -13,6 +13,12 @@ import {
   LOCK_COMMIT_UP_PX,
   CANCEL_SLIDE_RATIO,
   RAIL_LOCK_PX,
+  HOLD_DELAY_MS,
+  AUDIO_LIFT_PREVIEW_MS,
+  HOLD_DRIFT_CANCEL_PX,
+  PRESS_DOWN_MS,
+  PRESS_DOWN_SCALE,
+  PRESS_UP_SPRING,
 } from './voiceRecorderConstants';
 import type { VoiceRecordingState } from './useVoiceRecordingPipeline';
 
@@ -41,6 +47,11 @@ export interface UseComposerMicGestureParams {
   doCancel: () => void | Promise<void>;
   doSend: () => void | Promise<void>;
   playLockDropThenLock: () => void;
+  beginAudioLiftPreview: () => void;
+  rollbackAudioLiftPreview: () => boolean;
+  commitAudioRecording: () => void;
+  beginOptimisticVideoHold: () => void;
+  rollbackOptimisticVideoHold: () => void;
   setCancelActive: (active: boolean) => void;
   mediaMode: 'audio' | 'video';
   allowVideoRecording: boolean;
@@ -61,6 +72,11 @@ export function useComposerMicGesture({
   doCancel,
   doSend,
   playLockDropThenLock,
+  beginAudioLiftPreview,
+  rollbackAudioLiftPreview,
+  commitAudioRecording,
+  beginOptimisticVideoHold,
+  rollbackOptimisticVideoHold,
   setCancelActive,
   mediaMode,
   allowVideoRecording,
@@ -85,6 +101,7 @@ export function useComposerMicGesture({
   } = anim;
 
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liftPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearHoldTimer = useCallback(() => {
     if (holdTimerRef.current !== null) {
@@ -93,24 +110,54 @@ export function useComposerMicGesture({
     }
   }, []);
 
+  const clearLiftPreviewTimer = useCallback(() => {
+    if (liftPreviewTimerRef.current !== null) {
+      clearTimeout(liftPreviewTimerRef.current);
+      liftPreviewTimerRef.current = null;
+    }
+  }, []);
+
+  const clearAllHoldTimers = useCallback(() => {
+    clearHoldTimer();
+    clearLiftPreviewTimer();
+  }, [clearHoldTimer, clearLiftPreviewTimer]);
+
   useEffect(() => {
     return () => {
       holdCancelledRef.current = true;
       isHoldingRef.current = false;
-      clearHoldTimer();
+      clearAllHoldTimers();
     };
-  }, [clearHoldTimer, holdCancelledRef, isHoldingRef]);
+  }, [clearAllHoldTimers, holdCancelledRef, isHoldingRef]);
 
   const pressDown = useCallback(() => {
-    pressSV.value = withTiming(0.93, { duration: 80 });
+    pressSV.value = withTiming(PRESS_DOWN_SCALE, { duration: PRESS_DOWN_MS });
   }, [pressSV]);
 
   const pressUp = useCallback(() => {
-    pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
+    pressSV.value = withSpring(1, PRESS_UP_SPRING);
   }, [pressSV]);
 
+  const scheduleAudioLiftPreview = useCallback(() => {
+    clearLiftPreviewTimer();
+    if (stateRef.current !== 'IDLE') return;
+    if (allowVideoRecording && mediaMode === 'video') return;
+    liftPreviewTimerRef.current = setTimeout(() => {
+      liftPreviewTimerRef.current = null;
+      if (holdCancelledRef.current || stateRef.current !== 'IDLE') return;
+      beginAudioLiftPreview();
+    }, AUDIO_LIFT_PREVIEW_MS);
+  }, [
+    clearLiftPreviewTimer,
+    stateRef,
+    holdCancelledRef,
+    allowVideoRecording,
+    mediaMode,
+    beginAudioLiftPreview,
+  ]);
+
   const scheduleHold = useCallback(() => {
-    clearHoldTimer();
+    clearAllHoldTimers();
     if (stateRef.current !== 'IDLE') return;
     isHoldingRef.current = false;
     holdCancelledRef.current = false;
@@ -120,19 +167,25 @@ export function useComposerMicGesture({
     railSV.value = 0;
     txSV.value = 0;
     tySV.value = 0;
+    scheduleAudioLiftPreview();
     holdTimerRef.current = setTimeout(() => {
       holdTimerRef.current = null;
       if (holdCancelledRef.current || stateRef.current !== 'IDLE') return;
       isHoldingRef.current = true;
       triggerRecordStartHaptic();
       if (allowVideoRecording && mediaMode === 'video') {
-        void videoRecorderRef.current?.beginInlineHold();
+        beginOptimisticVideoHold();
+        void videoRecorderRef.current?.beginInlineHold().then((ok) => {
+          if (!ok) rollbackOptimisticVideoHold();
+        });
       } else {
+        commitAudioRecording();
         void doStart();
       }
-    }, 220);
+    }, HOLD_DELAY_MS);
   }, [
-    clearHoldTimer,
+    clearAllHoldTimers,
+    scheduleAudioLiftPreview,
     stateRef,
     isHoldingRef,
     holdCancelledRef,
@@ -146,6 +199,9 @@ export function useComposerMicGesture({
     mediaMode,
     allowVideoRecording,
     videoRecorderRef,
+    commitAudioRecording,
+    beginOptimisticVideoHold,
+    rollbackOptimisticVideoHold,
   ]);
 
   const sendPanToVideo = useCallback(
@@ -159,11 +215,12 @@ export function useComposerMicGesture({
     (projTx: number, projTy: number, rail: number, rawDy: number, maxSlideX: number) => {
       if (
         !isHoldingRef.current &&
-        holdTimerRef.current !== null &&
-        (Math.abs(projTx) > 14 || Math.abs(rawDy) > 14)
+        (holdTimerRef.current !== null || liftPreviewTimerRef.current !== null) &&
+        (Math.abs(projTx) > HOLD_DRIFT_CANCEL_PX || Math.abs(rawDy) > HOLD_DRIFT_CANCEL_PX)
       ) {
         holdCancelledRef.current = true;
-        clearHoldTimer();
+        clearAllHoldTimers();
+        rollbackAudioLiftPreview();
         railSV.value = 0;
         txSV.value = 0;
         tySV.value = 0;
@@ -171,9 +228,7 @@ export function useComposerMicGesture({
       }
       const half = Math.max(24, maxSlideX * 0.5);
       const leftHint = rail !== 2 && projTx < -half;
-      if (stateRef.current === 'RECORDING') {
-        setCancelActive(leftHint);
-      } else if (mediaMode === 'video' && isHoldingRef.current) {
+      if (stateRef.current === 'RECORDING' || isHoldingRef.current) {
         setCancelActive(leftHint);
       } else {
         return;
@@ -190,7 +245,8 @@ export function useComposerMicGesture({
       }
     },
     [
-      clearHoldTimer,
+      clearAllHoldTimers,
+      rollbackAudioLiftPreview,
       playLockDropThenLock,
       txSV,
       tySV,
@@ -208,15 +264,17 @@ export function useComposerMicGesture({
 
   const handleGestureEnd = useCallback(
     (projTx: number, rail: number, maxSlideX: number) => {
-      clearHoldTimer();
+      clearAllHoldTimers();
       if (!isHoldingRef.current) {
         holdCancelledRef.current = true;
+        const hadAudioPreview = rollbackAudioLiftPreview();
         if (isVideoLockedRef.current) {
           setIsVideoLocked(false);
           videoRecorderRef.current?.sendLocked();
           return;
         }
         if (
+          !hadAudioPreview &&
           stateRef.current === 'IDLE' &&
           allowVideoRecording &&
           !isVideoRecordingRef.current
@@ -256,7 +314,8 @@ export function useComposerMicGesture({
       else void doSend();
     },
     [
-      clearHoldTimer,
+      clearAllHoldTimers,
+      rollbackAudioLiftPreview,
       doCancel,
       doSend,
       mediaMode,

@@ -24,6 +24,10 @@ import {
   LOCK_DROP_SETTLE_MS,
   SPRING_RAIL_RETURN,
   RECORD_LIFT,
+  RECORD_LIFT_SPRING,
+  RECORD_OVERLAY_MS,
+  RECORD_ROLLBACK_MS,
+  PRESS_UP_SPRING,
   BAR_COUNT,
   TRIM_MIN_SPAN,
   MIN_RECORDING_SEC,
@@ -82,6 +86,9 @@ export function useVoiceRecordingPipeline({
   } = anim;
 
   const [state, setState] = useState<VoiceRecordingState>('IDLE');
+  /** Audio: lift @50ms, до overlay/haptic @120ms */
+  const [audioLiftPreview, setAudioLiftPreview] = useState(false);
+  const [optimisticAudioHold, setOptimisticAudioHold] = useState(false);
   const [dur, setDur] = useState(0);
   const [amps, setAmps] = useState<number[]>([]);
   const [cancelActive, setCancelActive] = useState(false);
@@ -161,7 +168,94 @@ export function useVoiceRecordingPipeline({
     }
   }, [state, dotOp]);
 
+  const pulseEdgeGlow = useCallback(() => {
+    edgeGlowSV.value = withRepeat(
+      withSequence(
+        withTiming(0.72, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.38, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      false,
+    );
+  }, [edgeGlowSV]);
+
+  const shrinkLiftPreview = useCallback(() => {
+    pressSV.value = withSpring(1, PRESS_UP_SPRING);
+    recordLiftSV.value = withSpring(1, { ...RECORD_LIFT_SPRING, overshootClamping: true });
+  }, [pressSV, recordLiftSV]);
+
+  const beginAudioLiftPreview = useCallback(() => {
+    setAudioLiftPreview(true);
+    pressSV.value = withSpring(1, PRESS_UP_SPRING);
+    recordLiftSV.value = withSpring(RECORD_LIFT, RECORD_LIFT_SPRING);
+  }, [pressSV, recordLiftSV]);
+
+  /** @returns true если был активен preview (для skip mic↔video toggle) */
+  const rollbackAudioLiftPreview = useCallback((): boolean => {
+    if (!audioLiftPreview) return false;
+    setAudioLiftPreview(false);
+    if (stateRef.current !== 'IDLE') return true;
+    shrinkLiftPreview();
+    return true;
+  }, [audioLiftPreview, shrinkLiftPreview]);
+
+  const commitAudioRecording = useCallback(() => {
+    setAudioLiftPreview(false);
+    setOptimisticAudioHold(true);
+    overlayOp.value = withTiming(1, { duration: RECORD_OVERLAY_MS });
+    micDragSV.value = 1;
+    railSV.value = 0;
+    txSV.value = 0;
+    tySV.value = 0;
+    lockFallSV.value = 0;
+    lockLatchSV.value = 0;
+    lockGesturesOffSV.value = 0;
+    lockDropArmedRef.current = false;
+    pulseEdgeGlow();
+  }, [
+    overlayOp,
+    micDragSV,
+    railSV,
+    txSV,
+    tySV,
+    lockFallSV,
+    lockLatchSV,
+    lockGesturesOffSV,
+    pulseEdgeGlow,
+  ]);
+
+  const rollbackOptimisticAudioHold = useCallback(() => {
+    setAudioLiftPreview(false);
+    setOptimisticAudioHold(false);
+    if (stateRef.current !== 'IDLE') return;
+    shrinkLiftPreview();
+    micDragSV.value = 0;
+    edgeGlowSV.value = 0;
+    overlayOp.value = withTiming(0, { duration: RECORD_ROLLBACK_MS });
+    railSV.value = 0;
+    txSV.value = withSpring(0, SPRING_RAIL_RETURN);
+    tySV.value = withSpring(0, SPRING_RAIL_RETURN);
+    lockFallSV.value = 0;
+    lockLatchSV.value = 0;
+    lockGesturesOffSV.value = 0;
+    lockDropArmedRef.current = false;
+    setCancelActive(false);
+  }, [
+    shrinkLiftPreview,
+    micDragSV,
+    edgeGlowSV,
+    overlayOp,
+    railSV,
+    txSV,
+    tySV,
+    lockFallSV,
+    lockLatchSV,
+    lockGesturesOffSV,
+  ]);
+
   const resetAnim = useCallback(() => {
+    setAudioLiftPreview(false);
+    setOptimisticAudioHold(false);
     pressSV.value = 1;
     recordLiftSV.value = 1;
     micDragSV.value = 0;
@@ -193,7 +287,7 @@ export function useVoiceRecordingPipeline({
   const doStart = useCallback(async () => {
     const abortIfHoldReleased = () => {
       if (!holdCancelledRef.current && isHoldingRef.current) return false;
-      pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
+      rollbackOptimisticAudioHold();
       return true;
     };
     try {
@@ -201,7 +295,7 @@ export function useVoiceRecordingPipeline({
       if (abortIfHoldReleased()) return;
       if (!perm.granted) {
         Alert.alert('Нет доступа', 'Разрешите доступ к микрофону');
-        pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
+        rollbackOptimisticAudioHold();
         return;
       }
       pauseDiceSound();
@@ -218,37 +312,18 @@ export function useVoiceRecordingPipeline({
       ampsRef.current = [];
       lastMeterRef.current = 0;
       savedUriRef.current = null;
+      setOptimisticAudioHold(false);
       go('RECORDING');
-      overlayOp.value = withTiming(1, { duration: 150 });
-      pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
-      recordLiftSV.value = withSpring(RECORD_LIFT, { damping: 14, stiffness: 140 });
-      railSV.value = 0;
-      txSV.value = 0;
-      tySV.value = 0;
-      lockFallSV.value = 0;
-      lockLatchSV.value = 0;
-      lockGesturesOffSV.value = 0;
-      lockDropArmedRef.current = false;
-      micDragSV.value = 1;
     } catch (e) {
       console.warn('[VoiceRecorder] doStart:', e);
-      pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
+      rollbackOptimisticAudioHold();
     }
   }, [
     recorder,
     go,
     holdCancelledRef,
     isHoldingRef,
-    pressSV,
-    overlayOp,
-    recordLiftSV,
-    micDragSV,
-    railSV,
-    txSV,
-    tySV,
-    lockFallSV,
-    lockLatchSV,
-    lockGesturesOffSV,
+    rollbackOptimisticAudioHold,
   ]);
 
   const doSend = useCallback(async () => {
@@ -437,7 +512,8 @@ export function useVoiceRecordingPipeline({
     return sl.reduce((a, b) => a + b, 0) / sl.length;
   });
 
-  const isAudioOverlayActive = state === 'RECORDING' || state === 'LOCKED';
+  const isAudioOverlayActive =
+    state === 'RECORDING' || state === 'LOCKED' || optimisticAudioHold;
 
   return {
     state,
@@ -450,6 +526,12 @@ export function useVoiceRecordingPipeline({
     handlePausedTrim,
     lockDropArmedRef,
     isAudioOverlayActive,
+    audioLiftPreview,
+    optimisticAudioHold,
+    beginAudioLiftPreview,
+    rollbackAudioLiftPreview,
+    commitAudioRecording,
+    rollbackOptimisticAudioHold,
     doStart,
     doSend,
     doCancel,

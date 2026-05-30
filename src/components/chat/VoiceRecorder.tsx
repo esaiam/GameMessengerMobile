@@ -86,6 +86,12 @@ function VoiceRecorder({
     handlePausedTrim,
     lockDropArmedRef,
     isAudioOverlayActive,
+    optimisticAudioHold,
+    audioLiftPreview,
+    beginAudioLiftPreview,
+    rollbackAudioLiftPreview,
+    commitAudioRecording,
+    rollbackOptimisticAudioHold,
     doStart,
     doSend,
     doCancel,
@@ -125,6 +131,8 @@ function VoiceRecorder({
     isVideoLockedRef,
     isVideoRecordingRef,
     onVideoRecordingChange,
+    beginOptimisticVideoHold,
+    rollbackOptimisticVideoHold,
     micLayerAboveVideo,
     showVideoLockFloat,
   } = video;
@@ -149,6 +157,11 @@ function VoiceRecorder({
     doCancel,
     doSend,
     playLockDropThenLock,
+    beginAudioLiftPreview,
+    rollbackAudioLiftPreview,
+    commitAudioRecording,
+    beginOptimisticVideoHold,
+    rollbackOptimisticVideoHold,
     setCancelActive,
     mediaMode,
     allowVideoRecording,
@@ -184,7 +197,12 @@ function VoiceRecorder({
   const overlayAnimStyle = useAnimatedStyle(() => ({ opacity: overlayOp.value }));
 
   const isMicActive =
-    state === 'RECORDING' || state === 'LOCKED' || isVideoRecording || isVideoLocked;
+    state === 'RECORDING' ||
+    state === 'LOCKED' ||
+    audioLiftPreview ||
+    optimisticAudioHold ||
+    isVideoRecording ||
+    isVideoLocked;
   const isAudioRecording = state === 'RECORDING' || state === 'LOCKED';
 
   if (state === 'PAUSED') {
@@ -209,7 +227,7 @@ function VoiceRecorder({
         onLayout={onVoiceMountLayout}
       >
         <VoiceRecordingOverlay
-          showLockFloat={state === 'RECORDING' || showVideoLockFloat}
+          showLockFloat={state === 'RECORDING' || optimisticAudioHold || showVideoLockFloat}
           showPauseAbove={state === 'LOCKED'}
           isOverlayActive={isAudioOverlayActive}
           state={state === 'LOCKED' ? 'LOCKED' : 'RECORDING'}

@@ -4,6 +4,7 @@ import {
   cancelAnimation,
   Extrapolation,
   interpolate,
+  interpolateColor,
   runOnUI,
   scrollTo,
   useAnimatedReaction,
@@ -24,6 +25,11 @@ const ACTIONS_MARGIN_TOP = 20;
 const SCROLL_CONTENT_LIFT = 36;
 const ACTION_ROW_HEIGHT = 52;
 export const PROFILE_COLLAPSE_DISTANCE = 132;
+/** Пик золотого свечения аватара (px скролла); затем fade до PROFILE_COLLAPSE_DISTANCE */
+const AVATAR_GLOW_SCROLL_PEAK = 80;
+const AVATAR_BORDER_SAGE = 'rgba(90,158,154,0.6)';
+const AVATAR_BORDER_GOLD = 'rgba(201,168,76,0.9)';
+const AVATAR_GLOW_RING_RAMP = [0, AVATAR_GLOW_SCROLL_PEAK, PROFILE_COLLAPSE_DISTANCE];
 const NAME_LINE_HEIGHT = 22;
 const STATUS_MARGIN_TOP = 6;
 const STATUS_LINE_HEIGHT = 13;
@@ -70,9 +76,14 @@ function calcSnapTarget(y, vy, dragDelta, dragStartY) {
 
 /**
  * Сворачивающаяся шапка профиля: аватар + имя, snap-скролл (как ProfileScreen).
- * @param {{ headerLayout: object, screenW: number, withStatusRow?: boolean }} options
+ * @param {{ headerLayout: object, screenW: number, withStatusRow?: boolean, withAvatarScrollGlow?: boolean }} options
  */
-export function useProfileCollapseHeader({ headerLayout, screenW, withStatusRow = false }) {
+export function useProfileCollapseHeader({
+  headerLayout,
+  screenW,
+  withStatusRow = false,
+  withAvatarScrollGlow = false,
+}) {
   const scrollRef = useAnimatedRef();
   const scrollY = useSharedValue(0);
   const snapDriving = useSharedValue(false);
@@ -134,6 +145,39 @@ export function useProfileCollapseHeader({ headerLayout, screenW, withStatusRow 
         { translateY: -avatarLiftY * lift },
         { scale: interpolate(p, [0, 1], [1, 0.42]) },
       ],
+    };
+  });
+
+  const avatarGlowStyle = useAnimatedStyle(() => {
+    if (!withAvatarScrollGlow) return {};
+    const y = scrollY.value;
+    return {
+      borderColor: interpolateColor(y, [0, AVATAR_GLOW_SCROLL_PEAK], [
+        AVATAR_BORDER_SAGE,
+        AVATAR_BORDER_GOLD,
+      ]),
+    };
+  });
+
+  const avatarGlowRingStyle = useAnimatedStyle(() => {
+    if (!withAvatarScrollGlow) return { opacity: 0 };
+    const y = scrollY.value;
+    const glowOpacity = interpolate(y, AVATAR_GLOW_RING_RAMP, [0, 0.7, 0], Extrapolation.CLAMP);
+    const glowScale = interpolate(y, AVATAR_GLOW_RING_RAMP, [1, 1.08, 1.08], Extrapolation.CLAMP);
+    return {
+      opacity: glowOpacity,
+      transform: [{ scale: glowScale }],
+    };
+  });
+
+  const avatarGlowRingSoftStyle = useAnimatedStyle(() => {
+    if (!withAvatarScrollGlow) return { opacity: 0 };
+    const y = scrollY.value;
+    const glowOpacity = interpolate(y, AVATAR_GLOW_RING_RAMP, [0, 0.7, 0], Extrapolation.CLAMP);
+    const glowScale = interpolate(y, AVATAR_GLOW_RING_RAMP, [1, 1.08, 1.08], Extrapolation.CLAMP);
+    return {
+      opacity: glowOpacity * 0.3,
+      transform: [{ scale: glowScale }],
     };
   });
 
@@ -248,6 +292,9 @@ export function useProfileCollapseHeader({ headerLayout, screenW, withStatusRow 
     nameStartY,
     statusStartY,
     avatarWrapStyle,
+    avatarGlowStyle,
+    avatarGlowRingStyle,
+    avatarGlowRingSoftStyle,
     nameStyle,
     statusStyle,
     nameWidthSv,

@@ -313,10 +313,18 @@ export default function ContactProfileScreen({ route, navigation }) {
     nameStartY,
     statusStartY,
     avatarWrapStyle,
+    avatarGlowStyle,
+    avatarGlowRingStyle,
+    avatarGlowRingSoftStyle,
     nameStyle,
     statusStyle,
     onNameLayout,
-  } = useProfileCollapseHeader({ headerLayout, screenW, withStatusRow: true });
+  } = useProfileCollapseHeader({
+    headerLayout,
+    screenW,
+    withStatusRow: true,
+    withAvatarScrollGlow: true,
+  });
 
   useEffect(() => {
     if (!nickname || !peerName) return;
@@ -631,12 +639,31 @@ export default function ContactProfileScreen({ route, navigation }) {
               left: (screenW - PROFILE_AVATAR_SIZE) / 2,
               width: PROFILE_AVATAR_SIZE,
               height: PROFILE_AVATAR_SIZE,
+              overflow: 'visible',
             },
             avatarWrapStyle,
           ]}
           collapsable={false}
         >
-          <UserAvatar name={peerName || '?'} uri={null} size={PROFILE_AVATAR_SIZE} />
+          <View style={styles.avatarCluster}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.avatarGlowOutlineInner,
+                avatarGlowRingStyle,
+              ]}
+            />
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.avatarGlowOutlineOuter,
+                avatarGlowRingSoftStyle,
+              ]}
+            />
+            <Animated.View style={[styles.avatarGlowRing, avatarGlowStyle]}>
+              <UserAvatar name={peerName || '?'} uri={null} size={PROFILE_AVATAR_SIZE} />
+            </Animated.View>
+          </View>
         </Animated.View>
 
         <Animated.Text
@@ -805,6 +832,37 @@ const styles = StyleSheet.create({
   avatarFloat: {
     position: 'absolute',
     zIndex: 21,
+  },
+  avatarCluster: {
+    width: PROFILE_AVATAR_SIZE,
+    height: PROFILE_AVATAR_SIZE,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  avatarGlowOutlineInner: {
+    position: 'absolute',
+    width: PROFILE_AVATAR_SIZE + 16,
+    height: PROFILE_AVATAR_SIZE + 16,
+    borderRadius: (PROFILE_AVATAR_SIZE + 16) / 2,
+    borderWidth: 2,
+    borderColor: V.accentGold,
+    top: -8,
+    left: -8,
+  },
+  avatarGlowOutlineOuter: {
+    position: 'absolute',
+    width: PROFILE_AVATAR_SIZE + 28,
+    height: PROFILE_AVATAR_SIZE + 28,
+    borderRadius: (PROFILE_AVATAR_SIZE + 28) / 2,
+    borderWidth: 4,
+    borderColor: V.accentGold,
+    top: -14,
+    left: -14,
+  },
+  avatarGlowRing: {
+    borderWidth: 2,
+    borderRadius: PROFILE_AVATAR_SIZE / 2,
+    overflow: 'hidden',
   },
   nameFloat: {
     position: 'absolute',
