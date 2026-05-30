@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,8 +24,15 @@ import {
   MESSENGER_HEADER_CONTENT_MIN_HEIGHT,
   useMessengerHeaderLayout,
 } from '../components/MessengerHeaderLayout';
-import { ICON_SELECTION_ACTION } from '../components/ChatRoomHeader';
+import SafeBlurView from '../components/SafeBlurView';
 import {
+  CHAT_HEADER_BLUR_INTENSITY_ANDROID,
+  CHAT_HEADER_BLUR_INTENSITY_IOS,
+  CHAT_HEADER_FROST_TINT_OPACITY,
+  ICON_SELECTION_ACTION,
+} from '../components/ChatRoomHeader';
+import {
+  HEADER_MINI_AVATAR_SIZE,
   PROFILE_AVATAR_SIZE,
   PROFILE_COLLAPSE_DISTANCE,
   useProfileCollapseHeader,
@@ -54,6 +62,9 @@ import {
   adjustMediaTransitionRectForScroll,
   isValidMediaTransitionRect,
 } from '../components/contactProfile/mediaTransitionSource';
+
+/** Зазор под шапкой до аватара (~80–100px; в хуке AVATAR_MARGIN_TOP = −12) */
+const CONTACT_PROFILE_AVATAR_BELOW_HEADER = 96;
 
 export default function ContactProfileScreen({ route, navigation }) {
   const { peerName, contactOnline, roomId, nickname } = route.params || {};
@@ -319,11 +330,20 @@ export default function ContactProfileScreen({ route, navigation }) {
     nameStyle,
     statusStyle,
     onNameLayout,
+    headerHeight,
+    headerUnderGlowTop,
+    headerUnderGlowHeight,
+    headerMiniAvatarLeft,
+    headerMiniAvatarTop,
+    headerMiniAvatarStyle,
+    headerUnderGlowStyle,
+    profileChromeStackStyle,
   } = useProfileCollapseHeader({
     headerLayout,
     screenW,
     withStatusRow: true,
     withAvatarScrollGlow: true,
+    avatarTopExtra: CONTACT_PROFILE_AVATAR_BELOW_HEADER,
   });
 
   useEffect(() => {
@@ -487,8 +507,23 @@ export default function ContactProfileScreen({ route, navigation }) {
 
   const content = (
     <TabBackground>
-      <View style={styles.flex}>
+      <Animated.View style={[styles.flexRoot, profileChromeStackStyle]}>
         <View style={[headerLayout.containerStyle, styles.headerBar]}>
+          <SafeBlurView
+            intensity={
+              Platform.OS === 'ios' ? CHAT_HEADER_BLUR_INTENSITY_IOS : CHAT_HEADER_BLUR_INTENSITY_ANDROID
+            }
+            tint="dark"
+            blurReductionFactor={Platform.OS === 'android' ? 4.5 : 3.5}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFillObject,
+              styles.headerBarFrostTint,
+            ]}
+          />
           <View
             style={[
               styles.headerNavRow,
@@ -576,6 +611,22 @@ export default function ContactProfileScreen({ route, navigation }) {
           </View>
         </View>
 
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.headerUnderGlow,
+            { top: headerUnderGlowTop, height: headerUnderGlowHeight },
+            headerUnderGlowStyle,
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(201,168,76,0.2)', 'transparent']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={styles.headerUnderGlowGradient}
+          />
+        </Animated.View>
+
         <Animated.ScrollView
           ref={scrollRef}
           {...GAME_NO_OVERSCROLL_PROPS}
@@ -627,9 +678,9 @@ export default function ContactProfileScreen({ route, navigation }) {
             onRegisterTransitionSource={handleRegisterTransitionSource}
           />
         </Animated.ScrollView>
-      </View>
+      </Animated.View>
 
-      <View style={styles.floatingLayer} pointerEvents="box-none">
+      <View style={styles.floatingLayerUnder} pointerEvents="box-none">
         <Animated.View
           pointerEvents="box-none"
           style={[
@@ -666,19 +717,6 @@ export default function ContactProfileScreen({ route, navigation }) {
           </View>
         </Animated.View>
 
-        <Animated.Text
-          pointerEvents="none"
-          style={[
-            styles.nameFloat,
-            { top: nameStartY, left: screenW / 2, color: V.textPrimary },
-            nameStyle,
-          ]}
-          numberOfLines={1}
-          onLayout={onNameLayout}
-        >
-          {displayName}
-        </Animated.Text>
-
         <Animated.View
           pointerEvents="none"
           style={[styles.statusFloat, { top: statusStartY }, statusStyle]}
@@ -699,6 +737,39 @@ export default function ContactProfileScreen({ route, navigation }) {
               {contactOnline ? 'в сети' : 'не в сети'}
             </Text>
           </View>
+        </Animated.View>
+      </View>
+
+      <View style={styles.floatingLayerOver} pointerEvents="box-none">
+        <Animated.Text
+          pointerEvents="none"
+          style={[
+            styles.nameFloat,
+            { top: nameStartY, left: screenW / 2, color: V.textPrimary },
+            nameStyle,
+          ]}
+          numberOfLines={1}
+          onLayout={onNameLayout}
+        >
+          {displayName}
+        </Animated.Text>
+
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.headerMiniAvatar,
+            {
+              left: headerMiniAvatarLeft,
+              top: headerMiniAvatarTop,
+            },
+            headerMiniAvatarStyle,
+          ]}
+        >
+          <UserAvatar
+            name={peerName || '?'}
+            uri={null}
+            size={HEADER_MINI_AVATAR_SIZE}
+          />
         </Animated.View>
       </View>
       <ContactProfileOverflowMenuModal
@@ -769,9 +840,33 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  flexRoot: {
+    flex: 1,
+    position: 'relative',
+  },
   headerBar: {
-    backgroundColor: 'transparent',
-    zIndex: 8,
+    overflow: 'hidden',
+    zIndex: 2,
+  },
+  headerBarFrostTint: {
+    backgroundColor: V.bgChatsScreen,
+    opacity: CHAT_HEADER_FROST_TINT_OPACITY,
+  },
+  headerUnderGlow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 1,
+    overflow: 'hidden',
+  },
+  headerUnderGlowGradient: {
+    flex: 1,
+  },
+  headerMiniAvatar: {
+    position: 'absolute',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerNavRow: {
     flexDirection: 'row',
@@ -825,13 +920,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: 'transparent',
   },
-  floatingLayer: {
+  floatingLayerUnder: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
+  },
+  floatingLayerOver: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 20,
   },
   avatarFloat: {
     position: 'absolute',
-    zIndex: 21,
   },
   avatarCluster: {
     width: PROFILE_AVATAR_SIZE,
@@ -866,7 +964,6 @@ const styles = StyleSheet.create({
   },
   nameFloat: {
     position: 'absolute',
-    zIndex: 21,
     fontSize: 18,
     fontWeight: '500',
     maxWidth: '92%',

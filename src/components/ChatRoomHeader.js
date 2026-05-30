@@ -18,10 +18,15 @@ import { fetchAriaState } from '../lib/aria';
 import { supabase } from '../lib/supabase';
 import { safeGoBackToMessengerList } from '../lib/safeGoBack';
 
-const HEADER_BLUR_INTENSITY_IOS = 100;
-const HEADER_BLUR_INTENSITY_ANDROID = 72;
-const HEADER_FROST_TINT_OPACITY = 0.28;
-const AVATAR_SIZE = 42;
+export const CHAT_HEADER_BLUR_INTENSITY_IOS = 100;
+export const CHAT_HEADER_BLUR_INTENSITY_ANDROID = 72;
+export const CHAT_HEADER_FROST_TINT_OPACITY = 0.28;
+const HEADER_BLUR_INTENSITY_IOS = CHAT_HEADER_BLUR_INTENSITY_IOS;
+const HEADER_BLUR_INTENSITY_ANDROID = CHAT_HEADER_BLUR_INTENSITY_ANDROID;
+const HEADER_FROST_TINT_OPACITY = CHAT_HEADER_FROST_TINT_OPACITY;
+/** Размер аватара в шапке чата (профиль контакта — тот же) */
+export const CHAT_HEADER_AVATAR_SIZE = 42;
+const AVATAR_SIZE = CHAT_HEADER_AVATAR_SIZE;
 /** Левая зона (назад / крестик) и действия выделения — один визуальный размер */
 /** Экспорт для слотов вне шапки (напр. `headerRight` в GameScreen) — тот же размер, что у действий шапки */
 export const ICON_SELECTION_ACTION = 26;
