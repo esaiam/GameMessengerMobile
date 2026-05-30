@@ -2,7 +2,6 @@ import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
-  Alert,
   Platform,
   type ViewStyle } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
@@ -16,23 +15,12 @@ import Animated, {
   withRepeat,
   withSequence,
   runOnJS } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import {
-  useAudioRecorder,
-  useAudioRecorderState,
-  RecordingPresets,
-  AudioModule } from 'expo-audio';
 import { Mic, Video as VideoIcon } from '../../icons/lucideIcons';
 import { V } from '../../theme';
-import { setAudioModeAsync } from '../../utils/audioMode';
-import { trimVoiceMessageFile, VOICE_TRIM_NATIVE_UNAVAILABLE } from '../../lib/voiceMessageTrim';
-import { pauseDiceSound } from '../../utils/diceSound';
 import { triggerRecordStartHaptic } from '../../utils/recordStartHaptic';
 import VideoRecorder, { type VideoRecorderHandle } from './VideoRecorder';
 import {
   LOCK_COMMIT_UP_PX,
-  LOCK_DROP_MS,
-  LOCK_DROP_SETTLE_MS,
   CANCEL_SLIDE_RATIO,
   RAIL_LOCK_PX,
   SPRING_RAIL_RETURN,
@@ -43,16 +31,10 @@ import {
   RECORD_LIFT,
   LOCK_FLOAT_EXTRA,
   EDGE_GLOW_SIZE,
-  MIC_VIDEO_FRONT_Z,
-  BAR_COUNT,
-  TRIM_MIN_SPAN,
-  MIN_RECORDING_SEC } from './voiceRecorderConstants';
-import { buildWaveform40FromAmps } from './voiceWaveformUtils';
+  MIC_VIDEO_FRONT_Z } from './voiceRecorderConstants';
 import { PausedPreviewBar } from './PausedPreviewBar';
 import { VoiceRecordingOverlay } from './VoiceRecordingOverlay';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-type RS = 'IDLE' | 'RECORDING' | 'LOCKED' | 'PAUSED';
+import { useVoiceRecordingPipeline } from './useVoiceRecordingPipeline';
 
 interface Props {
   onSendAudio: (uri: string, duration: number, waveform: number[]) => void;
@@ -78,41 +60,15 @@ function VoiceRecorder({
   onVideoSendError,
   onVideoUploadFinished,
   allowVideoRecording = true }: Props) {
-  const [state, setState] = useState<RS>('IDLE');
-  const [dur, setDur] = useState(0);
-  const [amps, setAmps] = useState<number[]>([]);
-  const [cancelActive, setCancelActive] = useState(false);
   const [mediaMode, setMediaMode] = useState<'audio' | 'video'>('audio');
   const [isVideoRecording, setIsVideoRecording] = useState(false);
   const [isVideoLocked, setIsVideoLocked] = useState(false);
 
-  const stateRef = useRef<RS>('IDLE');
-  const durRef = useRef(0);
-  const ampsRef = useRef<number[]>([]);
-  const lastMeterRef = useRef(0);
-  const savedUriRef = useRef<string | null>(null);
-  /** Доля [0,1] границ обрезки в режиме PAUSED (для длительности при отправке) */
-  const pausedTrimRef = useRef({ s: 0, e: 1 });
-  const handlePausedTrim = useCallback((s: number, e: number) => {
-    pausedTrimRef.current = { s, e };
-  }, []);
-  /** setTimeout id — ожидание 220 мс перед стартом записи */
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** true когда таймер сработал и запись инициирована */
   const isHoldingRef = useRef(false);
-  /** Отпустили до фактического старта record() — doStart не должен начинать запись */
   const holdCancelledRef = useRef(false);
-  /** Защита от повторного запуска анимации падения → doLock */
-  const lockDropArmedRef = useRef(false);
   const videoLockArmedRef = useRef(false);
   const videoRecorderRef = useRef<VideoRecorderHandle>(null);
-  const onRecordingChangeRef = useRef(onRecordingChange);
-  onRecordingChangeRef.current = onRecordingChange;
-
-  const recorder = useAudioRecorder({
-    ...RecordingPresets.HIGH_QUALITY,
-    isMeteringEnabled: true } as Parameters<typeof useAudioRecorder>[0]);
-  const recStatus = useAudioRecorderState(recorder, 100);
 
   // ── Reanimated shared values ────────────────────────────────────────────────
   /** Удержание пальца: 0.93 → spring 1 (спек onPressIn / onPressOut) */
@@ -139,6 +95,44 @@ function VoiceRecorder({
   const overlayOp = useSharedValue(0);
   const isMicActiveSV = useSharedValue(0);
 
+  const audio = useVoiceRecordingPipeline({
+    onSendAudio,
+    onRecordingChange,
+    anim: {
+      pressSV,
+      overlayOp,
+      recordLiftSV,
+      micDragSV,
+      railSV,
+      txSV,
+      tySV,
+      lockFallSV,
+      lockLatchSV,
+      lockGesturesOffSV,
+      edgeGlowSV,
+      dotOp,
+    },
+    holdRefs: { holdCancelledRef, isHoldingRef },
+  });
+
+  const {
+    state,
+    stateRef,
+    dur,
+    bars,
+    cancelActive,
+    setCancelActive,
+    savedUriRef,
+    handlePausedTrim,
+    lockDropArmedRef,
+    isAudioOverlayActive,
+    doStart,
+    doSend,
+    doCancel,
+    doPause,
+    playLockDropThenLock,
+  } = audio;
+
   // ── Mode morph (audio ↔ video) ──────────────────────────────────────────────
   const modeMorphSV = useSharedValue(mediaMode === 'video' ? 1 : 0);
   useEffect(() => {
@@ -152,66 +146,6 @@ function VoiceRecorder({
       duration: 220,
       easing: Easing.out(Easing.cubic) });
   }, [mediaMode, modeMorphSV]);
-
-  // ── State machine ───────────────────────────────────────────────────────────
-  const go = useCallback(
-    (s: RS) => {
-      stateRef.current = s;
-      setState(s);
-      onRecordingChange?.(s === 'RECORDING' || s === 'LOCKED' || s === 'PAUSED');
-    },
-    [onRecordingChange],
-  );
-
-  // ── Duration tracking ───────────────────────────────────────────────────────
-  useEffect(() => {
-    if (stateRef.current !== 'RECORDING' && stateRef.current !== 'LOCKED') return;
-    const d = Math.floor((recStatus.durationMillis ?? 0) / 1000);
-    durRef.current = d;
-    setDur(d);
-  }, [recStatus.durationMillis]);
-
-  // ── Amplitude collection ────────────────────────────────────────────────────
-  useEffect(() => {
-    const s = stateRef.current;
-    if (s !== 'RECORDING' && s !== 'LOCKED') return;
-    const now = Date.now();
-    if (now - lastMeterRef.current < 80) return;
-    lastMeterRef.current = now;
-    // Как в expo-av metering: ~−160…0 dB; на Android часто всегда -160 — тогда тик по durationMillis + псевдо-амплитуда.
-    const db =
-      typeof recStatus.metering === 'number' &&
-      !Number.isNaN(recStatus.metering) &&
-      recStatus.metering > -159 // -160 = нет данных
-        ? recStatus.metering
-        : null;
-
-    let linear: number;
-    if (db !== null) {
-      linear = Math.pow((db + 160) / 160, 0.5);
-    } else {
-      const prev = ampsRef.current[ampsRef.current.length - 1] ?? 0.3;
-      const delta = (Math.random() - 0.5) * 0.3;
-      linear = Math.min(0.95, Math.max(0.05, prev + delta));
-    }
-    ampsRef.current.push(linear);
-  }, [recStatus.metering, recStatus.durationMillis]);
-
-  // ── Red dot pulse (слабее и медленнее) ───────────────────────────────────────
-  useEffect(() => {
-    if (state === 'RECORDING' || state === 'LOCKED') {
-      dotOp.value = withRepeat(
-        withSequence(
-          withTiming(0.45, { duration: 700 }),
-          withTiming(1, { duration: 700 }),
-        ),
-        -1,
-        false,
-      );
-    } else {
-      dotOp.value = 1;
-    }
-  }, [state, dotOp]);
 
   // ── Video: mirror audio button lift (overlay — только в VideoRecorder) ───────
   useEffect(() => {
@@ -269,212 +203,6 @@ function VoiceRecorder({
     }
   }, [state, isVideoRecording, isVideoLocked, edgeGlowSV]);
 
-  // ── Animations reset ────────────────────────────────────────────────────────
-  const resetAnim = useCallback(() => {
-    pressSV.value = 1;
-    recordLiftSV.value = 1;
-    micDragSV.value = 0;
-    edgeGlowSV.value = 0;
-    railSV.value = 0;
-    txSV.value = withSpring(0, SPRING_RAIL_RETURN);
-    tySV.value = withSpring(0, SPRING_RAIL_RETURN);
-    lockFallSV.value = 0;
-    lockLatchSV.value = 0;
-    lockGesturesOffSV.value = 0;
-    overlayOp.value = 0;
-    lockDropArmedRef.current = false;
-    pausedTrimRef.current = { s: 0, e: 1 };
-    setCancelActive(false);
-  }, [pressSV, recordLiftSV, micDragSV, edgeGlowSV, txSV, tySV, railSV, lockFallSV, lockLatchSV, lockGesturesOffSV, overlayOp]);
-
-  // ── Audio actions ───────────────────────────────────────────────────────────
-  const doStart = useCallback(async () => {
-    const abortIfHoldReleased = () => {
-      if (!holdCancelledRef.current && isHoldingRef.current) return false;
-      pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
-      return true;
-    };
-    try {
-      const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (abortIfHoldReleased()) return;
-      if (!perm.granted) {
-        Alert.alert('Нет доступа', 'Разрешите доступ к микрофону');
-        pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
-        return;
-      }
-      pauseDiceSound();
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        interruptionMode: 'doNotMix',
-        allowsRecording: true,
-        shouldRouteThroughEarpiece: false });
-      if (abortIfHoldReleased()) return;
-      await recorder.prepareToRecordAsync();
-      if (abortIfHoldReleased() || stateRef.current !== 'IDLE') return;
-      recorder.record();
-      ampsRef.current = [];
-      lastMeterRef.current = 0;
-      savedUriRef.current = null;
-      go('RECORDING');
-      overlayOp.value = withTiming(1, { duration: 150 });
-      pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
-      recordLiftSV.value = withSpring(RECORD_LIFT, { damping: 14, stiffness: 140 });
-      railSV.value = 0;
-      txSV.value = 0;
-      tySV.value = 0;
-      lockFallSV.value = 0;
-      lockLatchSV.value = 0;
-      lockGesturesOffSV.value = 0;
-      lockDropArmedRef.current = false;
-      micDragSV.value = 1;
-    } catch (e) {
-      console.warn('[VoiceRecorder] doStart:', e);
-      pressSV.value = withSpring(1, { damping: 12, stiffness: 200 });
-    }
-  }, [recorder, go, pressSV, overlayOp, recordLiftSV, micDragSV, railSV, txSV, tySV, lockFallSV, lockLatchSV, lockGesturesOffSV]);
-
-  const doSend = useCallback(async () => {
-    const s = stateRef.current;
-    if (s === 'IDLE') return;
-    const d = durRef.current;
-    const caps = [...ampsRef.current];
-    const pausedUri = s === 'PAUSED' ? savedUriRef.current : null;
-    const pausedTrim = s === 'PAUSED' ? { ...pausedTrimRef.current } : null;
-    setAmps(caps);
-    go('IDLE');
-    resetAnim();
-    try {
-      if (s === 'PAUSED') {
-        if (pausedUri) {
-          const { s: ts, e: te } = pausedTrim ?? { s: 0, e: 1 };
-          const span = Math.max(TRIM_MIN_SPAN, te - ts);
-          const effSec = Math.round(d * span);
-          if (effSec < MIN_RECORDING_SEC) return;
-          const wf = buildWaveform40FromAmps(caps, ts, te);
-          try {
-            const sendUri = await trimVoiceMessageFile(pausedUri, d, { start: ts, end: te });
-            onSendAudio(sendUri, effSec, wf);
-          } catch (e) {
-            console.warn('[VoiceRecorder] trim/send PAUSED:', e);
-            const msg = e instanceof Error ? e.message : String(e);
-            if (msg === VOICE_TRIM_NATIVE_UNAVAILABLE) {
-              Alert.alert(
-                'Нужна пересборка',
-                'Обрезка голоса работает только в dev/release-сборке с нативным модулем.\n\nnpx expo run:android\nили\nnpx expo run:ios',
-              );
-            } else {
-              Alert.alert('Ошибка', 'Не удалось обрезать голосовое. Попробуй ещё раз.');
-            }
-          }
-        }
-        return;
-      }
-      await recorder.stop();
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        interruptionMode: 'mixWithOthers',
-        allowsRecording: false,
-        shouldRouteThroughEarpiece: false });
-      if (d < MIN_RECORDING_SEC) return;
-      const uri = recorder.uri;
-      if (uri) onSendAudio(uri, d, buildWaveform40FromAmps(caps, 0, 1));
-    } catch (e) {
-      console.warn('[VoiceRecorder] doSend:', e);
-    }
-  }, [recorder, go, resetAnim, onSendAudio]);
-
-  const doCancel = useCallback(async () => {
-    const s = stateRef.current;
-    if (s === 'IDLE') return;
-    go('IDLE');
-    resetAnim();
-    try {
-      if (s !== 'PAUSED') await recorder.stop();
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        interruptionMode: 'mixWithOthers',
-        allowsRecording: false,
-        shouldRouteThroughEarpiece: false });
-    } catch (e) {
-      console.warn('[VoiceRecorder] doCancel:', e);
-    }
-  }, [recorder, go, resetAnim]);
-
-  const doPause = useCallback(async () => {
-    if (stateRef.current !== 'LOCKED') return;
-    const caps = [...ampsRef.current];
-    const d = durRef.current;
-    try {
-      await recorder.stop();
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        interruptionMode: 'mixWithOthers',
-        allowsRecording: false,
-        shouldRouteThroughEarpiece: false });
-      savedUriRef.current = recorder.uri;
-    } catch (e) {
-      console.warn('[VoiceRecorder] doPause:', e);
-    }
-    pausedTrimRef.current = { s: 0, e: 1 };
-    setAmps(caps);
-    setDur(d);
-    recordLiftSV.value = 1;
-    micDragSV.value = 0;
-    railSV.value = 0;
-    lockFallSV.value = 0;
-    lockLatchSV.value = 0;
-    lockGesturesOffSV.value = 0;
-    lockDropArmedRef.current = false;
-    edgeGlowSV.value = 0;
-    go('PAUSED');
-  }, [recorder, go, recordLiftSV, micDragSV, railSV, lockFallSV, lockLatchSV, lockGesturesOffSV, edgeGlowSV]);
-
-  const doLock = useCallback(() => {
-    if (stateRef.current !== 'RECORDING') return;
-    lockDropArmedRef.current = false;
-    lockLatchSV.value = 0;
-    lockFallSV.value = 0;
-    micDragSV.value = 0;
-    lockGesturesOffSV.value = 1;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    railSV.value = 0;
-    txSV.value = 0;
-    tySV.value = 0;
-    go('LOCKED');
-    setCancelActive(false);
-  }, [go, txSV, tySV, railSV, lockFallSV, lockLatchSV, micDragSV, lockGesturesOffSV]);
-
-  const onLockDropAnimInterrupted = useCallback(() => {
-    lockDropArmedRef.current = false;
-    lockLatchSV.value = 0;
-    lockFallSV.value = 0;
-    tySV.value = 0;
-  }, [lockFallSV, lockLatchSV, tySV]);
-
-  const playLockDropThenLock = useCallback(() => {
-    if (lockDropArmedRef.current) return;
-    if (stateRef.current !== 'RECORDING') return;
-    lockDropArmedRef.current = true;
-    lockLatchSV.value = 1;
-    const settleEase = Easing.out(Easing.cubic);
-    lockFallSV.value = withTiming(
-      24,
-      { duration: LOCK_DROP_MS, easing: Easing.out(Easing.cubic) },
-      (finished) => {
-        if (!finished) {
-          lockLatchSV.value = 0;
-          runOnJS(onLockDropAnimInterrupted)();
-          return;
-        }
-        const settle = LOCK_DROP_SETTLE_MS;
-        tySV.value = withTiming(0, { duration: settle, easing: settleEase }, (f2) => {
-          if (f2) runOnJS(doLock)();
-        });
-        lockFallSV.value = withTiming(0, { duration: settle, easing: settleEase });
-      },
-    );
-  }, [lockFallSV, lockLatchSV, tySV, doLock, onLockDropAnimInterrupted]);
-
   // ── Gesture JS callbacks (JS-thread only) ───────────────────────────────────
   const clearHoldTimer = useCallback(() => {
     if (holdTimerRef.current !== null) {
@@ -488,24 +216,8 @@ function VoiceRecorder({
       holdCancelledRef.current = true;
       isHoldingRef.current = false;
       clearHoldTimer();
-      const s = stateRef.current;
-      void (async () => {
-        try {
-          if (s === 'RECORDING' || s === 'LOCKED') {
-            await recorder.stop();
-            await setAudioModeAsync({
-              playsInSilentMode: true,
-              interruptionMode: 'mixWithOthers',
-              allowsRecording: false,
-              shouldRouteThroughEarpiece: false });
-          }
-        } catch {
-          /* ignore */
-        }
-      })();
-      onRecordingChangeRef.current?.(false);
     };
-  }, [recorder, clearHoldTimer]);
+  }, [clearHoldTimer]);
 
   const pressDown = useCallback(() => {
     pressSV.value = withTiming(0.93, { duration: 80 });
@@ -763,19 +475,7 @@ function VoiceRecorder({
     [maxSlideXSV],
   );
 
-  // ── Waveform bars ───────────────────────────────────────────────────────────
-  const srcBars = amps.length > 0 ? amps : Array(BAR_COUNT).fill(0.05) as number[];
-  const step = srcBars.length / BAR_COUNT;
-  const bars: number[] = Array.from({ length: BAR_COUNT }, (_, i) => {
-    const s = Math.floor(i * step);
-    const e = Math.max(s + 1, Math.floor((i + 1) * step));
-    const sl = srcBars.slice(s, e);
-    return sl.reduce((a, b) => a + b, 0) / sl.length;
-  });
-
   const isMicActive = state === 'RECORDING' || state === 'LOCKED' || isVideoRecording || isVideoLocked;
-  /** Overlay капсулы — только audio; video рисует свой в VideoRecorder */
-  const isAudioOverlayActive = state === 'RECORDING' || state === 'LOCKED';
   useEffect(() => {
     isMicActiveSV.value = isMicActive ? 1 : 0;
   }, [isMicActive, isMicActiveSV]);
