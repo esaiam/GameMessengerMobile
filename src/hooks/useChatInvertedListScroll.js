@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { shouldStickScrollOnMessagesTailChange } from '../components/chat/chatListScrollStick';
 import { CHAT_AT_BOTTOM_THRESHOLD_PX } from '../components/chat/chatViewConstants';
 
-/** Повтор после suppress (клавиатура / emoji settling). */
+/** Повтор tail-scroll если suppress (emoji panel layout). */
 const SCROLL_SUPPRESS_RETRY_MS = 360;
 
 function scrollSuppressed(suppressRef) {
@@ -12,26 +12,52 @@ function scrollSuppressed(suppressRef) {
 }
 
 /**
- * Inverted FlatList: отслеживание «у низа», сброс при смене комнаты, подскролл при новых сообщениях.
- * suppressStickToBottomScrollRef — один ref или массив (напр. клавиатура + смена высоты композера).
+ * Inverted FlatList: «у низа», сброс при смене комнаты, подскролл при новых сообщениях.
+ * listOpacity — лента скрыта до первого scrollToOffset(0), без видимого прыжка при входе.
  */
-export function useChatInvertedListScroll(roomId, messages, suppressStickToBottomScrollRef) {
+export function useChatInvertedListScroll(
+  roomId,
+  messages,
+  suppressStickToBottomScrollRef,
+  listOpacity,
+) {
   const flatListRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const initialScrollDoneRef = useRef(false);
   const messagesTailPrevRef = useRef([]);
 
-  const onScroll = useCallback((e) => {
-    const y = e?.nativeEvent?.contentOffset?.y ?? 0;
-    const atBottom = y < CHAT_AT_BOTTOM_THRESHOLD_PX;
-    if (atBottom !== stickToBottomRef.current) {
-      stickToBottomRef.current = atBottom;
-    }
-  }, []);
+  const onScroll = useCallback(
+    (e) => {
+      // Inset KB/emoji меняет contentOffset без действия пользователя — не сбрасываем «у низа».
+      if (scrollSuppressed(suppressStickToBottomScrollRef)) return;
+      const y = e?.nativeEvent?.contentOffset?.y ?? 0;
+      const atBottom = y < CHAT_AT_BOTTOM_THRESHOLD_PX;
+      if (atBottom !== stickToBottomRef.current) {
+        stickToBottomRef.current = atBottom;
+      }
+    },
+    [suppressStickToBottomScrollRef],
+  );
 
   const scrollToBottomNow = useCallback(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, []);
+
+  const revealList = useCallback(() => {
+    if (listOpacity != null) {
+      listOpacity.value = 1;
+    }
+  }, [listOpacity]);
+
+  /**
+   * KB / composer inset: Reanimated spacer не всегда триггерит remeasure FlatList —
+   * компенсируем scroll сразу, без suppress (иначе лента остаётся под KB).
+   */
+  const scrollToBottomOnInsetChange = useCallback(() => {
+    if (!initialScrollDoneRef.current) return;
+    if (!stickToBottomRef.current) return;
+    scrollToBottomNow();
+  }, [scrollToBottomNow]);
 
   const scrollToBottomIfStuck = useCallback(() => {
     if (!initialScrollDoneRef.current) return undefined;
@@ -63,19 +89,45 @@ export function useChatInvertedListScroll(roomId, messages, suppressStickToBotto
     };
   }, [scrollToBottomNow, suppressStickToBottomScrollRef]);
 
-  const onListLayoutReady = useCallback(() => {
+  /** Первый показ: scroll + reveal за один кадр, пока opacity=0. */
+  const completeInitialScroll = useCallback(() => {
     if (initialScrollDoneRef.current) return;
     initialScrollDoneRef.current = true;
     stickToBottomRef.current = true;
-    return scrollToBottomIfStuck();
-  }, [scrollToBottomIfStuck]);
+
+    let retryTimer = null;
+    const finish = () => {
+      scrollToBottomNow();
+      revealList();
+    };
+
+    const raf = requestAnimationFrame(() => {
+      if (!scrollSuppressed(suppressStickToBottomScrollRef)) {
+        finish();
+        return;
+      }
+      retryTimer = setTimeout(finish, SCROLL_SUPPRESS_RETRY_MS);
+    });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      if (retryTimer != null) clearTimeout(retryTimer);
+    };
+  }, [scrollToBottomNow, revealList, suppressStickToBottomScrollRef]);
+
+  const onListLayoutReady = useCallback(() => {
+    return completeInitialScroll();
+  }, [completeInitialScroll]);
 
   useEffect(() => {
     if (!roomId) return;
     stickToBottomRef.current = true;
     initialScrollDoneRef.current = false;
     messagesTailPrevRef.current = [];
-  }, [roomId]);
+    if (listOpacity != null) {
+      listOpacity.value = 0;
+    }
+  }, [roomId, listOpacity]);
 
   useEffect(() => {
     const prev = messagesTailPrevRef.current;
@@ -83,14 +135,17 @@ export function useChatInvertedListScroll(roomId, messages, suppressStickToBotto
     messagesTailPrevRef.current = messages;
 
     if (!tailChanged) return;
+
+    if (!initialScrollDoneRef.current) return undefined;
+
     return scrollToBottomIfStuck();
   }, [messages, scrollToBottomIfStuck]);
 
   return {
     flatListRef,
-    initialScrollDoneRef,
     onScroll,
     onListLayoutReady,
+    scrollToBottomOnInsetChange,
     scrollToBottomIfStuck,
   };
 }

@@ -53,6 +53,7 @@ import Reanimated, {
   useAnimatedStyle,
   useAnimatedReaction,
   runOnJS } from 'react-native-reanimated';
+import { useKeyboardHandler } from 'react-native-keyboard-controller';
 import { V, chatListBottomFadeBottom } from '../theme';
 import {
   MAX_RENDERED_VIDEOS,
@@ -234,8 +235,13 @@ export default function Chat({
     flatListRef,
     onScroll: onListScroll,
     onListLayoutReady,
-    scrollToBottomIfStuck,
-  } = useChatInvertedListScroll(roomId, messages, listScrollSuppressRefs);
+    scrollToBottomOnInsetChange,
+  } = useChatInvertedListScroll(
+    roomId,
+    messages,
+    listScrollSuppressRefs,
+    isAriaChat ? null : listOpacity,
+  );
 
   const ephemeralClockTick = useChatEphemeralClockTick(messages, renderPausedRef);
 
@@ -393,12 +399,22 @@ export default function Chat({
     return { height: baseComposerH + visualEmojiH + kbH };
   });
 
+  useKeyboardHandler(
+    {
+      onMove: () => {
+        'worklet';
+        runOnJS(scrollToBottomOnInsetChange)();
+      },
+    },
+    [scrollToBottomOnInsetChange],
+  );
+
   useAnimatedReaction(
     () =>
-      `${composerStackHeightShared.value}|${emojiPanelHeightShared.value}|${keyboardHeightLib.value}`,
+      `${composerStackHeightShared.value}|${emojiPanelHeightShared.value}`,
     (sig, prev) => {
       if (prev != null && sig !== prev) {
-        runOnJS(scrollToBottomIfStuck)();
+        runOnJS(scrollToBottomOnInsetChange)();
       }
     },
   );
@@ -888,6 +904,7 @@ export default function Chat({
 
       <View style={{ flex: 1, position: 'relative' }}>
         <ChatMessageList
+          roomId={roomId}
           flatListRef={flatListRef}
           formattedMessages={formattedMessages}
           renderItem={renderItem}
@@ -896,6 +913,7 @@ export default function Chat({
           listBottomSpacerStyle={listBottomSpacerStyle}
           onListScroll={onListScroll}
           onListLayoutReady={onListLayoutReady}
+          onListContentResize={scrollToBottomOnInsetChange}
           messagesLoading={messagesLoading}
           chatRoomHeader={chatRoomHeader}
           listPaddingTop={listPaddingTop}

@@ -11,6 +11,7 @@ import { canLoadOlderOnEndReached } from './chatListScrollStick';
 import { CHAT_AT_BOTTOM_THRESHOLD_PX } from './chatViewConstants';
 
 export default function ChatMessageList({
+  roomId,
   flatListRef,
   formattedMessages,
   renderItem,
@@ -19,6 +20,7 @@ export default function ChatMessageList({
   listBottomSpacerStyle,
   onListScroll,
   onListLayoutReady,
+  onListContentResize,
   messagesLoading,
   chatRoomHeader,
   listPaddingTop,
@@ -138,12 +140,14 @@ export default function ChatMessageList({
     (_w, h) => {
       listMetricsRef.current.contentH = h;
       onListLayoutReady?.();
+      onListContentResize?.();
     },
-    [onListLayoutReady],
+    [onListLayoutReady, onListContentResize],
   );
 
   const messageList = (
     <FlatList
+      key={roomId ?? 'no-room'}
       {...overscrollProps}
       ref={flatListRef}
       data={formattedMessages}

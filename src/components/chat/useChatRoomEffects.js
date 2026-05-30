@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
-import { withTiming } from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
 import { fetchPublicKeys } from '../../utils/VaultKeyServer';
 import roomMessagesCache from '../../utils/roomMessagesCache';
@@ -82,17 +81,15 @@ export default function useChatRoomEffects({
     }
     let cancelled = false;
     const loadMessages = async () => {
+      listOpacity.value = 0;
+
       let cached = roomMessagesCache.get(roomId);
       if (!cached || cached.length === 0) {
         cached = await roomMessagesCache.hydrateFromDisk(roomId);
       }
-      if (!cached || cached.length === 0) {
-        listOpacity.value = 0;
-      }
       if (cached && cached.length > 0) {
         setMessages(cached);
         setMessagesLoading(false);
-        listOpacity.value = 1;
       } else {
         setMessagesLoading(true);
       }
@@ -106,6 +103,7 @@ export default function useChatRoomEffects({
 
       if (cancelled || !data) {
         setMessagesLoading(false);
+        listOpacity.value = 1;
         return;
       }
 
@@ -149,8 +147,8 @@ export default function useChatRoomEffects({
       setMessagesLoading(false);
       onInitialPageLoaded?.(data.length);
 
-      if (!cached || cached.length === 0) {
-        listOpacity.value = withTiming(1, { duration: 80 });
+      if (merged.length === 0) {
+        listOpacity.value = 1;
       }
     };
     loadMessages();
