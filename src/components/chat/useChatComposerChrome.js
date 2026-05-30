@@ -102,7 +102,10 @@ export default function useChatComposerChrome({
         !emojiPanelGifSearchFocusedShared.value &&
         emojiPanelHeightShared.value > 0
       ) {
-        emojiPanelHeightShared.value = storedKeyboardHeightShared.value;
+        emojiPanelHeightShared.value = withTiming(storedKeyboardHeightShared.value, {
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+        });
       }
     },
   );

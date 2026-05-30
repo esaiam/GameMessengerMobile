@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -35,13 +35,35 @@ import {
   MIC_INNER,
   ON_SAGE_GLYPH } from './chatComposerConstants';
 
+function composerInputBarBottomPad(insets) {
+  return Math.max(
+    insets.bottom,
+    Math.max(insets.bottom, 10) + TAB_BAR_LAYOUT.floatBottom - 8,
+  );
+}
+
+/** Blur-капсула; fallback полупрозрачный пока blur не ready (Android). */
+function ComposerCapsuleShell({ children, style, intensity, blurReductionFactor, ...rest }) {
+  return (
+    <SafeBlurView
+      intensity={intensity}
+      tint="dark"
+      blurReductionFactor={blurReductionFactor}
+      fallbackBackgroundColor="rgba(16, 18, 24, 0.52)"
+      style={style}
+      {...rest}
+    >
+      {children}
+    </SafeBlurView>
+  );
+}
+
 /**
  * Нижний блок чата: reply-плашка, панель эмодзи, капсула ввода (blur), VoiceRecorder.
  * Внешний Reanimated-контейнер (клавиатура) остаётся в Chat.
  */
 export default function ChatComposer({
   inputBarRef,
-  reportInputBar,
   reportComposerBaseHeight,
   insets,
   visibleReplyTo,
@@ -115,6 +137,13 @@ export default function ChatComposer({
   onEmojiPanelGifSearchBlur,
   onEmojiPanelGifTabExit }) {
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  /** Не уменьшаем при открытии KB — иначе insets.bottom скачет и капсула дёргается внутри wrapper. */
+  const [inputBarBottomPad, setInputBarBottomPad] = useState(() => composerInputBarBottomPad(insets));
+
+  useEffect(() => {
+    const next = composerInputBarBottomPad(insets);
+    setInputBarBottomPad((prev) => (next > prev + 0.5 ? next : prev));
+  }, [insets.bottom]);
 
   return (
     <>
@@ -203,14 +232,11 @@ export default function ChatComposer({
 
         <View
           ref={inputBarRef}
-          onLayout={(e) => reportInputBar(e.nativeEvent.layout.height)}
           style={{
             paddingHorizontal: TAB_BAR_LAYOUT.horizontalPad,
             paddingTop: TAB_BAR_LAYOUT.topPad,
-            paddingBottom: Math.max(
-              insets.bottom,
-              Math.max(insets.bottom, 10) + TAB_BAR_LAYOUT.floatBottom - 8
-            ) }}
+            paddingBottom: inputBarBottomPad,
+            backgroundColor: 'transparent' }}
         >
         <View
           ref={capsuleWrapperRef}
@@ -224,9 +250,8 @@ export default function ChatComposer({
             zIndex: 2,
             elevation: 4 }}
         >
-          <SafeBlurView
+          <ComposerCapsuleShell
             intensity={Platform.OS === 'ios' ? INPUT_BAR_BLUR_INTENSITY_IOS : INPUT_BAR_BLUR_INTENSITY_ANDROID}
-            tint="dark"
             blurReductionFactor={Platform.OS === 'android' ? 4.5 : 3.5}
             style={[
               tw`flex-row items-end`,
@@ -246,7 +271,7 @@ export default function ChatComposer({
                 StyleSheet.absoluteFillObject,
                 {
                   backgroundColor: V.bgElevated,
-                  opacity: INPUT_BAR_FROST_TINT_OPACITY }]}
+                  opacity: 0.1 }]}
             />
             <LinearGradient
               pointerEvents="none"
@@ -465,7 +490,7 @@ export default function ChatComposer({
                 )}
               </>
             )}
-          </SafeBlurView>
+          </ComposerCapsuleShell>
 
           {uiReady &&
             (!ariaTextOnly || ariaAllowVoice) &&

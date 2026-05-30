@@ -20,7 +20,6 @@ export default function ChatMessageList({
   listBottomSpacerStyle,
   onListScroll,
   onListLayoutReady,
-  onListContentResize,
   messagesLoading,
   chatRoomHeader,
   listPaddingTop,
@@ -72,11 +71,6 @@ export default function ChatMessageList({
       },
     });
   const mergedOnScroll = onListScroll ? handleListScroll : scrollHandler;
-
-  const ListBottomInsetHeader = useCallback(
-    () => <Reanimated.View collapsable={false} style={listBottomSpacerStyle} />,
-    [listBottomSpacerStyle],
-  );
 
   const listFooterComponent = useMemo(
     () => (
@@ -132,18 +126,27 @@ export default function ChatMessageList({
     onLoadOlderMessages?.();
   }, [onLoadOlderMessages]);
 
-  const handleListLayout = useCallback((e) => {
-    listMetricsRef.current.layoutH = e.nativeEvent.layout.height;
-  }, []);
+  const handleListLayout = useCallback(
+    (e) => {
+      listMetricsRef.current.layoutH = e.nativeEvent.layout.height;
+      if (formattedMessages.length > 0) {
+        onListLayoutReady?.();
+      }
+    },
+    [formattedMessages.length, onListLayoutReady],
+  );
 
   const handleContentSizeChange = useCallback(
     (_w, h) => {
       listMetricsRef.current.contentH = h;
       onListLayoutReady?.();
-      onListContentResize?.();
     },
-    [onListLayoutReady, onListContentResize],
+    [onListLayoutReady],
   );
+
+  const listHeaderSpacer = listBottomSpacerStyle ? (
+    <Reanimated.View style={listBottomSpacerStyle} />
+  ) : null;
 
   const messageList = (
     <FlatList
@@ -177,11 +180,11 @@ export default function ChatMessageList({
         chatRoomHeader ? { backgroundColor: 'transparent' } : null,
         { zIndex: 1 },
       ]}
-      removeClippedSubviews={Platform.OS === 'android'}
+      removeClippedSubviews={false}
       maintainVisibleContentPosition={maintainVisible}
       onEndReached={onLoadOlderMessages ? handleEndReached : undefined}
       onEndReachedThreshold={0.2}
-      ListHeaderComponent={ListBottomInsetHeader}
+      ListHeaderComponent={listHeaderSpacer}
       ListFooterComponent={listFooterComponent}
       contentContainerStyle={[
         tw`pt-1`,

@@ -1,6 +1,7 @@
 import React, {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useCallback,
   useMemo } from 'react';
@@ -8,7 +9,8 @@ import {
   View,
   useWindowDimensions,
   Alert,
-  TouchableOpacity } from 'react-native';
+  TouchableOpacity,
+  Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,14 +53,15 @@ import AriaStateGauges from './chat/AriaStateGauges';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedReaction,
   runOnJS } from 'react-native-reanimated';
-import { useKeyboardHandler } from 'react-native-keyboard-controller';
-import { V, chatListBottomFadeBottom } from '../theme';
+import { useKeyboardHandler, KeyboardController, AndroidSoftInputModes, KeyboardStickyView } from 'react-native-keyboard-controller';
+import { V } from '../theme';
 import {
   MAX_RENDERED_VIDEOS,
   CHAT_HEADER_TO_LIST_GAP_PX,
-  estimateComposerStackHeight } from './chat/chatViewConstants';
+  estimateComposerStackHeight,
+  computeChatListScrollSpacer,
+  computeChatListEmojiPanelInset } from './chat/chatViewConstants';
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
 import { useChatInvertedListScroll } from '../hooks/useChatInvertedListScroll';
@@ -110,15 +113,7 @@ export default function Chat({
   const insets = useSafeAreaInsets();
   const inputBarRef = useRef(null);
   const lastComposerLayoutHRef = useRef(0);
-
-  const reportInputBar = useCallback((layoutH) => {
-    if (typeof layoutH === 'number' && layoutH > 0) {
-      onInputBarHeight?.(layoutH);
-    }
-    inputBarRef.current?.measureInWindow((x, y) => {
-      if (typeof y === 'number') onInputBarTopY?.(y);
-    });
-  }, [onInputBarHeight, onInputBarTopY]);
+  const pendingComposerHeightRef = useRef(null);
   const [internalMessages, setInternalMessages] = useState([]);
   const ariaControlled =
     isAriaChat === true && typeof setAriaMessages === 'function' && Array.isArray(ariaMessages);
@@ -177,7 +172,8 @@ export default function Chat({
     onTopOverlayHeight?.(headerOverlayH + gaugesH);
   }, [chatRoomHeader, headerOverlayH, isAriaChat, ariaGaugesH, onTopOverlayHeight]);
 
-  const { armComposerInsetSettling, listScrollSuppressRefs } = useChatInputSettling(showEmojiPicker);
+  const { armComposerInsetSettling, listScrollSuppressRefs, keyboardSettlingRef } =
+    useChatInputSettling(showEmojiPicker);
 
   const {
     play: playVoice,
@@ -235,7 +231,6 @@ export default function Chat({
     flatListRef,
     onScroll: onListScroll,
     onListLayoutReady,
-    scrollToBottomOnInsetChange,
   } = useChatInvertedListScroll(
     roomId,
     messages,
@@ -375,7 +370,7 @@ export default function Chat({
     return unsub;
   }, [navigation, releaseComposerKeyboard]);
 
-  const reportComposerBaseHeight = useCallback((layoutH) => {
+  const applyComposerStackHeight = useCallback((layoutH) => {
     if (typeof layoutH !== 'number' || layoutH <= 0) return;
     if (Math.abs(layoutH - lastComposerLayoutHRef.current) < 0.5) return;
     lastComposerLayoutHRef.current = layoutH;
@@ -383,44 +378,79 @@ export default function Chat({
     armComposerInsetSettling();
   }, [armComposerInsetSettling, composerStackHeightShared]);
 
+  const flushPendingComposerStackHeight = useCallback(() => {
+    const pending = pendingComposerHeightRef.current;
+    if (pending == null) return;
+    pendingComposerHeightRef.current = null;
+    applyComposerStackHeight(pending);
+  }, [applyComposerStackHeight]);
+
+  /** Layout во время KB часто stale — на close сбрасываем, не применяем (рывок marginBottom). */
+  const discardPendingComposerHeight = useCallback(() => {
+    pendingComposerHeightRef.current = null;
+  }, []);
+
+  const reportComposerBaseHeight = useCallback((layoutH) => {
+    if (typeof layoutH !== 'number' || layoutH <= 0) return;
+    if (Math.abs(layoutH - lastComposerLayoutHRef.current) < 0.5) return;
+    if (keyboardSettlingRef.current) {
+      pendingComposerHeightRef.current = layoutH;
+      return;
+    }
+    applyComposerStackHeight(layoutH);
+  }, [applyComposerStackHeight, keyboardSettlingRef]);
+
   const listAnimatedStyle = useAnimatedStyle(() => ({
     opacity: listOpacity.value }));
 
   /**
-   * Inverted spacer: baseComposerH + visualEmojiH + kbH = константа при переходе emoji→keyboard.
-   * baseComposerH — reply + капсула + safe area (без emoji).
-   * visualEmojiH = max(0, emojiPanelH + keyboardHeightLib) — убывает синхронно с ростом клавиатуры.
-   * kbH = -keyboardHeightLib.
+   * Лента на всю высоту под glass-капсулой; marginBottom — только emoji-панель (opaque).
+   * KB — translateY; scroll spacer — ListHeader (inverted bottom).
    */
-  const listBottomSpacerStyle = useAnimatedStyle(() => {
-    const baseComposerH = composerStackHeightShared.value;
-    const visualEmojiH = Math.max(0, emojiPanelHeightShared.value + keyboardHeightLib.value);
-    const kbH = -keyboardHeightLib.value;
-    return { height: baseComposerH + visualEmojiH + kbH };
-  });
+  const listViewportStyle = useAnimatedStyle(() => ({
+    marginBottom: computeChatListEmojiPanelInset(
+      emojiPanelHeightShared.value,
+      keyboardHeightLib.value,
+    ),
+    transform: [{ translateY: keyboardHeightLib.value }],
+  }));
+
+  const listBottomSpacerStyle = useAnimatedStyle(() => ({
+    height: computeChatListScrollSpacer(
+      composerStackHeightShared.value,
+      emojiPanelHeightShared.value,
+      keyboardHeightLib.value,
+    ),
+  }));
 
   useKeyboardHandler(
     {
-      onMove: () => {
+      onStart: (e) => {
         'worklet';
-        runOnJS(scrollToBottomOnInsetChange)();
+        if (e.height <= 0) {
+          runOnJS(discardPendingComposerHeight)();
+        }
+      },
+      onEnd: (e) => {
+        'worklet';
+        if (e.height <= 0) {
+          runOnJS(discardPendingComposerHeight)();
+        } else {
+          runOnJS(flushPendingComposerStackHeight)();
+        }
       },
     },
-    [scrollToBottomOnInsetChange],
+    [discardPendingComposerHeight, flushPendingComposerStackHeight],
   );
 
-  useAnimatedReaction(
-    () =>
-      `${composerStackHeightShared.value}|${emojiPanelHeightShared.value}`,
-    (sig, prev) => {
-      if (prev != null && sig !== prev) {
-        runOnJS(scrollToBottomOnInsetChange)();
-      }
-    },
-  );
-
-  const composerWrapperAnimatedStyle = useAnimatedStyle(() => ({
-    bottom: -keyboardHeightLib.value }));
+  /** Только manual lift; без resize окна (двойной offset). */
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'android') return undefined;
+    KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_NOTHING);
+    return () => {
+      KeyboardController.setDefaultMode();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isRecordingVoice) return;
@@ -902,7 +932,8 @@ export default function Chat({
         setEphemeralSec={setEphemeralSec}
       />
 
-      <View style={{ flex: 1, position: 'relative' }}>
+      <View style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <Reanimated.View style={[{ flex: 1 }, listViewportStyle]}>
         <ChatMessageList
           roomId={roomId}
           flatListRef={flatListRef}
@@ -913,7 +944,6 @@ export default function Chat({
           listBottomSpacerStyle={listBottomSpacerStyle}
           onListScroll={onListScroll}
           onListLayoutReady={onListLayoutReady}
-          onListContentResize={scrollToBottomOnInsetChange}
           messagesLoading={messagesLoading}
           chatRoomHeader={chatRoomHeader}
           listPaddingTop={listPaddingTop}
@@ -926,20 +956,23 @@ export default function Chat({
           loadingOlder={loadingOlder}
           onLoadOlderMessages={loadOlderMessages}
         />
+        </Reanimated.View>
 
-        <Reanimated.View
+        <KeyboardStickyView
           pointerEvents="box-none"
-          style={[
-            {position: 'absolute',
-              left: 0,
-              right: 0,
-              zIndex: 2,
-              elevation: 2},
-            composerWrapperAnimatedStyle]}
+          offset={{ closed: 0, opened: 0 }}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 2,
+            elevation: 2,
+          }}
         >
           <LinearGradient
             pointerEvents="none"
-            colors={['transparent', chatListBottomFadeBottom]}
+            colors={['transparent', 'rgba(13, 15, 20, 0.35)']}
             locations={[0, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
@@ -952,7 +985,6 @@ export default function Chat({
           />
           <ChatComposer
             inputBarRef={inputBarRef}
-            reportInputBar={reportInputBar}
             reportComposerBaseHeight={reportComposerBaseHeight}
             insets={insets}
             visibleReplyTo={visibleReplyTo}
@@ -1023,7 +1055,7 @@ export default function Chat({
             }}
             {...ariaComposerSurfaceProps}
           />
-        </Reanimated.View>
+        </KeyboardStickyView>
       </View>
 
       {chatRoomHeader != null ? (

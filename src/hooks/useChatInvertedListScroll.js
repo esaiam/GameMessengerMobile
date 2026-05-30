@@ -49,11 +49,8 @@ export function useChatInvertedListScroll(
     }
   }, [listOpacity]);
 
-  /**
-   * KB / composer inset: Reanimated spacer не всегда триггерит remeasure FlatList —
-   * компенсируем scroll сразу, без suppress (иначе лента остаётся под KB).
-   */
-  const scrollToBottomOnInsetChange = useCallback(() => {
+  /** Однократный nudge после onEnd клавиатуры, если остались у низа (drift после resize viewport). */
+  const nudgeListToBottomIfStuck = useCallback(() => {
     if (!initialScrollDoneRef.current) return;
     if (!stickToBottomRef.current) return;
     scrollToBottomNow();
@@ -136,16 +133,35 @@ export function useChatInvertedListScroll(
 
     if (!tailChanged) return;
 
-    if (!initialScrollDoneRef.current) return undefined;
+    if (!initialScrollDoneRef.current) {
+      if (messages.length > 0) {
+        return completeInitialScroll();
+      }
+      return undefined;
+    }
 
     return scrollToBottomIfStuck();
-  }, [messages, scrollToBottomIfStuck]);
+  }, [messages, scrollToBottomIfStuck, completeInitialScroll]);
+
+  /** Страховка: если onContentSizeChange не пришёл (viewport remount). */
+  useEffect(() => {
+    if (listOpacity == null || initialScrollDoneRef.current) return undefined;
+    if (messages.length === 0) return undefined;
+
+    const timer = setTimeout(() => {
+      if (!initialScrollDoneRef.current) {
+        completeInitialScroll();
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [roomId, messages.length, listOpacity, completeInitialScroll]);
 
   return {
     flatListRef,
     onScroll,
     onListLayoutReady,
-    scrollToBottomOnInsetChange,
+    nudgeListToBottomIfStuck,
     scrollToBottomIfStuck,
   };
 }

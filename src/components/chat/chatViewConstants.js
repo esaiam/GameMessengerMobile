@@ -10,7 +10,36 @@ export const CHAT_AT_BOTTOM_THRESHOLD_PX = 40;
 /** Зазор между низом парящей шапки и первой строкой ленты. */
 export const CHAT_HEADER_TO_LIST_GAP_PX = 8;
 
-/** Стартовая оценка высоты композера до onLayout — чтобы bottom-spacer не был 0 при первом scroll. */
+/**
+ * Нижний inset ленты = высота композера + emoji + клавиатура (UI thread).
+ * Та же формула для marginBottom viewport и (legacy) ListHeader spacer.
+ */
+export function computeChatListBottomInset(
+  baseComposerH,
+  emojiPanelH,
+  keyboardHeightLib,
+  includeKeyboardLift = true,
+) {
+  'worklet';
+  const visualEmojiH = Math.max(0, emojiPanelH + keyboardHeightLib);
+  const kbH = includeKeyboardLift ? -keyboardHeightLib : 0;
+  return baseComposerH + visualEmojiH + kbH;
+}
+
+/** Inverted ListHeader — отступ прокрутки у низа; лента рисуется под glass-капсулой. */
+export function computeChatListScrollSpacer(baseComposerH, emojiPanelH, keyboardHeightLib) {
+  'worklet';
+  const visualEmojiH = Math.max(0, emojiPanelH + keyboardHeightLib);
+  return baseComposerH + visualEmojiH;
+}
+
+/** Viewport margin только под непрозрачную emoji-панель (не под blur-капсулу). */
+export function computeChatListEmojiPanelInset(emojiPanelH, keyboardHeightLib) {
+  'worklet';
+  return Math.max(0, emojiPanelH + keyboardHeightLib);
+}
+
+/** Стартовая оценка высоты композера до onLayout — чтобы bottom inset не был 0 при первом scroll. */
 export function estimateComposerStackHeight(insets) {
   const paddingBottom = Math.max(
     insets.bottom,
