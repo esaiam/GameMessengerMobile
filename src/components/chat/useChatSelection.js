@@ -2,7 +2,9 @@ import { useState, useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../../lib/supabase';
+import roomMessagesCache from '../../utils/roomMessagesCache';
 import { ARIA_MESSAGE_TYPING } from '../../lib/aria';
+import { invalidatePreviewCache } from '../../screens/chats/chatsPreviewCache';
 import { getBatchCopyLineFromDecrypted } from './getMessageCopyText';
 
 /**
@@ -12,6 +14,7 @@ export default function useChatSelection({
   messages,
   setMessages,
   nickname,
+  roomId,
   isAriaChat = false,
   filterHiddenForMe,
   filterExpired,
@@ -84,13 +87,20 @@ export default function useChatSelection({
               else updates.set(id, hidden);
             }
             if (updates.size > 0) {
-              setMessages((prev) =>
-                filterHiddenForMe(
+              setMessages((prev) => {
+                const next = filterHiddenForMe(
                   filterExpired(
-                    prev.map((m) => (updates.has(m.id) ? { ...m, hidden_for: updates.get(m.id) } : m)),
+                    prev.map((m) =>
+                      updates.has(m.id) ? { ...m, hidden_for: updates.get(m.id) } : m,
+                    ),
                   ),
-                ),
-              );
+                );
+                if (roomId && !isAriaChat) roomMessagesCache.set(roomId, next);
+                return next;
+              });
+              for (const id of updates.keys()) {
+                invalidatePreviewCache(id);
+              }
             }
             if (lastError) {
               Alert.alert('Ошибка', lastError.message);
@@ -98,7 +108,17 @@ export default function useChatSelection({
             exitSelectionMode();
           } }],
     );
-  }, [selectedIds, messages, nickname, exitSelectionMode, filterHiddenForMe, filterExpired, setMessages]);
+  }, [
+    selectedIds,
+    messages,
+    nickname,
+    roomId,
+    isAriaChat,
+    exitSelectionMode,
+    filterHiddenForMe,
+    filterExpired,
+    setMessages,
+  ]);
 
   const messageLineForCopy = useCallback(
     async (msg) => getBatchCopyLineFromDecrypted(await decryptMsg(msg)),

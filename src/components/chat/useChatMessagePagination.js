@@ -7,6 +7,7 @@ import {
   mergeMessagesById,
   MESSAGES_PAGE_SIZE,
   MESSAGE_LIST_SELECT,
+  serverHiddenForMeIdSet,
 } from './chatMessageMerge';
 
 /**
@@ -14,6 +15,7 @@ import {
  */
 export default function useChatMessagePagination({
   roomId,
+  nickname,
   isAriaChat,
   messagesRef,
   setMessages,
@@ -73,9 +75,12 @@ export default function useChatMessagePagination({
 
       const decrypted = await decryptBatch(chronological);
       const filtered = filterHiddenForMeKeepingDeleting(filterExpired(decrypted));
+      const serverHiddenForMeIds = serverHiddenForMeIdSet(nickname, chronological);
 
       setMessages((prev) => {
-        const merged = mergeMessagesById(filtered, prev);
+        const merged = mergeMessagesById(filtered, prev).filter(
+          (m) => !serverHiddenForMeIds.has(m.id),
+        );
         const withOptimistic = mergeMessagesKeepingOptimisticText(
           merged,
           prev,
@@ -90,6 +95,7 @@ export default function useChatMessagePagination({
     }
   }, [
     roomId,
+    nickname,
     isAriaChat,
     messagesLoading,
     messagesRef,

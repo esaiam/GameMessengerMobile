@@ -512,6 +512,7 @@ export default function Chat({
     messages,
     setMessages,
     nickname,
+    roomId,
     isAriaChat,
     filterHiddenForMe,
     filterExpired,
@@ -645,6 +646,7 @@ export default function Chat({
 
   const { loadingOlder, loadOlderMessages, onInitialPageLoaded } = useChatMessagePagination({
     roomId,
+    nickname,
     isAriaChat,
     messagesRef,
     setMessages,

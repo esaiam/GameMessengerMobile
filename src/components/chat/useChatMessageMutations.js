@@ -1,8 +1,10 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import roomMessagesCache from '../../utils/roomMessagesCache';
 import { buildHiddenForEveryone } from './buildHiddenForEveryone';
 import { chatMutationErrorMessage } from './chatMutationErrorMessage';
+import { invalidatePreviewCache } from '../../screens/chats/chatsPreviewCache';
 
 /** `aria-db-{uuid}` → uuid в `aria_messages`. */
 function ariaDbRowId(messageId) {
@@ -26,6 +28,18 @@ export default function useChatMessageMutations({
   setDeleteConfirmVisible,
   setSelectedMessage,
   chatSyncRef }) {
+  const removeMessageFromState = useCallback(
+    (messageId) => {
+      setMessages((prev) => {
+        const next = prev.filter((m) => m.id !== messageId);
+        if (roomId) roomMessagesCache.set(roomId, next);
+        return next;
+      });
+      invalidatePreviewCache(messageId);
+    },
+    [roomId, setMessages],
+  );
+
   const toggleReaction = useCallback(
     async (messageId, emoji) => {
       let nextReactions;
@@ -131,14 +145,14 @@ export default function useChatMessageMutations({
         });
         return;
       }
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      removeMessageFromState(messageId);
       setDeletingIds((prev) => {
         const next = new Set(prev);
         next.delete(messageId);
         return next;
       });
     },
-    [isAriaChat, deleteAriaMessage, messages, nickname, popMessage, setMessages, setDeletingIds],
+    [isAriaChat, deleteAriaMessage, messages, nickname, popMessage, removeMessageFromState, setDeletingIds],
   );
 
   const closeDeleteConfirm = useCallback(() => {
@@ -199,7 +213,7 @@ export default function useChatMessageMutations({
         return;
       }
 
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      removeMessageFromState(messageId);
       setDeletingIds((prev) => {
         const next = new Set(prev);
         next.delete(messageId);
@@ -207,7 +221,7 @@ export default function useChatMessageMutations({
       });
       chatSyncRef?.current?.hideMessage?.(messageId);
     },
-    [isAriaChat, deleteAriaMessage, messages, nickname, peerName, popMessage, roomId, setMessages, setDeletingIds, chatSyncRef],
+    [isAriaChat, deleteAriaMessage, messages, nickname, peerName, popMessage, removeMessageFromState, roomId, setDeletingIds, chatSyncRef],
   );
 
   return {

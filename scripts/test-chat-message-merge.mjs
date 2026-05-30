@@ -3,6 +3,16 @@
  * Run: node scripts/test-chat-message-merge.mjs
  */
 
+function serverHiddenForMeIdSet(nickname, rows) {
+  const hidden = new Set();
+  for (const m of rows ?? []) {
+    if (m?.id != null && (m.hidden_for || []).includes(nickname)) {
+      hidden.add(m.id);
+    }
+  }
+  return hidden;
+}
+
 function mergeMessagesById(...lists) {
   const byId = new Map();
   for (const list of lists) {
@@ -83,5 +93,27 @@ assert(withOpt[1].id === optId, 'optimistic at tail');
 // 5) cursor: oldest is index 0
 const chrono = afterPage;
 assert(chrono[0].created_at < chrono[chrono.length - 1].created_at, 'chronological order');
+
+// 6) stale cache: server says hidden, id only in disk cache
+const me = 'alice';
+const staleCache = [
+  { id: 'old-visible', created_at: '2026-01-01T10:00:00Z', text: 'hi' },
+  { id: 'deleted', created_at: '2026-01-02T10:00:00Z', text: 'gone' },
+];
+const serverRows = [
+  { id: 'old-visible', created_at: '2026-01-01T10:00:00Z', text: 'hi', hidden_for: [] },
+  {
+    id: 'deleted',
+    created_at: '2026-01-02T10:00:00Z',
+    text: 'gone',
+    hidden_for: [me],
+  },
+];
+const serverFiltered = serverRows.filter((m) => !(m.hidden_for || []).includes(me));
+const hiddenIds = serverHiddenForMeIdSet(me, serverRows);
+const reconciled = mergeMessagesById(staleCache, serverFiltered).filter(
+  (m) => !hiddenIds.has(m.id),
+);
+assert(reconciled.length === 1 && reconciled[0].id === 'old-visible', 'hidden id stripped from stale cache');
 
 console.log('test-chat-message-merge.mjs: all checks passed');

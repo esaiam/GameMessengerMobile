@@ -15,6 +15,7 @@ import {
   mergeMessagesById,
   MESSAGES_PAGE_SIZE,
   MESSAGE_LIST_SELECT,
+  serverHiddenForMeIdSet,
 } from './chatMessageMerge';
 
 /**
@@ -120,8 +121,12 @@ export default function useChatRoomEffects({
 
       const filtered = filterHiddenForMeKeepingDeleting(filterExpired(decrypted));
 
+      const serverHiddenForMeIds = serverHiddenForMeIdSet(nickname, chronological);
+
       const prev = messagesRef.current;
-      const mergedWithPrev = mergeMessagesById(prev, filtered);
+      const mergedWithPrev = mergeMessagesById(prev, filtered).filter(
+        (m) => !serverHiddenForMeIds.has(m.id),
+      );
       const merged = mergeMessagesKeepingOptimisticText(
         mergedWithPrev,
         prev,

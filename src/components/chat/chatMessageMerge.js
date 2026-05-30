@@ -9,6 +9,17 @@ export const MESSAGE_LIST_SELECT =
  * При конфликте id побеждает **последний** список в аргументах.
  * @param {...import('./chatMessageTypes').ChatMessageRow[]} lists
  */
+/** id сообщений, скрытых для nickname на сервере (сырые строки до decrypt). */
+export function serverHiddenForMeIdSet(nickname, rows) {
+  const hidden = new Set();
+  for (const m of rows ?? []) {
+    if (m?.id != null && (m.hidden_for || []).includes(nickname)) {
+      hidden.add(m.id);
+    }
+  }
+  return hidden;
+}
+
 export function mergeMessagesById(...lists) {
   const byId = new Map();
   for (const list of lists) {
