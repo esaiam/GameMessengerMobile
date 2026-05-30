@@ -1,9 +1,7 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   Platform,
   type ViewStyle } from 'react-native';
@@ -18,60 +16,40 @@ import Animated, {
   withRepeat,
   withSequence,
   runOnJS } from 'react-native-reanimated';
-import Svg, { Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import {
   useAudioRecorder,
   useAudioRecorderState,
   RecordingPresets,
-  AudioModule,
-  useAudioPlayer,
-  useAudioPlayerStatus,
-  setIsAudioActiveAsync } from 'expo-audio';
-import { Mic, Lock, Unlock, SendHorizontal, Trash2, Pause, Play, Video as VideoIcon } from '../../icons/lucideIcons';
-import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
+  AudioModule } from 'expo-audio';
+import { Mic, Video as VideoIcon } from '../../icons/lucideIcons';
+import { V } from '../../theme';
 import { setAudioModeAsync } from '../../utils/audioMode';
 import { trimVoiceMessageFile, VOICE_TRIM_NATIVE_UNAVAILABLE } from '../../lib/voiceMessageTrim';
 import { pauseDiceSound } from '../../utils/diceSound';
 import { triggerRecordStartHaptic } from '../../utils/recordStartHaptic';
 import VideoRecorder, { type VideoRecorderHandle } from './VideoRecorder';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-/** Вертикальный подъём до закрепления (~1 см в pt на типичном телефоне) */
-const LOCK_COMMIT_UP_PX = 38;
-/** Фаза «падение» без пружины — только easing */
-const LOCK_DROP_MS = 200;
-const LOCK_DROP_SETTLE_MS = 170;
-/** Отмена при сдвиге влево ≥ этой доли от maxSlideX (maxSlideX ≈ ширина капсулы / 3) */
-const CANCEL_SLIDE_RATIO = 0.88;
-/** После этого смещения (px) выбирается «рельс»: только влево или только вверх */
-const RAIL_LOCK_PX = 14;
-const SPRING_RAIL_RETURN = { damping: 18, stiffness: 280 } as const;
-/** padding between depth-ring and SafeBlurView */
-const DEPTH = 0;
-/** Визуальный спек микрофона в инпут-баре (−10% к прежним 44 / 52) */
-const MIC_INNER = 40;
-const MIC_OUTER = 47;
-/** Кружок под плавающие Lock / Pause над микрофоном */
-const FLOAT_ICON_CIRCLE = 36;
-const MIC_ICON_SPEC = 18;
-/** Как кнопка play в VoiceMessagePlayer (белый глиф на sage) */
-const MIC_ICON_ON_SAGE = '#FFFFFF';
-/** Масштаб кнопки при активной записи (меньше, чем «полный» ×3) */
-const RECORD_LIFT = 2;
-/** Сдвиг замка вверх при увеличении кнопки */
-const LOCK_FLOAT_EXTRA = Math.round((MIC_OUTER * (RECORD_LIFT - 1)) / 2);
-/** Тонкое свечение чуть больше внутреннего круга (только край) */
-const EDGE_GLOW_SIZE = MIC_INNER + 6;
-/** Выше overlay внутри VideoRecorder (zIndex 201), чтобы кнопка не уходила под превью */
-const MIC_VIDEO_FRONT_Z = 250;
-const BAR_COUNT = 40;
-/** Ручки обрезки голоса (предпросмотр) */
-const TRIM_HANDLE_W = 10;
-const TRIM_HANDLE_H = 34;
-const TRIM_MIN_SPAN = 0.06;
-/** Короче — тихий discard (случайный tap). */
-const MIN_RECORDING_SEC = 1;
+import {
+  LOCK_COMMIT_UP_PX,
+  LOCK_DROP_MS,
+  LOCK_DROP_SETTLE_MS,
+  CANCEL_SLIDE_RATIO,
+  RAIL_LOCK_PX,
+  SPRING_RAIL_RETURN,
+  MIC_INNER,
+  MIC_OUTER,
+  MIC_ICON_SPEC,
+  MIC_ICON_ON_SAGE,
+  RECORD_LIFT,
+  LOCK_FLOAT_EXTRA,
+  EDGE_GLOW_SIZE,
+  MIC_VIDEO_FRONT_Z,
+  BAR_COUNT,
+  TRIM_MIN_SPAN,
+  MIN_RECORDING_SEC } from './voiceRecorderConstants';
+import { buildWaveform40FromAmps } from './voiceWaveformUtils';
+import { PausedPreviewBar } from './PausedPreviewBar';
+import { VoiceRecordingOverlay } from './VoiceRecordingOverlay';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type RS = 'IDLE' | 'RECORDING' | 'LOCKED' | 'PAUSED';
@@ -87,68 +65,6 @@ interface Props {
   onVideoUploadFinished?: () => void;
   /** false — только голос (чат Aria: без upload video). */
   allowVideoRecording?: boolean;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function fmtDur(s: number): string {
-  return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
-}
-
-/** Амплитуды 0…1 → 40 высот столбиков (4…40) для сохранения в сообщении. */
-function buildWaveform40FromAmps(amps: number[], trimStart: number, trimEnd: number): number[] {
-  const TARGET = 40;
-  if (!amps.length) return Array(TARGET).fill(4);
-  const i0 = Math.min(amps.length - 1, Math.max(0, Math.floor(trimStart * amps.length)));
-  const i1 = Math.min(amps.length, Math.max(i0 + 1, Math.ceil(trimEnd * amps.length)));
-  const slice = amps.slice(i0, i1);
-  const n = slice.length;
-  const out: number[] = [];
-  for (let i = 0; i < TARGET; i++) {
-    const t0 = (i / TARGET) * n;
-    const t1 = ((i + 1) / TARGET) * n;
-    let mx = 0.008;
-    const j0 = Math.floor(t0);
-    const j1 = Math.ceil(t1);
-    for (let j = j0; j < j1 && j < n; j++) {
-      mx = Math.max(mx, slice[j] ?? 0);
-    }
-    // Растягиваем тихие уровни (иначе всё упирается в min 4px после clamp).
-    const shaped = Math.pow(Math.min(1, Math.max(0, mx)), 0.58);
-    out.push(Math.max(5, Math.min(39, 5 + shaped * 34)));
-  }
-  return out;
-}
-
-function WaveformSvg({
-  bars,
-  w,
-  h = 28,
-  fill = V.accentSage }: {
-  bars: number[];
-  w: number;
-  h?: number;
-  fill?: string;
-}) {
-  if (w <= 0) return null;
-  const bw = w / bars.length;
-  return (
-    <Svg width={w} height={h}>
-      {bars.map((amp, i) => {
-        const bh = Math.max(2, amp * h * 0.85);
-        return (
-          <Rect
-            key={i}
-            x={i * bw + 0.5}
-            y={(h - bh) / 2}
-            width={Math.max(1.5, bw - 1)}
-            height={bh}
-            rx={1}
-            fill={fill}
-          />
-        );
-      })}
-    </Svg>
-  );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -942,73 +858,21 @@ function VoiceRecorder({
       collapsable={false}
       onLayout={onVoiceMountLayout}
     >
-      {(state === 'RECORDING' || (isVideoRecording && !isVideoLocked)) ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.lockAbove, styles.floatingIconCircle, lockAboveAnimStyle]}
-        >
-          <View style={styles.lockIconPair}>
-            <Animated.View style={lockLockFadeStyle}>
-              <Lock size={16} color={V.textSecondary} strokeWidth={1.5} />
-            </Animated.View>
-            <Animated.View style={[styles.lockUnlockAbs, lockUnlockFadeStyle]}>
-              <Unlock size={16} color={V.accentSage} strokeWidth={1.5} />
-            </Animated.View>
-          </View>
-        </Animated.View>
-      ) : null}
-      {state === 'LOCKED' ? (
-        <View
-          pointerEvents="box-none"
-          style={[styles.lockAbove, styles.lockAboveLocked]}
-        >
-          <TouchableOpacity
-            onPress={() => void doPause()}
-            style={[styles.floatingIconCircle, styles.pauseAboveBtn]}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            accessibilityLabel="Пауза"
-          >
-            <Pause size={16} color={V.accentSage} strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      <Animated.View
-        pointerEvents={isAudioOverlayActive ? 'auto' : 'none'}
-        style={[styles.overlay, overlayAnimStyle]}
-      >
-        {isAudioOverlayActive ? (
-          <>
-            <View style={styles.timerRow}>
-              <Animated.View style={[styles.dot, dotAnimStyle]} />
-              <Text style={styles.timerText}>{fmtDur(dur)}</Text>
-            </View>
-
-            {state === 'RECORDING' ? (
-              <Text
-                style={[styles.hintText, cancelActive && styles.hintActive, { }]}
-                numberOfLines={1}
-              >
-                {'← Slide to cancel'}
-              </Text>
-            ) : (
-              <View style={styles.lockedRow}>
-                <TouchableOpacity
-                  onPress={() => void doCancel()}
-                  style={styles.lockedCancelBtn}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                  accessibilityLabel="Отмена"
-                >
-                  <Trash2 size={18} color={V.dangerMuted} strokeWidth={1.5} />
-                </TouchableOpacity>
-                <View style={styles.lockedRowSpacer} />
-              </View>
-            )}
-
-            <View style={styles.micSpacer} />
-          </>
-        ) : null}
-      </Animated.View>
+      <VoiceRecordingOverlay
+        showLockFloat={state === 'RECORDING' || (isVideoRecording && !isVideoLocked)}
+        showPauseAbove={state === 'LOCKED'}
+        isOverlayActive={isAudioOverlayActive}
+        state={state === 'LOCKED' ? 'LOCKED' : 'RECORDING'}
+        dur={dur}
+        cancelActive={cancelActive}
+        lockAboveAnimStyle={lockAboveAnimStyle}
+        lockLockFadeStyle={lockLockFadeStyle}
+        lockUnlockFadeStyle={lockUnlockFadeStyle}
+        overlayAnimStyle={overlayAnimStyle}
+        dotAnimStyle={dotAnimStyle}
+        onPause={() => void doPause()}
+        onCancel={() => void doCancel()}
+      />
 
     </View>
     {allowVideoRecording ? (
@@ -1138,394 +1002,7 @@ const styles = StyleSheet.create({
   micIconAbs: {
     position: 'absolute',
     alignItems: 'center',
-    justifyContent: 'center' },
-
-  /** Active overlay: covers SafeBlurView area exactly */
-  overlay: {
-    position: 'absolute',
-    top: DEPTH,
-    left: DEPTH,
-    right: DEPTH,
-    bottom: DEPTH,
-    borderRadius: COMPOSER_CAPSULE_RADIUS,
-    backgroundColor: V.bgSurface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: TAB_BAR_LAYOUT.rowPaddingH,
-    minHeight: COMPOSER_LAYOUT.innerHeight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: V.border,
-    overflow: 'hidden' },
-
-  /** Lock / pause над микрофоном — центр по внешнему кольцу MIC_OUTER */
-  lockAbove: {
-    position: 'absolute',
-    right: Math.round((MIC_OUTER - FLOAT_ICON_CIRCLE) / 2),
-    bottom: COMPOSER_LAYOUT.innerHeight + DEPTH * 2 + 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10 },
-  floatingIconCircle: {
-    width: FLOAT_ICON_CIRCLE,
-    height: FLOAT_ICON_CIRCLE,
-    borderRadius: FLOAT_ICON_CIRCLE / 2,
-    backgroundColor: V.bgElevated,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: V.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden' },
-  lockAboveLocked: {
-    transform: [{ translateY: -LOCK_FLOAT_EXTRA }],
-    zIndex: 30 },
-  lockIconPair: {
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  lockUnlockAbs: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  pauseAboveBtn: {
-    alignItems: 'center',
-    justifyContent: 'center' },
-  // Recording row content
-  timerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingRight: 4 },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: V.dangerMuted },
-  timerText: {
-    fontSize: 13,
-    color: V.textPrimary,
-    fontWeight: '500',
-    minWidth: 36 },
-  hintText: {
-    flex: 1,
-    fontSize: 11,
-    color: V.textMuted,
-    fontWeight: '400',
-    textAlign: 'center'
-  },
-  hintActive: {
-    color: V.dangerMuted
-  },
-  lockedRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0 },
-  lockedCancelBtn: {
-    width: COMPOSER_LAYOUT.innerHeight,
-    height: COMPOSER_LAYOUT.innerHeight,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  lockedRowSpacer: {
-    flex: 1 },
-  /** Reserves space in the overlay row for the absolutely-positioned mic button */
-  micSpacer: {
-    width: MIC_OUTER,
-    height: COMPOSER_LAYOUT.innerHeight },
-
-  // PAUSED state
-  iconSlot: {
-    width: 40,
-    height: COMPOSER_LAYOUT.innerHeight,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  trimStripOuter: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-    paddingVertical: 2,
-    paddingHorizontal: 2 },
-  trimStrip: {
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: V.btnPrimaryBg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: V.sageBorder,
-    position: 'relative',
-    overflow: 'hidden' },
-  trimWaveLayer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  trimMaskSide: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    backgroundColor: V.btnPrimaryBg },
-  trimHandle: {
-    position: 'absolute',
-    top: (46 - TRIM_HANDLE_H) / 2,
-    width: TRIM_HANDLE_W,
-    height: TRIM_HANDLE_H,
-    borderRadius: 3,
-    backgroundColor: V.accentSage,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 4 },
-  trimHandleGrip: {
-    width: 2,
-    height: 10,
-    borderRadius: 1,
-    backgroundColor: V.textPrimary },
-  trimCenterPillWrap: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 3,
-    pointerEvents: 'box-none' },
-  trimPillTouchable: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    backgroundColor: V.bgElevated,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: V.border },
-  trimPillTime: {
-    fontSize: 11,
-    fontWeight: '400',
-    color: V.textPrimary
-  },
-  trimPillPlayOffset: {
-    marginLeft: 1 },
-  sendSlot: {
-    width: MIC_OUTER,
-    height: COMPOSER_LAYOUT.innerHeight,
-    alignItems: 'center',
     justifyContent: 'center' } });
-
-interface PausedPreviewBarProps {
-  uri: string | null | undefined;
-  bars: number[];
-  dur: number;
-  onTrim: (start: number, end: number) => void;
-  onCancel: () => void;
-  onSend: () => void;
-}
-
-/** Предпросмотр с обрезкой (как в референсе), цвета Vault */
-function PausedPreviewBar({ uri, bars, dur, onTrim, onCancel, onSend }: PausedPreviewBarProps) {
-  const [trackW, setTrackW] = useState(0);
-  const [trim, setTrim] = useState({ s: 0, e: 1 });
-  const trimDragRef = useRef({ s: 0, e: 1 });
-  const trackWRef = useRef(0);
-  const dragStartRef = useRef({ s: 0, e: 1 });
-
-  const player = useAudioPlayer(uri ?? null, {});
-  const status = useAudioPlayerStatus(player);
-
-  useEffect(() => {
-    trimDragRef.current = trim;
-  }, [trim]);
-
-  useEffect(() => {
-    onTrim(trim.s, trim.e);
-  }, [trim, onTrim]);
-
-  useEffect(() => {
-    return () => {
-      try {
-        player.pause();
-      } catch {
-        /* ignore */
-      }
-    };
-  }, [player]);
-
-  /** При паузе — держать курсор на начале выбранного фрагмента */
-  useEffect(() => {
-    if (dur <= 0 || status.playing) return;
-    try {
-      void player.seekTo(dur * trim.s);
-    } catch {
-      /* ignore */
-    }
-  }, [trim.s, trim.e, dur, player, status.playing]);
-
-  useEffect(() => {
-    if (!status.playing || dur <= 0) return;
-    const t1 = dur * trim.e;
-    if (status.currentTime >= t1 - 0.06) {
-      try {
-        player.pause();
-        void player.seekTo(dur * trim.s);
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [status.playing, status.currentTime, dur, trim.s, trim.e, player]);
-
-  const activatePlayback = useCallback(async () => {
-    try {
-      await setIsAudioActiveAsync(true);
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        interruptionMode: Platform.OS === 'android' ? 'duckOthers' : 'mixWithOthers',
-        allowsRecording: false,
-        shouldRouteThroughEarpiece: false });
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const togglePreview = useCallback(async () => {
-    if (!uri || dur <= 0) return;
-    if (status.playing) {
-      player.pause();
-      return;
-    }
-    await activatePlayback();
-    try {
-      await player.seekTo(dur * trim.s);
-    } catch {
-      /* ignore */
-    }
-    player.play();
-  }, [uri, dur, trim.s, status.playing, player, activatePlayback]);
-
-  const beginLeft = useCallback(() => {
-    dragStartRef.current = { ...trimDragRef.current };
-  }, []);
-  const moveLeft = useCallback(
-    (tx: number) => {
-      const tw = trackWRef.current;
-      if (tw < 48) return;
-      const d = tx / tw;
-      const start = dragStartRef.current;
-      const nextS = Math.min(
-        Math.max(0, start.s + d),
-        trimDragRef.current.e - TRIM_MIN_SPAN,
-      );
-      setTrim((prev) => ({ s: nextS, e: prev.e }));
-    },
-    [],
-  );
-
-  const beginRight = useCallback(() => {
-    dragStartRef.current = { ...trimDragRef.current };
-  }, []);
-  const moveRight = useCallback((tx: number) => {
-    const tw = trackWRef.current;
-    if (tw < 48) return;
-    const d = tx / tw;
-    const start = dragStartRef.current;
-    const nextE = Math.max(
-      trimDragRef.current.s + TRIM_MIN_SPAN,
-      Math.min(1, start.e + d),
-    );
-    setTrim((prev) => ({ s: prev.s, e: nextE }));
-  }, []);
-
-  const leftPan = useMemo(
-    () =>
-      Gesture.Pan()
-        .onBegin(() => {
-          runOnJS(beginLeft)();
-        })
-        .onUpdate((e) => {
-          runOnJS(moveLeft)(e.translationX);
-        }),
-    [beginLeft, moveLeft],
-  );
-
-  const rightPan = useMemo(
-    () =>
-      Gesture.Pan()
-        .onBegin(() => {
-          runOnJS(beginRight)();
-        })
-        .onUpdate((e) => {
-          runOnJS(moveRight)(e.translationX);
-        }),
-    [beginRight, moveRight],
-  );
-
-  const wL = trim.s * trackW;
-  const wR = (1 - trim.e) * trackW;
-  const spanSec = Math.max(TRIM_MIN_SPAN, trim.e - trim.s);
-  const pillDur = Math.max(1, Math.round(dur * spanSec));
-
-  const leftHandleLeft =
-    trackW > 0 ? Math.max(0, Math.min(trackW - TRIM_HANDLE_W, trim.s * (trackW - TRIM_HANDLE_W))) : 0;
-  const rightHandleLeft =
-    trackW > 0 ? Math.max(0, Math.min(trackW - TRIM_HANDLE_W, trim.e * (trackW - TRIM_HANDLE_W))) : 0;
-
-  return (
-    <View style={styles.overlay}>
-      <TouchableOpacity onPress={onCancel} style={styles.iconSlot}>
-        <Trash2 size={18} color={V.dangerMuted} strokeWidth={1.5} />
-      </TouchableOpacity>
-
-      <View style={styles.trimStripOuter}>
-        <View
-          style={styles.trimStrip}
-          onLayout={(e) => {
-            const w = e.nativeEvent.layout.width;
-            setTrackW(w);
-            trackWRef.current = w;
-          }}
-        >
-          <View style={styles.trimWaveLayer} pointerEvents="none">
-            {trackW > 0 ? (
-              <WaveformSvg bars={bars} w={trackW} h={26} fill={V.textPrimary} />
-            ) : null}
-          </View>
-          {trackW > 0 ? (
-            <>
-              <View style={[styles.trimMaskSide, { width: wL, left: 0 }]} />
-              <View style={[styles.trimMaskSide, { width: wR, right: 0 }]} />
-            </>
-          ) : null}
-
-          <GestureDetector gesture={leftPan}>
-            <View style={[styles.trimHandle, { left: leftHandleLeft }]} accessibilityLabel="Начало обрезки">
-              <View style={styles.trimHandleGrip} />
-            </View>
-          </GestureDetector>
-          <GestureDetector gesture={rightPan}>
-            <View style={[styles.trimHandle, { left: rightHandleLeft }]} accessibilityLabel="Конец обрезки">
-              <View style={styles.trimHandleGrip} />
-            </View>
-          </GestureDetector>
-
-          <View style={styles.trimCenterPillWrap} pointerEvents="box-none">
-            <TouchableOpacity
-              onPress={() => void togglePreview()}
-              style={styles.trimPillTouchable}
-              disabled={!uri}
-              accessibilityLabel={status.playing ? 'Пауза' : 'Воспроизвести'}
-            >
-              {status.playing ? (
-                <Pause size={14} color={V.accentSage} strokeWidth={1.5} />
-              ) : (
-                <View style={styles.trimPillPlayOffset}>
-                  <Play size={14} color={V.accentSage} strokeWidth={1.5} />
-                </View>
-              )}
-              <Text style={styles.trimPillTime}>{fmtDur(pillDur)}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-
-      <TouchableOpacity onPress={onSend} style={styles.sendSlot}>
-        <SendHorizontal size={18} color={V.accentSage} strokeWidth={1.5} />
-      </TouchableOpacity>
-    </View>
-  );
-}
 
 const VoiceRecorderMemo = memo(VoiceRecorder);
 VoiceRecorderMemo.displayName = 'VoiceRecorder';
