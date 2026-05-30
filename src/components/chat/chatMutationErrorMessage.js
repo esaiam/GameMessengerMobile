@@ -16,6 +16,9 @@ export function chatMutationErrorMessage(error, fallback) {
   if (/Failed to fetch|Network request failed|timeout/i.test(msg)) {
     return 'Нет связи с сервером. Проверь интернет и попробуй ещё раз.';
   }
+  if (/edited_at|schema cache|PGRST204/i.test(msg)) {
+    return 'На сервере нет колонки edited_at. В Supabase SQL Editor выполни миграцию docs/migrations/20260530_messages_edited_at.sql и NOTIFY pgrst, \'reload schema\';';
+  }
 
   return msg || fallback;
 }

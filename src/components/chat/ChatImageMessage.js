@@ -23,6 +23,7 @@ export default function ChatImageMessage({
   isEphemeral,
   expiresAt,
   isSelected,
+  isUploading = false,
   onPress,
   onCaptionPress,
   onLongPress,
@@ -85,6 +86,11 @@ export default function ChatImageMessage({
         </View>
       ) : null}
       <Image source={{ uri }} style={[styles.image, frameStyle]} resizeMode="contain" />
+      {isUploading ? (
+        <View pointerEvents="none" style={styles.uploadOverlay}>
+          <ActivityIndicator color={V.accentSage} size="small" />
+        </View>
+      ) : null}
       {isGif ? (
         <View pointerEvents="none" style={styles.gifBadge}>
           <Text style={styles.gifBadgeText}>GIF</Text>
@@ -166,6 +172,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1 },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    zIndex: 2 },
   gifBadge: {
     position: 'absolute',
     top: 6,

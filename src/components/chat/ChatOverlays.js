@@ -22,6 +22,8 @@ export default function ChatOverlays({
   selectedMessage,
   onCloseMenu,
   onReplyToMessage,
+  onEditMessage,
+  canEditSelectedMessage,
   onRequestDeleteConfirm,
   onOpenImage,
   deleteConfirmVisible,
@@ -70,6 +72,8 @@ export default function ChatOverlays({
         position={menuPosition}
         selectedMessage={selectedMessage}
         onReplyToMessage={onReplyToMessage}
+        onEditMessage={onEditMessage}
+        canEditSelectedMessage={canEditSelectedMessage}
         onRequestDeleteConfirm={onRequestDeleteConfirm}
         onOpenImage={onOpenImage}
       />

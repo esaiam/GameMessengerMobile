@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { View, Text, Platform, FlatList } from 'react-native';
+import { View, Text, Platform, FlatList, ActivityIndicator } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS } from 'react-native-reanimated';
 import tw from 'twrnc';
@@ -27,6 +27,8 @@ export default function ChatMessageList({
   exitSelectionMode,
   batchDeleteForMe,
   overscrollEnabled = true,
+  loadingOlder = false,
+  onLoadOlderMessages,
 }) {
   const { androidBounce, scrollHandler, animatedStyle: listBounceStyle, overscrollProps, wrapGesture } =
     useAndroidTabOverscroll({
@@ -50,16 +52,24 @@ export default function ChatMessageList({
 
   const listFooterComponent = useMemo(
     () => (
-      <ChatListFooter
-        chatRoomHeader={chatRoomHeader}
-        listPaddingTop={listFooterPaddingTop}
-        selectionMode={selectionMode}
-        selectedCount={selectedIds.size}
-        onExitSelection={exitSelectionMode}
-        onBatchDeleteForMe={batchDeleteForMe}
-      />
+      <>
+        {loadingOlder ? (
+          <View style={{ paddingVertical: 10, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={V.textMuted} />
+          </View>
+        ) : null}
+        <ChatListFooter
+          chatRoomHeader={chatRoomHeader}
+          listPaddingTop={listFooterPaddingTop}
+          selectionMode={selectionMode}
+          selectedCount={selectedIds.size}
+          onExitSelection={exitSelectionMode}
+          onBatchDeleteForMe={batchDeleteForMe}
+        />
+      </>
     ),
     [
+      loadingOlder,
       chatRoomHeader,
       listFooterPaddingTop,
       selectionMode,
@@ -68,6 +78,21 @@ export default function ChatMessageList({
       batchDeleteForMe,
     ],
   );
+
+  const maintainVisible = useMemo(
+    () =>
+      Platform.OS === 'web'
+        ? undefined
+        : {
+            minIndexForVisible: 1,
+            autoscrollToTopThreshold: 24,
+          },
+    [],
+  );
+
+  const handleEndReached = useCallback(() => {
+    onLoadOlderMessages?.();
+  }, [onLoadOlderMessages]);
 
   const messageList = (
     <FlatList
@@ -100,6 +125,9 @@ export default function ChatMessageList({
         { zIndex: 1 },
       ]}
       removeClippedSubviews={Platform.OS === 'android'}
+      maintainVisibleContentPosition={maintainVisible}
+      onEndReached={onLoadOlderMessages ? handleEndReached : undefined}
+      onEndReachedThreshold={0.2}
       ListHeaderComponent={ListBottomInsetHeader}
       ListFooterComponent={listFooterComponent}
       contentContainerStyle={[

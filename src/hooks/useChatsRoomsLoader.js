@@ -30,11 +30,16 @@ export function useChatsRoomsLoader(nickname) {
   const load = useCallback(async () => {
     const { rows: next, error } = await fetchChatsRows(nickname);
     if (error) {
-      Alert.alert(
-        'Ошибка загрузки',
-        'Не удалось загрузить чаты. Проверь подключение.',
-        [{ text: 'OK' }]
-      );
+      const hasCachedRows =
+        (rowsCacheRef.current.rows.length > 0 && rowsCacheRef.current.nickname === nickname) ||
+        rowsRef.current.length > 0;
+      if (!hasCachedRows) {
+        Alert.alert(
+          'Ошибка загрузки',
+          'Не удалось загрузить чаты. Проверь подключение.',
+          [{ text: 'OK' }],
+        );
+      }
       return;
     }
     const visible = await filterVisibleChatRows(nickname, next);

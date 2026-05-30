@@ -17,10 +17,13 @@ export default function useChatMediaActions({
   setReplyTarget,
   setUploading,
   setShowAttachMenu,
-  decryptMsg,
-  setMessages,
-  filterHiddenForMeKeepingDeleting,
-  filterExpired }) {
+  appendOptimisticImage,
+  handleImageUploadFinished,
+  handleImageSendError,
+  appendOptimisticVoice,
+  handleVoiceUploadFinished,
+  handleVoiceSendError,
+}) {
   const uploadMedia = useCallback(async (uri, folder, ext, contentType) => {
     if (!roomId) {
       throw new Error('room_id отсутствует');
@@ -113,17 +116,29 @@ export default function useChatMediaActions({
       quality: 0.7,
       allowsEditing: true });
     if (result.canceled || !result.assets?.[0]) return;
+    const localUri = result.assets[0].uri;
+    appendOptimisticImage?.(localUri);
     setUploading(true);
     try {
-      const url = await uploadMedia(result.assets[0].uri, 'images', 'jpg', 'image/jpeg');
+      const url = await uploadMedia(localUri, 'images', 'jpg', 'image/jpeg');
       await sendMediaMessage('image', url);
+      handleImageUploadFinished?.();
     } catch (e) {
+      handleImageSendError?.();
       const detail = e?.message || e?.error_description || String(e);
       Alert.alert('Ошибка', `Не удалось отправить фото.\n${detail}`);
       if (__DEV__) console.warn(e);
     }
     setUploading(false);
-  }, [uploadMedia, sendMediaMessage, setUploading, setShowAttachMenu]);
+  }, [
+    uploadMedia,
+    sendMediaMessage,
+    setUploading,
+    setShowAttachMenu,
+    appendOptimisticImage,
+    handleImageUploadFinished,
+    handleImageSendError,
+  ]);
 
   const takePhoto = useCallback(async () => {
     setShowAttachMenu(false);
@@ -137,17 +152,29 @@ export default function useChatMediaActions({
       quality: 0.7,
       allowsEditing: true });
     if (result.canceled || !result.assets?.[0]) return;
+    const localUri = result.assets[0].uri;
+    appendOptimisticImage?.(localUri);
     setUploading(true);
     try {
-      const url = await uploadMedia(result.assets[0].uri, 'images', 'jpg', 'image/jpeg');
+      const url = await uploadMedia(localUri, 'images', 'jpg', 'image/jpeg');
       await sendMediaMessage('image', url);
+      handleImageUploadFinished?.();
     } catch (e) {
+      handleImageSendError?.();
       const detail = e?.message || e?.error_description || String(e);
       Alert.alert('Ошибка', `Не удалось отправить фото.\n${detail}`);
       if (__DEV__) console.warn(e);
     }
     setUploading(false);
-  }, [uploadMedia, sendMediaMessage, setUploading, setShowAttachMenu]);
+  }, [
+    uploadMedia,
+    sendMediaMessage,
+    setUploading,
+    setShowAttachMenu,
+    appendOptimisticImage,
+    handleImageUploadFinished,
+    handleImageSendError,
+  ]);
 
   const sendCurrentLocation = useCallback(async () => {
     setShowAttachMenu(false);
@@ -173,22 +200,18 @@ export default function useChatMediaActions({
 
   const handleSendVoice = useCallback(
     async (uri, duration, waveform) => {
+      appendOptimisticVoice?.({ localUri: uri, duration, waveform });
       setUploading(true);
       try {
         const url = await uploadMedia(uri, 'voice', 'm4a', 'audio/m4a');
         const wf =
           Array.isArray(waveform) && waveform.length > 0 ? waveform : DEFAULT_VOICE_WAVEFORM();
-        const inserted = await sendMediaMessage('voice', url, {
+        await sendMediaMessage('voice', url, {
           text: `🎤 ${formatDuration(duration)}`,
           waveform: wf });
-        if (inserted?.id) {
-          const msg = await decryptMsg(inserted);
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === inserted.id)) return prev;
-            return filterHiddenForMeKeepingDeleting(filterExpired([...prev, msg]));
-          });
-        }
+        handleVoiceUploadFinished?.();
       } catch (e) {
+        handleVoiceSendError?.();
         const detail = e?.message || e?.error_description || String(e);
         Alert.alert('Ошибка', `Не удалось отправить голосовое.\n${detail}`);
         if (__DEV__) console.warn(e);
@@ -198,11 +221,11 @@ export default function useChatMediaActions({
     [
       uploadMedia,
       sendMediaMessage,
-      decryptMsg,
-      filterHiddenForMeKeepingDeleting,
-      filterExpired,
-      setMessages,
-      setUploading],
+      setUploading,
+      appendOptimisticVoice,
+      handleVoiceUploadFinished,
+      handleVoiceSendError,
+    ],
   );
 
   return {

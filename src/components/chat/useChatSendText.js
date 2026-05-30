@@ -13,59 +13,81 @@ export default function useChatSendText({
   nickname,
   ephemeralSec,
   otherPlayerName,
-  sendInProgressRef }) {
+  sendInProgressRef,
+  appendOptimisticText,
+  removeOptimisticText,
+  reconcileOptimisticText,
+}) {
   const sendMessage = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
     if (sendInProgressRef.current) return;
+
+    if (!otherPlayerName) {
+      Alert.alert('Ошибка', 'Не удалось определить получателя');
+      return;
+    }
+
     sendInProgressRef.current = true;
     const replySnapshot = replyTo;
     const replyId = replyTo?.id || null;
-    let cipherText;
-    try {
-      if (!otherPlayerName) {
-        throw new Error('Не удалось определить получателя');
-      }
-      const forRecipient = await encryptMessage(trimmed, otherPlayerName);
-      const forSelf = await encryptMessage(trimmed, nickname);
-      cipherText = 'VM2:' + JSON.stringify({ r: forRecipient, s: forSelf });
-    } catch (e) {
-      const detail = e?.message || 'Не удалось зашифровать сообщение';
-      if (__DEV__) console.warn('[Vault E2E] Ошибка шифрования:', detail);
-      Alert.alert('Ошибка', detail);
-      sendInProgressRef.current = false;
-      return;
-    }
-    const row = {
-      room_id: roomId,
-      player_name: nickname,
-      text: cipherText,
-      reply_to: replyId };
-    if (ephemeralSec) {
-      row.expires_at = new Date(Date.now() + ephemeralSec * 1000).toISOString();
-    }
+
+    const tempId = appendOptimisticText({
+      plainText: trimmed,
+      replyTo: replySnapshot,
+      ephemeralSec,
+    });
+
     setText('');
     setReplyTarget(null);
+
     try {
-      const { error } = await supabase.from('messages').insert(row);
-      if (error) {
-        if (__DEV__) console.warn('Chat insert error:', error.message);
-        setText(trimmed);
-        setReplyTarget(replySnapshot);
-        Alert.alert('Ошибка', error.message || 'Не удалось отправить сообщение');
-      } else {
-        await refreshChatsListAfterMessage(nickname, roomId);
+      const forRecipient = await encryptMessage(trimmed, otherPlayerName);
+      const forSelf = await encryptMessage(trimmed, nickname);
+      const cipherText = 'VM2:' + JSON.stringify({ r: forRecipient, s: forSelf });
+
+      const row = {
+        room_id: roomId,
+        player_name: nickname,
+        text: cipherText,
+        message_type: 'text',
+        reply_to: replyId,
+      };
+      if (ephemeralSec) {
+        row.expires_at = new Date(Date.now() + ephemeralSec * 1000).toISOString();
       }
+
+      const { data, error } = await supabase.from('messages').insert(row).select('*').single();
+      if (error) throw error;
+
+      if (data?.id) {
+        reconcileOptimisticText(tempId, { ...data, text: trimmed });
+      }
+      await refreshChatsListAfterMessage(nickname, roomId);
     } catch (e) {
-      const detail = e?.message || String(e);
-      if (__DEV__) console.warn('Chat insert error:', detail);
+      removeOptimisticText(tempId);
       setText(trimmed);
       setReplyTarget(replySnapshot);
-      Alert.alert('Ошибка', detail);
+      const detail = e?.message || String(e);
+      if (__DEV__) console.warn('Chat insert error:', detail);
+      Alert.alert('Ошибка', detail || 'Не удалось отправить сообщение');
     } finally {
       sendInProgressRef.current = false;
     }
-  }, [text, replyTo, roomId, nickname, ephemeralSec, otherPlayerName, setReplyTarget, setText, sendInProgressRef]);
+  }, [
+    text,
+    replyTo,
+    roomId,
+    nickname,
+    ephemeralSec,
+    otherPlayerName,
+    setReplyTarget,
+    setText,
+    sendInProgressRef,
+    appendOptimisticText,
+    removeOptimisticText,
+    reconcileOptimisticText,
+  ]);
 
   return { sendMessage };
 }

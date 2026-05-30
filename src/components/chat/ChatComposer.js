@@ -45,10 +45,13 @@ export default function ChatComposer({
   reportComposerBaseHeight,
   insets,
   visibleReplyTo,
+  visibleEditTarget,
   replyTargetAnimatedStyle,
   emojiPanelAnimatedStyle,
   emojiContentAnimatedStyle,
   onDismissReply,
+  onDismissEdit,
+  isEditingMessage = false,
   uiReady,
   showEmojiPicker,
   toggleEmojiPicker,
@@ -146,7 +149,33 @@ export default function ChatComposer({
           onLoadMore={onGifInlineLoadMore}
         />
 
-        {visibleReplyTo && (
+        {visibleEditTarget ? (
+          <Reanimated.View style={[{ overflow: 'hidden' }, replyTargetAnimatedStyle]}>
+            <View
+              style={[
+                tw`flex-row items-center px-3 py-2`,
+                {
+                  height: REPLY_TARGET_PREVIEW_H,
+                  backgroundColor: V.bgSurface,
+                  borderTopWidth: 0.5,
+                  borderTopColor: V.border}]}
+            >
+              <View style={[tw`flex-1 pl-2`, { borderLeftWidth: 2, borderLeftColor: V.accentGold }]}>
+                <Text style={[tw`text-[10px] font-medium`, { color: V.accentGold }]} numberOfLines={1}>
+                  Редактирование
+                </Text>
+                <Text style={[tw`text-[10px]`, { color: V.textSecondary }]} numberOfLines={1}>
+                  {visibleEditTarget.text}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={onDismissEdit} style={tw`ml-2 p-1`}>
+                <X size={16} color={V.textMuted} strokeWidth={1.5} />
+              </TouchableOpacity>
+            </View>
+          </Reanimated.View>
+        ) : null}
+
+        {visibleReplyTo && !visibleEditTarget ? (
           <Reanimated.View style={[{ overflow: 'hidden' }, replyTargetAnimatedStyle]}>
             <View
               style={[
@@ -170,7 +199,7 @@ export default function ChatComposer({
               </TouchableOpacity>
             </View>
           </Reanimated.View>
-        )}
+        ) : null}
 
         <View
           ref={inputBarRef}
@@ -344,9 +373,11 @@ export default function ChatComposer({
                       paddingHorizontal: 6,
                       minHeight: COMPOSER_LAYOUT.innerHeight }]}
                   placeholder={
-                    ephemeralSec
-                      ? `Сгорит через ${ephemeralSec}с...`
-                      : 'Сообщение...'
+                    isEditingMessage
+                      ? 'Изменить сообщение...'
+                      : ephemeralSec
+                        ? `Сгорит через ${ephemeralSec}с...`
+                        : 'Сообщение...'
                   }
                   placeholderTextColor={V.textGhost}
                   value={text}
@@ -358,7 +389,7 @@ export default function ChatComposer({
                   editable={!ariaUnavailable}
                 />
 
-                {!ariaTextOnly ? (
+                {!ariaTextOnly && !isEditingMessage ? (
                   <TouchableOpacity
                     onPress={() => {
                       collapseEmojiForKeyboard();
@@ -394,7 +425,7 @@ export default function ChatComposer({
                       height: MIC_BUTTON_SIZE,
                       alignItems: 'center',
                       justifyContent: 'center' }}
-                    accessibilityLabel="Отправить"
+                    accessibilityLabel={isEditingMessage ? 'Сохранить' : 'Отправить'}
                   >
                     {/* Как VoiceRecorder: «гнездо» + sage-круг + светлый глиф */}
                     <View

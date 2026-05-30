@@ -135,6 +135,7 @@ const MessageRow = React.memo(
       : false;
     const messageRowAnims = env.ensureMessageAnims(item.id);
     const isEphemeral = !!item.expires_at;
+    const isEdited = !!item.edited_at;
     const isSelected = listExtra.selectionMode && env.selectedIds.has(item.id);
 
     const bounceAnim = useRef(new Animated.Value(1)).current;
@@ -206,6 +207,11 @@ const MessageRow = React.memo(
     const renderTimeMeta = (timeColor) => (
       <>
         {isEphemeral && <ChatEphemeralCountdown expiresAt={item.expires_at} />}
+        {isEdited ? (
+          <Text style={{ fontSize: TS_TEXT_SIZE - 1, color: timeColor, fontWeight: '400' }}>
+            изм.
+          </Text>
+        ) : null}
         <Text style={{ fontSize: TS_TEXT_SIZE, color: timeColor, fontWeight: '400' }}>
           {item._formattedTime}
         </Text>
@@ -217,7 +223,8 @@ const MessageRow = React.memo(
 
     const metaReservePx =
       (isMine ? META_RESERVE_PX_OUTGOING : META_RESERVE_PX_INCOMING) +
-      (isEphemeral ? META_RESERVE_PX_EPHEMERAL_EXTRA : 0);
+      (isEphemeral ? META_RESERVE_PX_EPHEMERAL_EXTRA : 0) +
+      (isEdited ? 24 : 0);
 
     const hasReactions =
       !listExtra.isAriaChat &&
@@ -401,6 +408,7 @@ const MessageRow = React.memo(
             isEphemeral={isEphemeral}
             expiresAt={item.expires_at}
             isSelected={isSelected}
+            isUploading={item._isOptimistic === true}
             onPress={handleImagePress}
             onCaptionPress={handleMessagePress}
             onLongPress={emitMessageLongPress}

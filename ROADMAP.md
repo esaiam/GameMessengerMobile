@@ -46,6 +46,58 @@
 
 ---
 
+## Chat perf — «Telegram-feel» (2026-05)
+
+> Пошаговая реализация; каждый шаг — отдельно с ручной проверкой.
+
+| # | Шаг | Статус |
+|---|-----|--------|
+| 1 | **Optimistic UI для текста** — пузырь сразу, insert в фоне, reconcile по insert/realtime | ✅ |
+| 2 | **Дисковый кэш ленты** — AsyncStorage поверх `roomMessagesCache`, до 120 msg, cold start | ✅ |
+| 3 | **Persist decrypt cache** — `@decrypt_txt_v1_{nickname}`, invalidation UPDATE/DELETE, logout | ✅ |
+| 4 | **Pagination** — `onEndReached` + cursor `created_at`, история >30 | ✅ |
+| 5 | **Optimistic фото/голос** — local URI → upload → reconcile (как video) | ✅ |
+| 6 | **CDN перед Supabase Storage** — Cloudflare и т.п.; триггер: latency медиа >500ms | ⬜ отложен |
+| 7 | **Редактирование сообщений** — см. ниже | ✅ |
+
+### Шаг 7 — редактирование сообщений (после 1–6)
+
+**Цель:** редактировать **свои текстовые** сообщения; у собеседника — UPDATE через realtime; E2E сохраняется.
+
+**Scope MVP edit:**
+- Только `message_type: text` (не медиа/голос/локация/игра).
+- Только **свои** сообщения.
+- UI: пункт в меню сообщения (сейчас контекстное меню по long press / свайп-reply — туда же «Изменить»).
+- Лимит по времени *(опционально, как Telegram ~48ч)* — решить при реализации.
+
+**Backend / data:**
+- `UPDATE messages SET text = …` — новый VM2 ciphertext (`encryptMessage` для peer + self).
+- Колонка `edited_at timestamptz` *(миграция)* — метка «изменено» в пузыре.
+- RLS: UPDATE только автор (`player_name`) и только свои строки.
+- `invalidateDecryptCache(id)` при UPDATE — уже есть в `messageDecrypt.js`.
+
+**Клиент:**
+- Режим edit в composer: prefilled text, «Отмена» / отправка = save.
+- Optimistic: сразу новый текст + `edited_at`; rollback при ошибке.
+- Realtime UPDATE → merge в ленту + re-decrypt если пришёл cipher.
+- Список чатов: preview последнего сообщения после edit.
+
+**Не в scope первой итерации:**
+- История версий / «показать original».
+- Edit в группах (DM only).
+- Edit медиа-подписей.
+
+**Проверка:**
+1. Edit своего текста → мгновенно в ленте, у peer после realtime.
+2. Kill app → текст и метка «изменено» на месте.
+3. Ephemeral / reply — edit не ломает метаданные.
+4. Попытка edit чужого / медиа — недоступно.
+5. E2E: на wire только VM2, plaintext не в `messages.text`.
+
+**Зависимости:** шаги 1–3 желательны до edit (optimistic + cache + decrypt invalidation); pagination/media не блокируют.
+
+---
+
 ## P1 — после ограниченной беты
 
 ### Наблюдаемость (сейчас ≈ ноль в prod)

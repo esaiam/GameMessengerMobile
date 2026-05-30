@@ -19,6 +19,7 @@ import {
   Copy,
   Forward,
   Image,
+  Pencil,
   Pin,
   Reply,
   Trash2 } from '../../icons/lucideIcons';
@@ -38,8 +39,8 @@ const REACTION_BAR_EXTRA_W = 4;
 /** Высота плашки для top (paddingVertical 7+7 + ряд) */
 const REACTIONS_HEIGHT = 48;
 
-/** Примерная высота меню (реакции ~56 + 5 строк * 48 + паддинги) — используется только для выбора top/bottom */
-const APPROX_MENU_HEIGHT = 310;
+/** Примерная высота меню (реакции ~56 + строки * 48 + паддинги) */
+const APPROX_MENU_HEIGHT = 358;
 const EDGE_PADDING = 12;
 const ANCHOR_OFFSET = 8;
 
@@ -49,6 +50,8 @@ export type MessageContextMenuProps = {
   visible: boolean;
   onClose: () => void;
   onReply: () => void;
+  /** Свой текст — редактирование */
+  onEdit?: () => void;
   /** Фото/GIF: открыть на весь экран */
   onOpen?: () => void;
   onCopy: () => void;
@@ -131,6 +134,7 @@ export default function MessageContextMenu({
   visible,
   onClose,
   onReply,
+  onEdit,
   onOpen,
   onCopy,
   onForward,
@@ -275,6 +279,16 @@ export default function MessageContextMenu({
               label="Ответить"
               onPress={() => run(onReply)}
             />
+            {onEdit ? (
+              <>
+                <View style={styles.rowDivider} />
+                <MenuRow
+                  icon={<Pencil {...ICON_PROPS} />}
+                  label="Изменить"
+                  onPress={() => run(onEdit)}
+                />
+              </>
+            ) : null}
             {onOpen ? (
               <>
                 <View style={styles.rowDivider} />

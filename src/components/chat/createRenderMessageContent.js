@@ -49,6 +49,7 @@ export function createRenderMessageContent({
             activeVoiceMessageId={pe.activeVoiceMessageId}
             activePlayerStatus={pe.activePlayerStatus}
             idleDurationSec={parseVoiceCaptionDurationSec(item.text)}
+            isUploading={item._isOptimistic === true}
           />
         );
       case 'location':

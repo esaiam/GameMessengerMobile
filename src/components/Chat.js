@@ -37,6 +37,11 @@ import useChatSelection from './chat/useChatSelection';
 import useChatMessageMutations from './chat/useChatMessageMutations';
 import useChatReplyHelpers from './chat/useChatReplyHelpers';
 import useChatOptimisticVideo from './chat/useChatOptimisticVideo';
+import useChatOptimisticText from './chat/useChatOptimisticText';
+import useChatOptimisticMedia from './chat/useChatOptimisticMedia';
+import useChatMessagePagination from './chat/useChatMessagePagination';
+import useChatEditMessage from './chat/useChatEditMessage';
+import { canEditMessage } from './chat/chatEditMessageUtils';
 import useChatComposerChrome from './chat/useChatComposerChrome';
 import { sendAriaChatTextMessage } from './chat/ariaTextComposerSend';
 import { startAriaVoiceComposerSend } from './chat/ariaVoiceComposerSend';
@@ -119,6 +124,8 @@ export default function Chat({
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const [visibleReplyTo, setVisibleReplyTo] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
+  const [visibleEditTarget, setVisibleEditTarget] = useState(null);
   const [unlockedVideoIds, setUnlockedVideoIds] = useState(() => new Set());
   const [ephemeralSec, setEphemeralSec] = useState(null);
   const [deletingIds, setDeletingIds] = useState(() => new Set());
@@ -192,8 +199,27 @@ export default function Chat({
 
   const setReplyTarget = useCallback((nextReply) => {
     configureReplyTargetLayoutAnimation();
+    if (nextReply) setEditTarget(null);
     setReplyTo(nextReply);
   }, []);
+
+  const cancelEditMessage = useCallback(() => {
+    configureReplyTargetLayoutAnimation();
+    setEditTarget(null);
+    setText('');
+  }, []);
+
+  const startEditMessage = useCallback((msg) => {
+    if (!canEditMessage(msg, nickname, isAriaChat)) return;
+    configureReplyTargetLayoutAnimation();
+    setReplyTarget(null);
+    setEditTarget(msg);
+    setText(msg.text || '');
+  }, [nickname, isAriaChat, setReplyTarget, setText]);
+
+  useEffect(() => {
+    setEditTarget(null);
+  }, [roomId]);
 
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -289,6 +315,15 @@ export default function Chat({
 
   const inputRef = useRef(null);
   const sendInProgressRef = useRef(false);
+  const editInProgressRef = useRef(false);
+
+  useEffect(() => {
+    if (!editTarget) return;
+    const raf = requestAnimationFrame(() => {
+      inputRef.current?.focus?.();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [editTarget?.id]);
 
   const deletingIdsRef = useRef(deletingIds);
   useEffect(() => {
@@ -312,7 +347,9 @@ export default function Chat({
     releaseEmojiPanelGifSearch,
     exitGifTabLayout } = useChatComposerChrome({
     replyTo,
+    editTarget,
     setVisibleReplyTo,
+    setVisibleEditTarget,
     inputRef,
     showEmojiPicker,
     setShowEmojiPicker,
@@ -378,7 +415,10 @@ export default function Chat({
 
   const decryptMsg = useMemo(() => createDecryptMsg({ nickname }), [nickname]);
 
-  const decryptBatch = useCallback(async (msgs) => decryptMessagesBatch(msgs, decryptMsg), [decryptMsg]);
+  const decryptBatch = useCallback(
+    async (msgs) => decryptMessagesBatch(msgs, decryptMsg, nickname),
+    [decryptMsg, nickname],
+  );
 
   const filterExpired = useCallback((msgs) => filterExpiredMessages(msgs), []);
 
@@ -436,6 +476,53 @@ export default function Chat({
     filterExpired,
     fadeAnims,
     scaleAnims });
+
+  const {
+    optimisticTextTempIdsRef,
+    appendOptimisticText,
+    removeOptimisticText,
+    reconcileOptimisticText,
+  } = useChatOptimisticText({
+    roomId,
+    nickname,
+    setMessages,
+    filterHiddenForMeKeepingDeleting,
+    filterExpired,
+    fadeAnims,
+    scaleAnims });
+
+  const {
+    optimisticImageTempIdRef,
+    optimisticVoiceTempIdRef,
+    appendOptimisticImage,
+    appendOptimisticVoice,
+    handleImageSendError,
+    handleVoiceSendError,
+    handleImageUploadFinished,
+    handleVoiceUploadFinished,
+  } = useChatOptimisticMedia({
+    roomId,
+    nickname,
+    setMessages,
+    filterHiddenForMeKeepingDeleting,
+    filterExpired,
+    fadeAnims,
+    scaleAnims });
+
+  const { saveEditedMessage } = useChatEditMessage({
+    roomId,
+    nickname,
+    otherPlayerName,
+    setMessages,
+    filterHiddenForMeKeepingDeleting,
+    filterExpired,
+    editInProgressRef,
+  });
+
+  const canEditSelectedMessage = useMemo(
+    () => canEditMessage(selectedMessage, nickname, isAriaChat),
+    [selectedMessage, nickname, isAriaChat],
+  );
 
   const {
     toggleReaction,
@@ -498,6 +585,18 @@ export default function Chat({
     [roomId, nickname, deleteChatInProgress, otherPlayerName, navigation],
   );
 
+  const { loadingOlder, loadOlderMessages, onInitialPageLoaded } = useChatMessagePagination({
+    roomId,
+    isAriaChat,
+    messagesRef,
+    setMessages,
+    decryptBatch,
+    filterExpired,
+    filterHiddenForMeKeepingDeleting,
+    optimisticTextTempIdsRef,
+    messagesLoading,
+  });
+
   useChatRoomEffects({
     roomId,
     nickname,
@@ -515,6 +614,9 @@ export default function Chat({
     fadeAnims,
     scaleAnims,
     optimisticVideoTempIdRef,
+    optimisticImageTempIdRef,
+    optimisticVoiceTempIdRef,
+    optimisticTextTempIdsRef,
     pendingVideoActiveIdMigrationRef,
     activatedVideoIds,
     setActiveVideoId,
@@ -523,6 +625,7 @@ export default function Chat({
     setMessages,
     setMessagesLoading,
     messagesRef,
+    onInitialPageLoaded,
     chatSyncRef: vaultChatSyncRef });
 
   const {
@@ -539,10 +642,13 @@ export default function Chat({
     setReplyTarget,
     setUploading,
     setShowAttachMenu,
-    decryptMsg,
-    setMessages,
-    filterHiddenForMeKeepingDeleting,
-    filterExpired });
+    appendOptimisticImage,
+    handleImageUploadFinished,
+    handleImageSendError,
+    appendOptimisticVoice,
+    handleVoiceUploadFinished,
+    handleVoiceSendError,
+  });
 
   const inlineMediaEnabled = !isAriaChat && Boolean(roomId);
   const activeInlineMedia = useMemo(
@@ -582,13 +688,33 @@ export default function Chat({
     nickname,
     ephemeralSec,
     otherPlayerName,
-    sendInProgressRef });
+    sendInProgressRef,
+    appendOptimisticText,
+    removeOptimisticText,
+    reconcileOptimisticText,
+  });
 
   const sendMessage = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
     if (parsePicInlineQuery(trimmed) || parseGifInlineQuery(trimmed)) return;
     if (isAriaChat && chatRoomHeader?.ariaOnline === false) return;
+
+    if (editTarget) {
+      const result = await saveEditedMessage({
+        messageId: editTarget.id,
+        previousText: editTarget.text,
+        previousEditedAt: editTarget.edited_at,
+        newText: trimmed,
+      });
+      if (result === true || result === 'unchanged') {
+        cancelEditMessage();
+      } else if (result === false) {
+        setEditTarget((prev) => prev ?? editTarget);
+      }
+      return;
+    }
+
     if (isAriaChat && sendToAria) {
       await sendAriaChatTextMessage({
         trimmed,
@@ -599,7 +725,18 @@ export default function Chat({
       return;
     }
     await sendVaultTextMessage();
-  }, [isAriaChat, chatRoomHeader?.ariaOnline, sendToAria, text, sendVaultTextMessage, setText, setReplyTarget]);
+  }, [
+    isAriaChat,
+    chatRoomHeader?.ariaOnline,
+    sendToAria,
+    text,
+    editTarget,
+    saveEditedMessage,
+    cancelEditMessage,
+    sendVaultTextMessage,
+    setText,
+    setReplyTarget,
+  ]);
 
   const handleSendVoiceForComposer = useCallback(
     async (uri, duration, waveform) => {
@@ -709,6 +846,8 @@ export default function Chat({
         selectedMessage={selectedMessage}
         onCloseMenu={() => setMenuVisible(false)}
         onReplyToMessage={setReplyTarget}
+        onEditMessage={startEditMessage}
+        canEditSelectedMessage={canEditSelectedMessage}
         onRequestDeleteConfirm={() => setDeleteConfirmVisible(true)}
         onOpenImage={(uri) => setFullScreenImage(uri)}
         deleteConfirmVisible={deleteConfirmVisible}
@@ -755,6 +894,8 @@ export default function Chat({
           exitSelectionMode={exitSelectionMode}
           batchDeleteForMe={batchDeleteForMe}
           overscrollEnabled={overscrollEnabled}
+          loadingOlder={loadingOlder}
+          onLoadOlderMessages={loadOlderMessages}
         />
 
         <Reanimated.View
@@ -786,10 +927,13 @@ export default function Chat({
             reportComposerBaseHeight={reportComposerBaseHeight}
             insets={insets}
             visibleReplyTo={visibleReplyTo}
+            visibleEditTarget={visibleEditTarget}
             replyTargetAnimatedStyle={replyTargetAnimatedStyle}
             emojiPanelAnimatedStyle={emojiPanelAnimatedStyle}
             emojiContentAnimatedStyle={emojiContentAnimatedStyle}
             onDismissReply={() => setReplyTarget(null)}
+            onDismissEdit={cancelEditMessage}
+            isEditingMessage={!!editTarget}
             uiReady={uiReady}
             showEmojiPicker={showEmojiPicker}
             toggleEmojiPicker={toggleEmojiPicker}

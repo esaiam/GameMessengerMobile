@@ -14,6 +14,8 @@ export default function ChatMessageContextMenuHost({
   position,
   selectedMessage,
   onReplyToMessage,
+  onEditMessage,
+  canEditSelectedMessage,
   onRequestDeleteConfirm,
   onOpenImage }) {
   const canOpenImage =
@@ -28,6 +30,11 @@ export default function ChatMessageContextMenuHost({
       onReply={() => {
         if (selectedMessage) onReplyToMessage(selectedMessage);
       }}
+      onEdit={
+        canEditSelectedMessage && selectedMessage
+          ? () => onEditMessage?.(selectedMessage)
+          : undefined
+      }
       onOpen={
         canOpenImage
           ? () => {

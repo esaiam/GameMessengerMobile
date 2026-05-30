@@ -61,6 +61,7 @@ import { useAuthGate } from '../context/AuthGateContext';
 import { useMainTabsNavigationOptional } from '../context/MainTabsNavigationContext';
 
 import { clearNicknameFromStorage } from '../lib/nicknameStorage';
+import { clearDecryptCache } from '../components/chat/messageDecrypt';
 
 import { UserAvatar } from '../components/UserAvatar';
 
@@ -933,6 +934,8 @@ export default function ProfileScreen({ route, navigation }) {
 
   const logout = async () => {
 
+    if (nickname) await clearDecryptCache(nickname);
+
     await supabase.auth.signOut();
 
     await clearNicknameFromStorage();
@@ -966,6 +969,8 @@ export default function ProfileScreen({ route, navigation }) {
       await supabase.from('profiles').delete().eq('id', uid);
 
       await removeAvatar();
+
+      if (nickname) await clearDecryptCache(nickname);
 
       await clearNicknameFromStorage();
 

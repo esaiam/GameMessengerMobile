@@ -4,6 +4,19 @@ import { withTiming } from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
 import { fetchPublicKeys } from '../../utils/VaultKeyServer';
 import roomMessagesCache from '../../utils/roomMessagesCache';
+import {
+  mergeMessagesKeepingOptimisticText,
+  isOwnTextMessage,
+  transferRowAnims,
+} from './useChatOptimisticText';
+import { isOwnImageMessage, isOwnVoiceMessage } from './useChatOptimisticMedia';
+import { invalidateDecryptCache } from './messageDecrypt';
+import { invalidatePreviewCache } from '../../screens/chats/chatsPreviewCache';
+import {
+  mergeMessagesById,
+  MESSAGES_PAGE_SIZE,
+  MESSAGE_LIST_SELECT,
+} from './chatMessageMerge';
 
 /**
  * Загрузка истории, realtime postgres_changes, очистка эфемерки в БД, read receipts.
@@ -26,6 +39,9 @@ export default function useChatRoomEffects({
   fadeAnims,
   scaleAnims,
   optimisticVideoTempIdRef,
+  optimisticImageTempIdRef,
+  optimisticVoiceTempIdRef,
+  optimisticTextTempIdsRef,
   pendingVideoActiveIdMigrationRef,
   activatedVideoIds,
   setActiveVideoId,
@@ -34,6 +50,7 @@ export default function useChatRoomEffects({
   setMessages,
   setMessagesLoading,
   messagesRef,
+  onInitialPageLoaded,
   /** ref для отправки broadcast после «удалить у всех» / очистки (когда postgres UPDATE не доходит из‑за RLS) */
   chatSyncRef }) {
   const readSentRef = useRef(new Set());
@@ -65,7 +82,10 @@ export default function useChatRoomEffects({
     }
     let cancelled = false;
     const loadMessages = async () => {
-      const cached = roomMessagesCache.get(roomId);
+      let cached = roomMessagesCache.get(roomId);
+      if (!cached || cached.length === 0) {
+        cached = await roomMessagesCache.hydrateFromDisk(roomId);
+      }
       if (!cached || cached.length === 0) {
         listOpacity.value = 0;
       }
@@ -79,12 +99,10 @@ export default function useChatRoomEffects({
 
       const { data } = await supabase
         .from('messages')
-        .select(
-          'id, room_id, player_name, text, created_at, read_at, reply_to, reactions, hidden_for, message_type, media_url, latitude, longitude, expires_at, waveform',
-        )
+        .select(MESSAGE_LIST_SELECT)
         .eq('room_id', roomId)
         .order('created_at', { ascending: false })
-        .limit(30);
+        .limit(MESSAGES_PAGE_SIZE);
 
       if (cancelled || !data) {
         setMessagesLoading(false);
@@ -105,22 +123,31 @@ export default function useChatRoomEffects({
       const filtered = filterHiddenForMeKeepingDeleting(filterExpired(decrypted));
 
       const prev = messagesRef.current;
+      const mergedWithPrev = mergeMessagesById(prev, filtered);
+      const merged = mergeMessagesKeepingOptimisticText(
+        mergedWithPrev,
+        prev,
+        optimisticTextTempIdsRef?.current ?? [],
+      );
       const hasChanged =
-        prev.length !== filtered.length ||
-        filtered.some((msg, i) => {
+        prev.length !== merged.length ||
+        merged.some((msg, i) => {
           const prior = prev[i];
           return (
             !prior ||
             prior.id !== msg.id ||
             prior.text !== msg.text ||
-            prior.message_type !== msg.message_type
+            prior.message_type !== msg.message_type ||
+            prior.edited_at !== msg.edited_at ||
+            prior.read_at !== msg.read_at
           );
         });
       if (hasChanged) {
-        setMessages(filtered);
+        setMessages(merged);
       }
-      roomMessagesCache.set(roomId, filtered);
+      roomMessagesCache.set(roomId, merged);
       setMessagesLoading(false);
+      onInitialPageLoaded?.(data.length);
 
       if (!cached || cached.length === 0) {
         listOpacity.value = withTiming(1, { duration: 80 });
@@ -131,7 +158,7 @@ export default function useChatRoomEffects({
       cancelled = true;
       setMessagesLoading(false);
     };
-  }, [roomId, isAriaChat, filterHiddenForMeKeepingDeleting, decryptBatch, filterExpired]);
+  }, [roomId, isAriaChat, filterHiddenForMeKeepingDeleting, decryptBatch, filterExpired, onInitialPageLoaded]);
 
   useEffect(() => {
     if (!roomId || isAriaChat) return;
@@ -155,15 +182,27 @@ export default function useChatRoomEffects({
           msg.message_type === 'video' && msg.player_name === nickname
             ? optimisticVideoTempIdRef.current
             : null;
+        const replaceImageTempId = isOwnImageMessage(msg, nickname)
+          ? optimisticImageTempIdRef?.current
+          : null;
+        const replaceVoiceTempId = isOwnVoiceMessage(msg, nickname)
+          ? optimisticVoiceTempIdRef?.current
+          : null;
+        const replaceTextTempId =
+          isOwnTextMessage(msg, nickname) && optimisticTextTempIdsRef?.current?.[0]
+            ? optimisticTextTempIdsRef.current[0]
+            : null;
+        const replaceTempId =
+          replaceVideoTempId || replaceImageTempId || replaceVoiceTempId || replaceTextTempId;
         if (
-          replaceVideoTempId &&
-          fadeAnims[replaceVideoTempId] != null &&
-          scaleAnims[replaceVideoTempId] != null
+          replaceTempId &&
+          fadeAnims[replaceTempId] != null &&
+          scaleAnims[replaceTempId] != null
         ) {
-          fadeAnims[msg.id] = fadeAnims[replaceVideoTempId];
-          scaleAnims[msg.id] = scaleAnims[replaceVideoTempId];
-          delete fadeAnims[replaceVideoTempId];
-          delete scaleAnims[replaceVideoTempId];
+          fadeAnims[msg.id] = fadeAnims[replaceTempId];
+          scaleAnims[msg.id] = scaleAnims[replaceTempId];
+          delete fadeAnims[replaceTempId];
+          delete scaleAnims[replaceTempId];
         } else {
           fadeAnims[msg.id] = new Animated.Value(0);
           scaleAnims[msg.id] = new Animated.Value(0.85);
@@ -199,8 +238,50 @@ export default function useChatRoomEffects({
               continue;
             }
           }
+          if (isOwnImageMessage(msg, nickname)) {
+            const tempId = optimisticImageTempIdRef?.current;
+            if (tempId) {
+              optimisticImageTempIdRef.current = null;
+              transferRowAnims(tempId, msg.id, fadeAnims, scaleAnims);
+              next = filterHiddenForMeKeepingDeleting(
+                filterExpired([
+                  ...next.filter((m) => m.id !== tempId),
+                  { ...msg, clientRowKey: tempId }])
+              );
+              continue;
+            }
+          }
+          if (isOwnVoiceMessage(msg, nickname)) {
+            const tempId = optimisticVoiceTempIdRef?.current;
+            if (tempId) {
+              optimisticVoiceTempIdRef.current = null;
+              transferRowAnims(tempId, msg.id, fadeAnims, scaleAnims);
+              next = filterHiddenForMeKeepingDeleting(
+                filterExpired([
+                  ...next.filter((m) => m.id !== tempId),
+                  { ...msg, clientRowKey: tempId }])
+              );
+              continue;
+            }
+          }
+          if (isOwnTextMessage(msg, nickname) && optimisticTextTempIdsRef?.current?.length) {
+            const tempId = optimisticTextTempIdsRef.current.shift();
+            if (tempId && next.some((m) => m.id === tempId)) {
+              transferRowAnims(tempId, msg.id, fadeAnims, scaleAnims);
+              next = filterHiddenForMeKeepingDeleting(
+                filterExpired([
+                  ...next.filter((m) => m.id !== tempId),
+                  { ...msg, clientRowKey: tempId, _isOptimistic: false }])
+              );
+              continue;
+            }
+            if (tempId && !next.some((m) => m.id === tempId)) {
+              optimisticTextTempIdsRef.current.unshift(tempId);
+            }
+          }
           next = filterHiddenForMeKeepingDeleting(filterExpired([...next, msg]));
         }
+        roomMessagesCache.set(roomId, next);
         return next;
       });
 
@@ -290,6 +371,10 @@ export default function useChatRoomEffects({
           } else if (payload.eventType === 'UPDATE') {
             const id = payload.new?.id ?? payload.old?.id;
             if (id == null) return;
+            if (payload.old?.text !== payload.new?.text) {
+              invalidateDecryptCache(id);
+              invalidatePreviewCache(id);
+            }
             const base = messagesRef.current.find((m) => m.id === id) || {};
             const merged = { ...base, ...payload.new, id };
             const updatedMsg = await decryptMsg(merged);
@@ -305,6 +390,7 @@ export default function useChatRoomEffects({
             });
           } else if (payload.eventType === 'DELETE') {
             const id = payload.old.id;
+            invalidateDecryptCache(id);
             if (deletingIdsRef.current?.has?.(id)) return;
             setMessages((prev) => {
               const next = prev.filter((m) => m.id !== id);

@@ -8,6 +8,10 @@ export function clearPreviewCache() {
   _previewCache.clear();
 }
 
+export function invalidatePreviewCache(messageId) {
+  if (messageId != null) _previewCache.delete(messageId);
+}
+
 function trimPreviewCacheIfNeeded() {
   while (_previewCache.size > MAX_PREVIEW_CACHE_ENTRIES) {
     const k = _previewCache.keys().next().value;

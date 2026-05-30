@@ -29,7 +29,9 @@ let composerKeyboardReleaseInFlight = false;
  */
 export default function useChatComposerChrome({
   replyTo,
+  editTarget,
   setVisibleReplyTo,
+  setVisibleEditTarget,
   inputRef,
   showEmojiPicker,
   setShowEmojiPicker,
@@ -171,9 +173,17 @@ export default function useChatComposerChrome({
     return () => clearTimeout(t);
   }, [playEmojiWobble]);
 
+  const composerStripTarget = editTarget ?? replyTo;
+
   useEffect(() => {
-    if (replyTo) {
-      setVisibleReplyTo(replyTo);
+    if (composerStripTarget) {
+      if (editTarget) {
+        setVisibleEditTarget(editTarget);
+        setVisibleReplyTo(null);
+      } else {
+        setVisibleReplyTo(replyTo);
+        setVisibleEditTarget(null);
+      }
       replyTargetProgress.value = withTiming(1, {
         duration: REPLY_TARGET_ANIM_MS,
         easing: Easing.out(Easing.cubic) });
@@ -186,10 +196,13 @@ export default function useChatComposerChrome({
         duration: REPLY_TARGET_ANIM_MS,
         easing: Easing.in(Easing.cubic) },
       (finished) => {
-        if (finished) runOnJS(setVisibleReplyTo)(null);
+        if (finished) {
+          runOnJS(setVisibleReplyTo)(null);
+          runOnJS(setVisibleEditTarget)(null);
+        }
       },
     );
-  }, [replyTo, replyTargetProgress, setVisibleReplyTo]);
+  }, [composerStripTarget, editTarget, replyTo, replyTargetProgress, setVisibleReplyTo, setVisibleEditTarget]);
 
   // Как в Telegram: контент эмодзи исчезает мгновенно при старте анимации клавиатуры;
   // слот (оболочка) остаётся и клавиатура едет поверх него.

@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useVoicePlayerResolvedUri } from '../../hooks/useVoicePlayerResolvedUri';
 import VoiceMessagePlayer from './VoiceMessagePlayer';
 import VoiceWaveformBars from './VoiceWaveformBars';
@@ -18,7 +18,9 @@ export default function ChatVoicePlayer({
   onPlay,
   activeVoiceMessageId,
   activePlayerStatus,
-  idleDurationSec }) {
+  idleDurationSec,
+  isUploading = false,
+}) {
   const resolvedUri = useVoicePlayerResolvedUri(url);
 
   const preparingRemote =
@@ -87,16 +89,32 @@ export default function ChatVoicePlayer({
       : 0;
 
   return (
-    <VoiceMessagePlayer
-      resolvedUri={resolvedUri}
-      messageId={messageId}
-      waveformHeights={displayHeights}
-      isPlaying={isPlaying}
-      progress={progress}
-      duration={duration}
-      idleDurationSec={idleDurationSec}
-      onPlay={onPlay}
-      isRecordingVoice={isRecordingVoice}
-    />
+    <View style={{ position: 'relative', alignSelf: 'flex-start' }}>
+      <VoiceMessagePlayer
+        resolvedUri={resolvedUri}
+        messageId={messageId}
+        waveformHeights={displayHeights}
+        isPlaying={isPlaying}
+        progress={progress}
+        duration={duration}
+        idleDurationSec={idleDurationSec}
+        onPlay={onPlay}
+        isRecordingVoice={isRecordingVoice}
+      />
+      {isUploading ? (
+        <View
+          pointerEvents="none"
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.25)',
+            borderRadius: 12,
+          }}
+        >
+          <ActivityIndicator size="small" color={V.accentSage} />
+        </View>
+      ) : null}
+    </View>
   );
 }
