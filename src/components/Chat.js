@@ -50,11 +50,14 @@ import { getAriaComposerSurfaceProps } from './chat/ariaComposerSurfaceProps';
 import AriaStateGauges from './chat/AriaStateGauges';
 import Reanimated, {
   useSharedValue,
-  useAnimatedStyle } from 'react-native-reanimated';
+  useAnimatedStyle,
+  useAnimatedReaction,
+  runOnJS } from 'react-native-reanimated';
 import { V, chatListBottomFadeBottom } from '../theme';
 import {
   MAX_RENDERED_VIDEOS,
-  CHAT_HEADER_TO_LIST_GAP_PX } from './chat/chatViewConstants';
+  CHAT_HEADER_TO_LIST_GAP_PX,
+  estimateComposerStackHeight } from './chat/chatViewConstants';
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
 import { useChatInvertedListScroll } from '../hooks/useChatInvertedListScroll';
@@ -225,15 +228,14 @@ export default function Chat({
   messagesRef.current = messages;
 
   const listOpacity = useSharedValue(0);
-  const headerMeasured = useSharedValue(0);
   const vaultChatSyncRef = useRef(null);
 
   const {
     flatListRef,
-    stickToBottomRef,
-    layoutReadyRef,
-    initialScrollDoneRef,
-    onScroll: onListScroll } = useChatInvertedListScroll(roomId, messages, headerMeasured, listScrollSuppressRefs);
+    onScroll: onListScroll,
+    onListLayoutReady,
+    scrollToBottomIfStuck,
+  } = useChatInvertedListScroll(roomId, messages, listScrollSuppressRefs);
 
   const ephemeralClockTick = useChatEphemeralClockTick(messages, renderPausedRef);
 
@@ -330,7 +332,7 @@ export default function Chat({
     deletingIdsRef.current = deletingIds;
   }, [deletingIds]);
 
-  const composerStackHeightShared = useSharedValue(0);
+  const composerStackHeightShared = useSharedValue(estimateComposerStackHeight(insets));
 
   const {
     keyboardHeightLib,
@@ -390,6 +392,16 @@ export default function Chat({
     const kbH = -keyboardHeightLib.value;
     return { height: baseComposerH + visualEmojiH + kbH };
   });
+
+  useAnimatedReaction(
+    () =>
+      `${composerStackHeightShared.value}|${emojiPanelHeightShared.value}|${keyboardHeightLib.value}`,
+    (sig, prev) => {
+      if (prev != null && sig !== prev) {
+        runOnJS(scrollToBottomIfStuck)();
+      }
+    },
+  );
 
   const composerWrapperAnimatedStyle = useAnimatedStyle(() => ({
     bottom: -keyboardHeightLib.value }));
@@ -883,8 +895,7 @@ export default function Chat({
           listAnimatedStyle={listAnimatedStyle}
           listBottomSpacerStyle={listBottomSpacerStyle}
           onListScroll={onListScroll}
-          layoutReadyRef={layoutReadyRef}
-          initialScrollDoneRef={initialScrollDoneRef}
+          onListLayoutReady={onListLayoutReady}
           messagesLoading={messagesLoading}
           chatRoomHeader={chatRoomHeader}
           listPaddingTop={listPaddingTop}
@@ -1010,10 +1021,7 @@ export default function Chat({
               elevation: 50 }}
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;
-              if (h > 0) {
-                setHeaderOverlayH(h);
-                headerMeasured.value = 1;
-              }
+              if (h > 0) setHeaderOverlayH(h);
             }}
           >
             <ChatRoomHeader

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { shouldStickScrollOnMessagesTailChange } from '../components/chat/chatListScrollStick';
 import { CHAT_AT_BOTTOM_THRESHOLD_PX } from '../components/chat/chatViewConstants';
+
+/** Повтор после suppress (клавиатура / emoji settling). */
+const SCROLL_SUPPRESS_RETRY_MS = 360;
 
 function scrollSuppressed(suppressRef) {
   if (suppressRef == null) return false;
@@ -11,11 +15,11 @@ function scrollSuppressed(suppressRef) {
  * Inverted FlatList: отслеживание «у низа», сброс при смене комнаты, подскролл при новых сообщениях.
  * suppressStickToBottomScrollRef — один ref или массив (напр. клавиатура + смена высоты композера).
  */
-export function useChatInvertedListScroll(roomId, messages, headerMeasured, suppressStickToBottomScrollRef) {
+export function useChatInvertedListScroll(roomId, messages, suppressStickToBottomScrollRef) {
   const flatListRef = useRef(null);
   const stickToBottomRef = useRef(true);
-  const layoutReadyRef = useRef(false);
   const initialScrollDoneRef = useRef(false);
+  const messagesTailPrevRef = useRef([]);
 
   const onScroll = useCallback((e) => {
     const y = e?.nativeEvent?.contentOffset?.y ?? 0;
@@ -25,35 +29,68 @@ export function useChatInvertedListScroll(roomId, messages, headerMeasured, supp
     }
   }, []);
 
-  useEffect(() => {
-    if (!roomId) return;
-    stickToBottomRef.current = true;
-    layoutReadyRef.current = false;
-    initialScrollDoneRef.current = false;
-    headerMeasured.value = 0;
-  }, [roomId, headerMeasured]);
+  const scrollToBottomNow = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, []);
 
-  useEffect(() => {
-    if (!initialScrollDoneRef.current) return;
-    if (!stickToBottomRef.current) return;
-    if (scrollSuppressed(suppressStickToBottomScrollRef)) return;
+  const scrollToBottomIfStuck = useCallback(() => {
+    if (!initialScrollDoneRef.current) return undefined;
+    if (!stickToBottomRef.current) return undefined;
+
     let innerRaf = null;
+    let retryTimer = null;
+
+    const tryScroll = () => {
+      if (!stickToBottomRef.current) return true;
+      if (scrollSuppressed(suppressStickToBottomScrollRef)) return false;
+      scrollToBottomNow();
+      return true;
+    };
+
     const outerRaf = requestAnimationFrame(() => {
       innerRaf = requestAnimationFrame(() => {
-        if (scrollSuppressed(suppressStickToBottomScrollRef)) return;
-        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+        if (tryScroll()) return;
+        retryTimer = setTimeout(() => {
+          tryScroll();
+        }, SCROLL_SUPPRESS_RETRY_MS);
       });
     });
+
     return () => {
       cancelAnimationFrame(outerRaf);
       if (innerRaf != null) cancelAnimationFrame(innerRaf);
+      if (retryTimer != null) clearTimeout(retryTimer);
     };
-  }, [messages, suppressStickToBottomScrollRef]);
+  }, [scrollToBottomNow, suppressStickToBottomScrollRef]);
+
+  const onListLayoutReady = useCallback(() => {
+    if (initialScrollDoneRef.current) return;
+    initialScrollDoneRef.current = true;
+    stickToBottomRef.current = true;
+    return scrollToBottomIfStuck();
+  }, [scrollToBottomIfStuck]);
+
+  useEffect(() => {
+    if (!roomId) return;
+    stickToBottomRef.current = true;
+    initialScrollDoneRef.current = false;
+    messagesTailPrevRef.current = [];
+  }, [roomId]);
+
+  useEffect(() => {
+    const prev = messagesTailPrevRef.current;
+    const tailChanged = shouldStickScrollOnMessagesTailChange(prev, messages);
+    messagesTailPrevRef.current = messages;
+
+    if (!tailChanged) return;
+    return scrollToBottomIfStuck();
+  }, [messages, scrollToBottomIfStuck]);
 
   return {
     flatListRef,
-    stickToBottomRef,
-    layoutReadyRef,
     initialScrollDoneRef,
-    onScroll };
+    onScroll,
+    onListLayoutReady,
+    scrollToBottomIfStuck,
+  };
 }

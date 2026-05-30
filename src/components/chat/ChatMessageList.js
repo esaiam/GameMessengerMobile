@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, Platform, FlatList, ActivityIndicator } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS } from 'react-native-reanimated';
@@ -7,6 +7,8 @@ import { V } from '../../theme';
 import { useAndroidTabOverscroll } from '../../hooks/useAndroidTabOverscroll';
 import ChatMessagesLoadingOverlay from './ChatMessagesLoadingOverlay';
 import ChatListFooter from './ChatListFooter';
+import { canLoadOlderOnEndReached } from './chatListScrollStick';
+import { CHAT_AT_BOTTOM_THRESHOLD_PX } from './chatViewConstants';
 
 export default function ChatMessageList({
   flatListRef,
@@ -16,8 +18,7 @@ export default function ChatMessageList({
   listAnimatedStyle,
   listBottomSpacerStyle,
   onListScroll,
-  layoutReadyRef,
-  initialScrollDoneRef,
+  onListLayoutReady,
   messagesLoading,
   chatRoomHeader,
   listPaddingTop,
@@ -30,20 +31,45 @@ export default function ChatMessageList({
   loadingOlder = false,
   onLoadOlderMessages,
 }) {
+  const listMetricsRef = useRef({ contentH: 0, layoutH: 0 });
+  const userScrolledToHistoryRef = useRef(false);
+
+  useEffect(() => {
+    if (formattedMessages.length === 0) {
+      userScrolledToHistoryRef.current = false;
+    }
+  }, [formattedMessages.length]);
+
+  const trackHistoryScrollOffset = useCallback((offsetY) => {
+    if (offsetY > CHAT_AT_BOTTOM_THRESHOLD_PX) {
+      userScrolledToHistoryRef.current = true;
+    }
+  }, []);
+
+  const handleListScroll = useCallback(
+    (e) => {
+      const y = e?.nativeEvent?.contentOffset?.y ?? 0;
+      trackHistoryScrollOffset(y);
+      onListScroll?.(e);
+    },
+    [onListScroll, trackHistoryScrollOffset],
+  );
+
   const { androidBounce, scrollHandler, animatedStyle: listBounceStyle, overscrollProps, wrapGesture } =
     useAndroidTabOverscroll({
       enabled: overscrollEnabled,
       inverted: true,
-      onScrollExtra: onListScroll
-        ? (e) => {
-            'worklet';
-            runOnJS(onListScroll)({
-              nativeEvent: { contentOffset: { y: e.contentOffset.y } },
-            });
-          }
-        : undefined,
+      onScrollExtra: (e) => {
+        'worklet';
+        runOnJS(trackHistoryScrollOffset)(e.contentOffset.y);
+        if (onListScroll) {
+          runOnJS(onListScroll)({
+            nativeEvent: { contentOffset: { y: e.contentOffset.y } },
+          });
+        }
+      },
     });
-  const mergedOnScroll = onListScroll ?? scrollHandler;
+  const mergedOnScroll = onListScroll ? handleListScroll : scrollHandler;
 
   const ListBottomInsetHeader = useCallback(
     () => <Reanimated.View collapsable={false} style={listBottomSpacerStyle} />,
@@ -91,8 +117,30 @@ export default function ChatMessageList({
   );
 
   const handleEndReached = useCallback(() => {
+    const { contentH, layoutH } = listMetricsRef.current;
+    if (
+      !canLoadOlderOnEndReached(
+        contentH,
+        layoutH,
+        userScrolledToHistoryRef.current,
+      )
+    ) {
+      return;
+    }
     onLoadOlderMessages?.();
   }, [onLoadOlderMessages]);
+
+  const handleListLayout = useCallback((e) => {
+    listMetricsRef.current.layoutH = e.nativeEvent.layout.height;
+  }, []);
+
+  const handleContentSizeChange = useCallback(
+    (_w, h) => {
+      listMetricsRef.current.contentH = h;
+      onListLayoutReady?.();
+    },
+    [onListLayoutReady],
+  );
 
   const messageList = (
     <FlatList
@@ -112,6 +160,7 @@ export default function ChatMessageList({
       windowSize={10}
       onScroll={androidBounce ? scrollHandler : mergedOnScroll}
       scrollEventThrottle={32}
+      onLayout={handleListLayout}
       onScrollToIndexFailed={(info) => {
         flatListRef.current?.scrollToOffset({
           offset: info.averageItemLength * info.index,
@@ -136,12 +185,7 @@ export default function ChatMessageList({
           ? null
           : tw`pb-2`,
       ]}
-      onContentSizeChange={() => {
-        if (!layoutReadyRef.current) {
-          layoutReadyRef.current = true;
-          initialScrollDoneRef.current = true;
-        }
-      }}
+      onContentSizeChange={handleContentSizeChange}
       ListEmptyComponent={
         messagesLoading ? null : (
           <Text style={[tw`text-center py-6 text-[13px]`, { color: V.textMuted }]}>
@@ -163,7 +207,7 @@ export default function ChatMessageList({
   return (
     <View style={{ flex: 1 }}>
       <ChatMessagesLoadingOverlay visible={messagesLoading} />
-      <Reanimated.View style={[tw`flex-1`, listAnimatedStyle, {}]}>{listBody}</Reanimated.View>
+      <Reanimated.View style={[tw`flex-1`, listAnimatedStyle]}>{listBody}</Reanimated.View>
     </View>
   );
 }

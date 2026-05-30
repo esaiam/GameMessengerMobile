@@ -561,11 +561,7 @@ const MessageRow = React.memo(
                         isMine={isMine}
                         onReply={fireReply}
                       >
-                        {isImageMessage ? (
-                          <View style={{ alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
-                            {bubbleInner}
-                          </View>
-                        ) : isMine ? (
+                        {isMine ? (
                           <OutgoingBubble
                             message={item}
                             bubbleMaxW={bubbleMaxW}

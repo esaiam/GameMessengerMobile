@@ -48,6 +48,18 @@ function stableReactionsSig(reactions) {
   return s;
 }
 
+function stableWaveformSig(waveform) {
+  if (waveform == null) return '';
+  if (!Array.isArray(waveform)) return String(waveform);
+  return waveform.join(',');
+}
+
+function stableAriaAttachmentSig(attachment) {
+  if (attachment == null) return '';
+  if (typeof attachment !== 'object') return String(attachment);
+  return [attachment.mime_type ?? '', attachment.url ?? '', attachment.data ?? ''].join('|');
+}
+
 /** Сигнал для инвалидации кэша строки: все поля, от которых зависит пузырь и разделители дат. */
 /** @param {import('./chatMessageTypes').ChatMessageRow} m */
 export function messageRowContentSig(m) {
@@ -60,10 +72,18 @@ export function messageRowContentSig(m) {
     m.message_type ?? '',
     m.media_url ?? '',
     m.read_at ?? '',
+    m.edited_at ?? '',
     m.expires_at ?? '',
     m.reply_to ?? '',
     m.latitude ?? '',
     m.longitude ?? '',
+    m._isOptimistic ? '1' : '0',
+    stableWaveformSig(m.waveform),
+    m.transcription ?? '',
+    m.aria_voice_message ? '1' : '0',
+    m.audio_uri ?? '',
+    stableAriaAttachmentSig(m.aria_attachment),
+    m.isTyping ? '1' : '0',
     stableReactionsSig(m.reactions)].join('\x1e');
 }
 

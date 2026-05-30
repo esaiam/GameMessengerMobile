@@ -30,6 +30,8 @@ export interface VideoRecorderHandle {
   endInlineHold: (opts: { cancelSlide: boolean }) => void;
   onPanUpdate: (tx: number, ty: number) => void;
   lock: () => void;
+  /** LOCKED: завершить запись и отправить (как кнопка Send в overlay). */
+  sendLocked: () => void;
   cancelLocked: () => void;
   getIsLocked: () => boolean;
 }
@@ -411,6 +413,15 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
       }
     }, []);
 
+    const sendLocked = useCallback(() => {
+      setIsLocked(false);
+      try {
+        cameraRef.current?.stopRecording();
+      } catch {
+        /* ignore */
+      }
+    }, []);
+
     useImperativeHandle(
       ref,
       () => ({
@@ -418,9 +429,10 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
         endInlineHold: (o) => endInlineHold(o),
         onPanUpdate: (tx, ty) => onPanUpdate(tx, ty),
         lock: () => lock(),
+        sendLocked: () => sendLocked(),
         cancelLocked: () => cancelLocked(),
         getIsLocked: () => isLocked }),
-      [openRecorder, endInlineHold, onPanUpdate, lock, cancelLocked, isLocked],
+      [openRecorder, endInlineHold, onPanUpdate, lock, sendLocked, cancelLocked, isLocked],
     );
 
     const formatTime = (ms: number) => {
@@ -527,14 +539,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandle, VideoRecorderProps>(
                   </View>
                   <View style={styles.lockedRowSpacer} />
                   <TouchableOpacity
-                    onPress={() => {
-                      setIsLocked(false);
-                      try {
-                        cameraRef.current?.stopRecording();
-                      } catch {
-                        /* ignore */
-                      }
-                    }}
+                    onPress={sendLocked}
                     style={styles.sendSlot}
                   >
                     <SendHorizontal size={18} color={V.accentSage} strokeWidth={1.5} />
