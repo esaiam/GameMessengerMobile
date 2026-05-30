@@ -10,8 +10,16 @@ function detachPlayer(player: AudioPlayer | null, sub: StatusSub | null) {
   } catch {
     /* ignore */
   }
+  if (!player) return;
   try {
-    player?.remove();
+    if (player.playing) {
+      player.pause();
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    player.remove();
   } catch {
     /* ignore */
   }
@@ -51,6 +59,7 @@ export function useVoicePlayer() {
   const playerRef = useRef<AudioPlayer | null>(null);
   const statusSubRef = useRef<StatusSub | null>(null);
   const loadedUriRef = useRef<string | null>(null);
+  const activeMessageIdRef = useRef<string | null>(null);
   const playbackGenRef = useRef(0);
 
   const [activeUri, setActiveUri] = useState<string | null>(null);
@@ -73,6 +82,7 @@ export function useVoicePlayer() {
         if (bindGen !== playbackGenRef.current) return;
         setPlaying(false);
         setProgress(0);
+        activeMessageIdRef.current = null;
         setActiveUri(null);
         activeUriRef.current = null;
       }
@@ -89,24 +99,37 @@ export function useVoicePlayer() {
     });
   }, []);
 
+  const stopPlaybackSync = useCallback(() => {
+    playbackGenRef.current += 1;
+    detachPlayer(playerRef.current, statusSubRef.current);
+    playerRef.current = null;
+    statusSubRef.current = null;
+    loadedUriRef.current = null;
+    activeMessageIdRef.current = null;
+    setPlaying(false);
+    setProgress(0);
+    setDuration(0);
+    setActiveUri(null);
+    activeUriRef.current = null;
+  }, []);
+
   const play = useCallback(
-    async (uri: string) => {
-      if (__DEV__) console.log('[VOICE] play called with uri:', uri);
+    async (uri: string, messageId?: string | null) => {
+      if (__DEV__) console.log('[VOICE] play called with uri:', uri, 'messageId:', messageId);
       try {
-        const sameLoaded = playerRef.current != null && loadedUriRef.current === uri;
-        if (!sameLoaded) {
-          playbackGenRef.current += 1;
-          setPlaying(false);
-          setProgress(0);
-          setDuration(0);
-        }
+        const sameSession =
+          messageId != null &&
+          messageId === activeMessageIdRef.current &&
+          playerRef.current != null &&
+          loadedUriRef.current === uri;
 
-        await ensurePlaybackMode();
-
-        if (playerRef.current && loadedUriRef.current === uri) {
+        if (sameSession) {
+          await ensurePlaybackMode();
           const p = playerRef.current;
+          if (!p) return;
           if (p.playing) {
             p.pause();
+            setPlaying(false);
           } else {
             const dur = p.duration ?? 0;
             if (dur > 0 && (p.currentTime ?? 0) >= dur - 0.1) {
@@ -117,16 +140,16 @@ export function useVoicePlayer() {
           return;
         }
 
-        if (playerRef.current) {
-          detachPlayer(playerRef.current, statusSubRef.current);
-          playerRef.current = null;
-          statusSubRef.current = null;
-          loadedUriRef.current = null;
-        }
+        stopPlaybackSync();
 
         const bindGen = playbackGenRef.current;
+        activeMessageIdRef.current = messageId ?? null;
         setActiveUri(uri);
         activeUriRef.current = uri;
+
+        await ensurePlaybackMode();
+
+        if (bindGen !== playbackGenRef.current) return;
 
         let player: AudioPlayer | null = null;
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -150,6 +173,7 @@ export function useVoicePlayer() {
 
         if (!player) {
           if (__DEV__) console.warn('[useVoicePlayer] all create attempts failed, aborting');
+          activeMessageIdRef.current = null;
           setActiveUri(null);
           activeUriRef.current = null;
           return;
@@ -176,6 +200,7 @@ export function useVoicePlayer() {
         }
         if (!loaded) {
           if (__DEV__) console.warn('[useVoicePlayer] load timeout');
+          activeMessageIdRef.current = null;
           setActiveUri(null);
           activeUriRef.current = null;
           return;
@@ -189,19 +214,12 @@ export function useVoicePlayer() {
         }
       }
     },
-    [bindStatusListener, ensurePlaybackMode],
+    [bindStatusListener, ensurePlaybackMode, stopPlaybackSync],
   );
 
   const pause = useCallback(async () => {
-    try {
-      playerRef.current?.pause();
-    } catch {
-      /* ignore */
-    }
-    setPlaying(false);
-    setActiveUri(null);
-    activeUriRef.current = null;
-  }, []);
+    stopPlaybackSync();
+  }, [stopPlaybackSync]);
 
   useEffect(() => {
     return () => {
