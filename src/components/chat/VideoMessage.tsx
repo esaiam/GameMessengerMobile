@@ -45,7 +45,7 @@ export default function VideoMessage({
 
   const {
     player,
-    activated,
+    wasEverActive,
     thumbUri,
     idlePreviewReady,
     streamRenderReady,
@@ -139,7 +139,7 @@ export default function VideoMessage({
             borderColor: V.border,
           }}
         >
-          {(activated || isActive) && player ? (
+          {(wasEverActive || isActive) && player ? (
             <VideoView
               pointerEvents="none"
               player={player}

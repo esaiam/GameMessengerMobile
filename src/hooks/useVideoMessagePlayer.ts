@@ -30,8 +30,8 @@ export function useVideoMessagePlayer({
   const [thumbUri, setThumbUri] = useState<string | null>(null);
   const [idlePreviewReady, setIdlePreviewReady] = useState(false);
   const [streamRenderReady, setStreamRenderReady] = useState(false);
-  const [activated, setActivated] = useState(wasActivated);
-  const [shouldInitPlayer, setShouldInitPlayer] = useState(wasActivated);
+  /** Player и VideoView остаются в дереве после первой активации (lazy init, без re-mount). */
+  const [wasEverActive, setWasEverActive] = useState(wasActivated);
   const [progress01, setProgress01] = useState(0);
   const [isScrubbingUi, setIsScrubbingUi] = useState(false);
 
@@ -87,7 +87,7 @@ export function useVideoMessagePlayer({
     };
   }, [shouldLoadThumb, url]);
 
-  const player = useVideoPlayer(shouldInitPlayer || isActive ? url : null, (p) => {
+  const player = useVideoPlayer(wasEverActive || isActive ? url : null, (p) => {
     if (!p) return;
     p.loop = false;
     p.pause();
@@ -220,10 +220,6 @@ export function useVideoMessagePlayer({
   );
 
   useEffect(() => {
-    if (isActive && !shouldInitPlayer) setShouldInitPlayer(true);
-  }, [isActive, shouldInitPlayer]);
-
-  useEffect(() => {
     const wasActive = prevIsActiveRef.current;
     prevIsActiveRef.current = isActive;
 
@@ -234,7 +230,7 @@ export function useVideoMessagePlayer({
       }
       sawMeaningfulProgressRef.current = false;
       playbackStartedAtRef.current = 0;
-      setActivated(true);
+      setWasEverActive(true);
       setProgress01(0);
       setStreamRenderReady(false);
       return;
@@ -365,7 +361,7 @@ export function useVideoMessagePlayer({
 
   return {
     player,
-    activated,
+    wasEverActive,
     thumbUri,
     idlePreviewReady,
     streamRenderReady,
