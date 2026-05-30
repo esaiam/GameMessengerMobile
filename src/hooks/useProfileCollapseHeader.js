@@ -29,7 +29,7 @@ export const PROFILE_COLLAPSE_DISTANCE = 132;
 /** Пик золотого свечения аватара (px скролла); затем fade до PROFILE_COLLAPSE_DISTANCE */
 const AVATAR_GLOW_SCROLL_PEAK = 80;
 const AVATAR_BORDER_SAGE = 'rgba(90,158,154,0.6)';
-const AVATAR_BORDER_GOLD = 'rgba(201,168,76,0.9)';
+const AVATAR_BORDER_SAGE_PEAK = 'rgba(90,158,154,0.9)';
 const AVATAR_GLOW_RING_RAMP = [0, AVATAR_GLOW_SCROLL_PEAK, PROFILE_COLLAPSE_DISTANCE];
 const NAME_LINE_HEIGHT = 22;
 /** Дуга имени (профиль контакта), px скролла */
@@ -56,6 +56,17 @@ const SNAP_COLLAPSE_THRESHOLD = 0.42;
 const COLLAPSE_SNAP_ZONE_EXTRA = 12;
 const SNAP_SPRING = { damping: 22, stiffness: 280, mass: 0.85 };
 const SNAP_DRAG_MIN_PX = 8;
+
+/** Fade свечения вместе с появлением имени в шапке (профиль контакта). */
+function glowHeaderNameFade(y) {
+  'worklet';
+  return interpolate(
+    y,
+    [NAME_HEADER_SCROLL_START, NAME_HEADER_SCROLL_END],
+    [1, 0],
+    Extrapolation.CLAMP,
+  );
+}
 
 function snapHeaderSpring(offsetY, scrollRef, scrollY, snapDriving) {
   'worklet';
@@ -190,10 +201,19 @@ export function useProfileCollapseHeader({
   const avatarGlowStyle = useAnimatedStyle(() => {
     if (!withAvatarScrollGlow) return {};
     const y = scrollY.value;
+    if (y >= NAME_HEADER_SCROLL_START) {
+      return {
+        borderColor: interpolateColor(
+          y,
+          [NAME_HEADER_SCROLL_START, NAME_HEADER_SCROLL_END],
+          [AVATAR_BORDER_SAGE_PEAK, AVATAR_BORDER_SAGE],
+        ),
+      };
+    }
     return {
       borderColor: interpolateColor(y, [0, AVATAR_GLOW_SCROLL_PEAK], [
         AVATAR_BORDER_SAGE,
-        AVATAR_BORDER_GOLD,
+        AVATAR_BORDER_SAGE_PEAK,
       ]),
     };
   });
@@ -204,7 +224,7 @@ export function useProfileCollapseHeader({
     const glowOpacity = interpolate(y, AVATAR_GLOW_RING_RAMP, [0, 0.7, 0], Extrapolation.CLAMP);
     const glowScale = interpolate(y, AVATAR_GLOW_RING_RAMP, [1, 1.08, 1.08], Extrapolation.CLAMP);
     return {
-      opacity: glowOpacity,
+      opacity: glowOpacity * glowHeaderNameFade(y),
       transform: [{ scale: glowScale }],
     };
   });
@@ -215,7 +235,7 @@ export function useProfileCollapseHeader({
     const glowOpacity = interpolate(y, AVATAR_GLOW_RING_RAMP, [0, 0.7, 0], Extrapolation.CLAMP);
     const glowScale = interpolate(y, AVATAR_GLOW_RING_RAMP, [1, 1.08, 1.08], Extrapolation.CLAMP);
     return {
-      opacity: glowOpacity * 0.3,
+      opacity: glowOpacity * 0.3 * glowHeaderNameFade(y),
       transform: [{ scale: glowScale }],
     };
   });
@@ -320,8 +340,10 @@ export function useProfileCollapseHeader({
 
   const headerUnderGlowStyle = useAnimatedStyle(() => {
     if (!withAvatarScrollGlow) return { opacity: 0 };
+    const y = scrollY.value;
     return {
-      opacity: interpolate(scrollY.value, [40, 80], [0, 1], Extrapolation.CLAMP),
+      opacity:
+        interpolate(y, [40, 80], [0, 1], Extrapolation.CLAMP) * glowHeaderNameFade(y),
     };
   });
 

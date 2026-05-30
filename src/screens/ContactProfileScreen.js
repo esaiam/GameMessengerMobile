@@ -62,6 +62,7 @@ import {
   adjustMediaTransitionRectForScroll,
   isValidMediaTransitionRect,
 } from '../components/contactProfile/mediaTransitionSource';
+import { CHATS_HEADER_GLOW_STOP_CENTER } from '../components/chats/ChatsHeaderGlow';
 
 /** Зазор под шапкой до аватара (~80–100px; в хуке AVATAR_MARGIN_TOP = −12) */
 const CONTACT_PROFILE_AVATAR_BELOW_HEADER = 96;
@@ -620,7 +621,7 @@ export default function ContactProfileScreen({ route, navigation }) {
           ]}
         >
           <LinearGradient
-            colors={['rgba(201,168,76,0.2)', 'transparent']}
+            colors={[`rgba(90,158,154,${CHATS_HEADER_GLOW_STOP_CENTER})`, 'transparent']}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={styles.headerUnderGlowGradient}
@@ -943,7 +944,7 @@ const styles = StyleSheet.create({
     height: PROFILE_AVATAR_SIZE + 16,
     borderRadius: (PROFILE_AVATAR_SIZE + 16) / 2,
     borderWidth: 2,
-    borderColor: V.accentGold,
+    borderColor: V.accentSage,
     top: -8,
     left: -8,
   },
@@ -953,7 +954,7 @@ const styles = StyleSheet.create({
     height: PROFILE_AVATAR_SIZE + 28,
     borderRadius: (PROFILE_AVATAR_SIZE + 28) / 2,
     borderWidth: 4,
-    borderColor: V.accentGold,
+    borderColor: V.accentSage,
     top: -14,
     left: -14,
   },

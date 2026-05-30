@@ -16,7 +16,9 @@ const GLOW_MAX_OPACITY = 2.1 * 2.25;
 /** Равномерный scale центра от середины при оверскролле */
 const GLOW_CENTER_MAX_SCALE = 8.8;
 
-const GLOW_STOP_CENTER = 0.252;
+export const CHATS_HEADER_GLOW_COLOR = '#5A9E9A';
+export const CHATS_HEADER_GLOW_STOP_CENTER = 0.252;
+const GLOW_STOP_CENTER = CHATS_HEADER_GLOW_STOP_CENTER;
 const GLOW_STOP_MID = 0.098;
 const GLOW_CENTER_BOOST_STOP = GLOW_STOP_CENTER;
 
@@ -102,9 +104,9 @@ export default function ChatsHeaderGlow({
         <Svg style={styles.glowSvg} width="100%" height="100%" pointerEvents="none">
           <Defs>
             <RadialGradient id="chatsHeaderGlow" cx="50%" cy="50%" rx="50%" ry="50%">
-              <Stop offset="0%" stopColor="#5A9E9A" stopOpacity={GLOW_STOP_CENTER} />
-              <Stop offset="50%" stopColor="#5A9E9A" stopOpacity={GLOW_STOP_MID} />
-              <Stop offset="100%" stopColor="#5A9E9A" stopOpacity="0" />
+              <Stop offset="0%" stopColor={CHATS_HEADER_GLOW_COLOR} stopOpacity={GLOW_STOP_CENTER} />
+              <Stop offset="50%" stopColor={CHATS_HEADER_GLOW_COLOR} stopOpacity={GLOW_STOP_MID} />
+              <Stop offset="100%" stopColor={CHATS_HEADER_GLOW_COLOR} stopOpacity="0" />
             </RadialGradient>
           </Defs>
           <Ellipse cx="50%" cy="50%" rx="45%" ry="70%" fill="url(#chatsHeaderGlow)" />
@@ -115,9 +117,9 @@ export default function ChatsHeaderGlow({
         <Svg style={styles.glowSvg} width="100%" height="100%" pointerEvents="none">
           <Defs>
             <RadialGradient id="chatsHeaderGlowCenter" cx="50%" cy="50%" rx="50%" ry="50%">
-              <Stop offset="0%" stopColor="#5A9E9A" stopOpacity={GLOW_CENTER_BOOST_STOP} />
-              <Stop offset="45%" stopColor="#5A9E9A" stopOpacity="0" />
-              <Stop offset="100%" stopColor="#5A9E9A" stopOpacity="0" />
+              <Stop offset="0%" stopColor={CHATS_HEADER_GLOW_COLOR} stopOpacity={GLOW_CENTER_BOOST_STOP} />
+              <Stop offset="45%" stopColor={CHATS_HEADER_GLOW_COLOR} stopOpacity="0" />
+              <Stop offset="100%" stopColor={CHATS_HEADER_GLOW_COLOR} stopOpacity="0" />
             </RadialGradient>
           </Defs>
           <Ellipse cx="50%" cy="50%" rx="28%" ry="38%" fill="url(#chatsHeaderGlowCenter)" />
