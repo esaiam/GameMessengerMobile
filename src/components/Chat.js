@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getOrCreateKeyPair } from '../utils/VaultKeyStore';
 import { publishMyPublicKey } from '../utils/VaultKeyServer';
 import { useVoicePlayer } from '../hooks/useVoicePlayer';
+import { useChatMediaPlayback } from '../hooks/useChatMediaPlayback';
 import ChatRoomHeader, { ICON_SELECTION_ACTION } from './ChatRoomHeader';
 import ChatOverlays from './chat/ChatOverlays';
 import { EphemeralClockContext } from './chat/ephemeralClockContext';
@@ -168,14 +169,26 @@ export default function Chat({
   const { armComposerInsetSettling, listScrollSuppressRefs } = useChatInputSettling(showEmojiPicker);
 
   const {
-    play: handleVoicePlay,
+    play: playVoice,
     activeUri: activeVoiceUri,
     status: activePlayerStatus,
-    pause: pauseVoice } = useVoicePlayer();
+    pause: pauseVoice,
+  } = useVoicePlayer();
 
-  const [activeVideoId, setActiveVideoId] = useState(null);
-  const activatedVideoIds = useRef(new Set());
-  const [activeVoiceMessageId, setActiveVoiceMessageId] = useState(null);
+  const {
+    activeVideoId,
+    activeVoiceMessageId,
+    activatedVideoIds,
+    setActiveVideoId,
+    playVoiceMessage,
+    activateVideo,
+    stopVideo,
+  } = useChatMediaPlayback({
+    playVoice,
+    pauseVoice,
+    activeVoiceUri,
+    roomId,
+  });
 
   const setReplyTarget = useCallback((nextReply) => {
     configureReplyTargetLayoutAnimation();
@@ -349,11 +362,6 @@ export default function Chat({
     pauseVoice();
   }, [isRecordingVoice, pauseVoice]);
 
-  // Сбрасываем activeVoiceMessageId когда плеер останавливается
-  useEffect(() => {
-    if (!activeVoiceUri) setActiveVoiceMessageId(null);
-  }, [activeVoiceUri]);
-
   useEffect(() => {
     const initE2E = async () => {
       try {
@@ -367,10 +375,6 @@ export default function Chat({
   }, [nickname]);
 
   useAriaChatListBootstrap(isAriaChat, setMessagesLoading, listOpacity);
-
-  useEffect(() => {
-    pauseVoice();
-  }, [roomId, pauseVoice]);
 
   const decryptMsg = useMemo(() => createDecryptMsg({ nickname }), [nickname]);
 
@@ -623,8 +627,8 @@ export default function Chat({
   );
 
   const onVoiceRecorderOpen = useCallback(() => {
-    setActiveVideoId(null);
-  }, []);
+    stopVideo();
+  }, [stopVideo]);
 
   const { renderItem, listExtraDataStable } = useChatMessageListRender({
     formattedMessages,
@@ -637,13 +641,12 @@ export default function Chat({
     handleMessagePress,
     handleMessageLongPress,
     toggleReaction,
-    setActiveVideoId,
-    setActiveVoiceMessageId,
+    playVoiceMessage,
+    activateVideo,
     activatedVideoIds,
     replyToMessage,
     isAriaChat,
     openCalendarFromSeparator,
-    handleVoicePlay,
     activeVoiceUri,
     activePlayerStatus,
     activeVoiceMessageId,

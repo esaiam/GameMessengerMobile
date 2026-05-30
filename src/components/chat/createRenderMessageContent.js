@@ -13,9 +13,8 @@ import { parseVoiceCaptionDurationSec } from './chatMessageListFormat';
  */
 export function createRenderMessageContent({
   setFullScreenImage,
-  setActiveVoiceMessageId,
-  handleVoicePlay,
-  setActiveVideoId,
+  playVoiceMessage,
+  activateVideo,
   activatedVideoIdsRef,
   rowEnvRef,
   playbackEnvRef }) {
@@ -46,10 +45,7 @@ export function createRenderMessageContent({
             messageId={item.id}
             isRecordingVoice={pe.isRecordingVoice}
             waveformRaw={item.waveform}
-            onPlay={(uri) => {
-              setActiveVoiceMessageId(item.id);
-              handleVoicePlay(uri);
-            }}
+            onPlay={(uri) => playVoiceMessage(uri, item.id)}
             activeVoiceMessageId={pe.activeVoiceMessageId}
             activePlayerStatus={pe.activePlayerStatus}
             idleDurationSec={parseVoiceCaptionDurationSec(item.text)}
@@ -86,10 +82,7 @@ export function createRenderMessageContent({
             activeVideoId={pe.activeVideoId}
             wasActivated={activatedVideoIdsRef.current.has(item.id)}
             isUploading={item._isOptimistic === true}
-            onActivate={(id) => {
-              if (id) activatedVideoIdsRef.current.add(id);
-              setActiveVideoId(id);
-            }}
+            onActivate={activateVideo}
             onLongPress={(e) => {
               const x = e?.nativeEvent?.pageX ?? 0;
               const y = e?.nativeEvent?.pageY ?? 0;

@@ -14,13 +14,12 @@ export default function useChatMessageListRender({
   handleMessagePress,
   handleMessageLongPress,
   toggleReaction,
-  setActiveVideoId,
-  setActiveVoiceMessageId,
+  playVoiceMessage,
+  activateVideo,
   activatedVideoIds,
   replyToMessage,
   isAriaChat,
   openCalendarFromSeparator,
-  handleVoicePlay,
   activeVoiceUri,
   activePlayerStatus,
   activeVoiceMessageId,
@@ -48,14 +47,13 @@ export default function useChatMessageListRender({
     () =>
       createRenderMessageContent({
         setFullScreenImage,
-        setActiveVoiceMessageId,
-        handleVoicePlay,
-        setActiveVideoId,
+        playVoiceMessage,
+        activateVideo,
         activatedVideoIdsRef: activatedVideoIds,
         rowEnvRef,
         playbackEnvRef,
       }),
-    [handleVoicePlay, setFullScreenImage, setActiveVoiceMessageId, setActiveVideoId, activatedVideoIds],
+    [playVoiceMessage, setFullScreenImage, activateVideo, activatedVideoIds],
   );
 
   const listExtraDataStable = useMemo(
@@ -131,7 +129,6 @@ export default function useChatMessageListRender({
     handleMessagePress,
     handleMessageLongPress,
     toggleReaction,
-    setActiveVideoId,
     replyToMessage,
     isAriaChat,
     ariaPeerName: ARIA_CONTACT.display_name,
