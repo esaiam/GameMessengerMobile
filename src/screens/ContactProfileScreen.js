@@ -22,6 +22,7 @@ import { GAME_NO_OVERSCROLL_PROPS, V } from '../theme';
 import TabBackground from '../components/TabBackground';
 import {
   MESSENGER_HEADER_CONTENT_MIN_HEIGHT,
+  MESSENGER_HEADER_PADDING_HORIZONTAL,
   useMessengerHeaderLayout,
 } from '../components/MessengerHeaderLayout';
 import SafeBlurView from '../components/SafeBlurView';
@@ -317,11 +318,14 @@ export default function ContactProfileScreen({ route, navigation }) {
   const {
     scrollRef,
     scrollTopPadding,
+    scrollContentPullStyle,
     scrollSnapHandler,
     onScrollBeginDrag,
     onScrollEndDrag,
     onMomentumScrollEnd,
     avatarTop,
+    actionsFloatTop,
+    actionsFloatStyle,
     nameStartY,
     statusStartY,
     avatarWrapStyle,
@@ -339,6 +343,7 @@ export default function ContactProfileScreen({ route, navigation }) {
     headerMiniAvatarStyle,
     headerUnderGlowStyle,
     profileChromeStackStyle,
+    nameHeaderChromeStackStyle,
   } = useProfileCollapseHeader({
     headerLayout,
     screenW,
@@ -649,39 +654,76 @@ export default function ContactProfileScreen({ route, navigation }) {
           onScrollEndDrag={wrapProfileScrollEnd(onScrollEndDrag)}
           onMomentumScrollEnd={wrapProfileScrollEnd(onMomentumScrollEnd)}
         >
-          <View style={styles.actionsRow}>
-            <ActionButton
-              icon={<MessageCircle size={14} color={V.accentSage} strokeWidth={1.5} />}
-              label="Сообщение"
-              onPress={goBackToChat}
-              disabled={busy || blocked}
-            />
-            <ActionButton
-              icon={<User size={14} color={V.textSecondary} strokeWidth={1.5} />}
-              label="Контакты"
-              onPress={goToContactsTab}
-              disabled={busy}
-            />
-          </View>
+          <Animated.View style={scrollContentPullStyle}>
+            <View style={styles.sectionSpacer} />
 
-          <View style={styles.sectionSpacer} />
-
-          <ContactProfileMediaSection
-            items={mediaItems}
-            loading={mediaLoading}
-            roomId={roomId}
-            selectionMode={mediaSelectionMode}
-            selectedIds={selectedMediaIds}
-            hiddenTileId={hiddenTileId}
-            onMediaPress={handleMediaPress}
-            onMediaLongPress={handleMediaLongPress}
-            onTileLayout={handleTileLayout}
-            onRegisterTransitionSource={handleRegisterTransitionSource}
-          />
+            <ContactProfileMediaSection
+              items={mediaItems}
+              loading={mediaLoading}
+              roomId={roomId}
+              selectionMode={mediaSelectionMode}
+              selectedIds={selectedMediaIds}
+              hiddenTileId={hiddenTileId}
+              onMediaPress={handleMediaPress}
+              onMediaLongPress={handleMediaLongPress}
+              onTileLayout={handleTileLayout}
+              onRegisterTransitionSource={handleRegisterTransitionSource}
+            />
+          </Animated.View>
         </Animated.ScrollView>
-      </Animated.View>
 
-      <View style={styles.floatingLayerUnder} pointerEvents="box-none">
+        <View style={styles.floatingLayerUnder} pointerEvents="box-none">
+          <Animated.View
+            pointerEvents="box-none"
+            style={[
+              styles.actionsFloat,
+              {
+                top: actionsFloatTop,
+                left: MESSENGER_HEADER_PADDING_HORIZONTAL,
+                right: MESSENGER_HEADER_PADDING_HORIZONTAL,
+              },
+              actionsFloatStyle,
+            ]}
+          >
+            <View style={styles.actionsRow}>
+              <ActionButton
+                icon={<MessageCircle size={14} color={V.accentSage} strokeWidth={1.5} />}
+                label="Сообщение"
+                onPress={goBackToChat}
+                disabled={busy || blocked}
+              />
+              <ActionButton
+                icon={<User size={14} color={V.textSecondary} strokeWidth={1.5} />}
+                label="Контакты"
+                onPress={goToContactsTab}
+                disabled={busy}
+              />
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.statusFloat, { top: statusStartY }, statusStyle]}
+          >
+            <View style={styles.statusRow}>
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: contactOnline ? V.accentSage : V.textMuted },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: contactOnline ? V.accentSage : V.textMuted },
+                ]}
+              >
+                {contactOnline ? 'в сети' : 'не в сети'}
+              </Text>
+            </View>
+          </Animated.View>
+        </View>
+
         <Animated.View
           pointerEvents="box-none"
           style={[
@@ -719,60 +761,42 @@ export default function ContactProfileScreen({ route, navigation }) {
         </Animated.View>
 
         <Animated.View
-          pointerEvents="none"
-          style={[styles.statusFloat, { top: statusStartY }, statusStyle]}
+          style={[styles.nameHeaderChrome, nameHeaderChromeStackStyle]}
+          pointerEvents="box-none"
         >
-          <View style={styles.statusRow}>
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: contactOnline ? V.accentSage : V.textMuted },
-              ]}
+          <Animated.Text
+            pointerEvents="none"
+            style={[
+              styles.nameFloat,
+              { top: nameStartY, left: screenW / 2, color: V.textPrimary },
+              nameStyle,
+            ]}
+            numberOfLines={1}
+            onLayout={onNameLayout}
+          >
+            {displayName}
+          </Animated.Text>
+
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.headerMiniAvatar,
+              {
+                left: headerMiniAvatarLeft,
+                top: headerMiniAvatarTop,
+              },
+              headerMiniAvatarStyle,
+            ]}
+          >
+            <UserAvatar
+              name={peerName || '?'}
+              uri={null}
+              size={HEADER_MINI_AVATAR_SIZE}
             />
-            <Text
-              style={[
-                styles.statusText,
-                { color: contactOnline ? V.accentSage : V.textMuted },
-              ]}
-            >
-              {contactOnline ? 'в сети' : 'не в сети'}
-            </Text>
-          </View>
+          </Animated.View>
         </Animated.View>
-      </View>
+      </Animated.View>
 
-      <View style={styles.floatingLayerOver} pointerEvents="box-none">
-        <Animated.Text
-          pointerEvents="none"
-          style={[
-            styles.nameFloat,
-            { top: nameStartY, left: screenW / 2, color: V.textPrimary },
-            nameStyle,
-          ]}
-          numberOfLines={1}
-          onLayout={onNameLayout}
-        >
-          {displayName}
-        </Animated.Text>
-
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.headerMiniAvatar,
-            {
-              left: headerMiniAvatarLeft,
-              top: headerMiniAvatarTop,
-            },
-            headerMiniAvatarStyle,
-          ]}
-        >
-          <UserAvatar
-            name={peerName || '?'}
-            uri={null}
-            size={HEADER_MINI_AVATAR_SIZE}
-          />
-        </Animated.View>
-      </View>
       <ContactProfileOverflowMenuModal
         visible={overflowMenuVisible}
         onClose={() => setOverflowMenuVisible(false)}
@@ -847,7 +871,7 @@ const styles = StyleSheet.create({
   },
   headerBar: {
     overflow: 'hidden',
-    zIndex: 2,
+    zIndex: 8,
   },
   headerBarFrostTint: {
     backgroundColor: V.bgChatsScreen,
@@ -923,14 +947,17 @@ const styles = StyleSheet.create({
   },
   floatingLayerUnder: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 5,
+    zIndex: 4,
   },
-  floatingLayerOver: {
+  actionsFloat: {
+    position: 'absolute',
+  },
+  nameHeaderChrome: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 20,
   },
   avatarFloat: {
     position: 'absolute',
+    zIndex: 4,
   },
   avatarCluster: {
     width: PROFILE_AVATAR_SIZE,
@@ -972,7 +999,6 @@ const styles = StyleSheet.create({
   },
   statusFloat: {
     position: 'absolute',
-    zIndex: 21,
     left: 0,
     right: 0,
     alignItems: 'center',

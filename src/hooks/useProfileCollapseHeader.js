@@ -23,7 +23,13 @@ export const PROFILE_AVATAR_SIZE = 96;
 const AVATAR_MARGIN_TOP = -12;
 const NAME_MARGIN_TOP = 14;
 const ACTIONS_MARGIN_TOP = 20;
+/** Зазор между рядом кнопок и верхом большого аватара (профиль контакта) */
+const ACTIONS_ABOVE_AVATAR_GAP = 12;
 const SCROLL_CONTENT_LIFT = 36;
+/** Зазор медиа под шапкой в свёрнутом состоянии */
+const SCROLL_CONTENT_GAP_BELOW_HEADER = 16;
+/** Профиль контакта: зазор между статусом сети и началом скролла (до sectionSpacer) */
+const CONTACT_PROFILE_MEDIA_GAP_BELOW_STATUS = 12;
 const ACTION_ROW_HEIGHT = 52;
 export const PROFILE_COLLAPSE_DISTANCE = 132;
 /** Пик золотого свечения аватара (px скролла); затем fade до PROFILE_COLLAPSE_DISTANCE */
@@ -47,9 +53,10 @@ const HEADER_BACK_SLOT_W = 40;
 const HEADER_UNDER_GLOW_HEIGHT = 32;
 /** Сдвиг вверх: яркий край градиента под непрозрачной шапкой */
 export const HEADER_UNDER_GLOW_LIFT_UP = 20;
-/** flexRoot выше floatingOver в дуге; ниже — имя/мини-аватар поверх шапки */
-const PROFILE_CHROME_Z_ABOVE_FLOAT = 25;
 const PROFILE_CHROME_Z_BELOW_FLOAT = 8;
+/** Имя под шапкой (z8) во время дуги; в шапке — поверх неё */
+const NAME_BELOW_HEADER_Z = 6;
+const NAME_ABOVE_HEADER_Z = 12;
 const STATUS_MARGIN_TOP = 6;
 const STATUS_LINE_HEIGHT = 13;
 const SNAP_COLLAPSE_THRESHOLD = 0.42;
@@ -158,16 +165,32 @@ export function useProfileCollapseHeader({
   const nameHeaderTy = nameEndY - nameStartY;
 
   const statusBlock = withStatusRow ? STATUS_MARGIN_TOP + STATUS_LINE_HEIGHT : 0;
-  const scrollTopPadding =
-    AVATAR_MARGIN_TOP +
-    avatarTopExtra +
-    PROFILE_AVATAR_SIZE +
-    NAME_MARGIN_TOP +
-    NAME_LINE_HEIGHT +
-    statusBlock +
-    ACTIONS_MARGIN_TOP +
-    ACTION_ROW_HEIGHT -
-    SCROLL_CONTENT_LIFT;
+  const actionsFloatTop = withAvatarScrollGlow
+    ? avatarTop - ACTION_ROW_HEIGHT - ACTIONS_ABOVE_AVATAR_GAP
+    : 0;
+  const scrollTopPadding = withAvatarScrollGlow
+    ? AVATAR_MARGIN_TOP +
+      avatarTopExtra +
+      PROFILE_AVATAR_SIZE +
+      NAME_MARGIN_TOP +
+      NAME_LINE_HEIGHT +
+      statusBlock +
+      CONTACT_PROFILE_MEDIA_GAP_BELOW_STATUS
+    : AVATAR_MARGIN_TOP +
+      avatarTopExtra +
+      PROFILE_AVATAR_SIZE +
+      NAME_MARGIN_TOP +
+      NAME_LINE_HEIGHT +
+      statusBlock +
+      ACTIONS_MARGIN_TOP +
+      ACTION_ROW_HEIGHT -
+      SCROLL_CONTENT_LIFT;
+
+  const scrollContentPullSv = useSharedValue(
+    withAvatarScrollGlow
+      ? SCROLL_CONTENT_GAP_BELOW_HEADER - scrollTopPadding + PROFILE_COLLAPSE_DISTANCE
+      : 0,
+  );
 
   const scrollSnapHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -349,11 +372,16 @@ export function useProfileCollapseHeader({
 
   const profileChromeStackStyle = useAnimatedStyle(() => {
     if (!withAvatarScrollGlow) return { zIndex: PROFILE_CHROME_Z_BELOW_FLOAT };
+    return {};
+  });
+
+  const nameHeaderChromeStackStyle = useAnimatedStyle(() => {
+    if (!withAvatarScrollGlow) return {};
     return {
       zIndex:
         scrollY.value >= NAME_HEADER_SCROLL_START
-          ? PROFILE_CHROME_Z_BELOW_FLOAT
-          : PROFILE_CHROME_Z_ABOVE_FLOAT,
+          ? NAME_ABOVE_HEADER_Z
+          : NAME_BELOW_HEADER_Z,
     };
   });
 
@@ -361,6 +389,44 @@ export function useProfileCollapseHeader({
     const p = collapseP.value;
     return {
       opacity: interpolate(p, [0, 0.45, 1], [1, 0, 0], Extrapolation.CLAMP),
+    };
+  });
+
+  const scrollContentPullStyle = useAnimatedStyle(() => {
+    if (!withAvatarScrollGlow) return {};
+    const pullAtCollapse = scrollContentPullSv.value;
+    if (pullAtCollapse >= 0) return {};
+    const y = scrollY.value;
+    if (y < NAME_HEADER_SCROLL_START) return {};
+    const pullT =
+      y >= NAME_HEADER_SCROLL_END
+        ? 1
+        : interpolate(
+            y,
+            [NAME_HEADER_SCROLL_START, NAME_HEADER_SCROLL_END],
+            [0, 1],
+            Extrapolation.CLAMP,
+          );
+    return { transform: [{ translateY: pullAtCollapse * pullT }] };
+  });
+
+  const actionsFloatStyle = useAnimatedStyle(() => {
+    if (!withAvatarScrollGlow) return {};
+    const p = collapseP.value;
+    const lift = Math.sin(p * Math.PI * 0.5);
+    const y = scrollY.value;
+    let parallaxY = 0;
+    if (y <= AVATAR_GLOW_SCROLL_PEAK) {
+      parallaxY = -y * 0.5;
+    } else {
+      parallaxY = -AVATAR_GLOW_SCROLL_PEAK * 0.5 - (y - AVATAR_GLOW_SCROLL_PEAK) * 1.5;
+    }
+    return {
+      opacity: interpolate(p, [0, 0.55, 1], [1, 0.25, 0], Extrapolation.CLAMP),
+      transform: [
+        { translateY: -avatarLiftY * lift + parallaxY },
+        { scale: interpolate(p, [0, 1], [1, 0.38]) },
+      ],
     };
   });
 
@@ -445,11 +511,14 @@ export function useProfileCollapseHeader({
   return {
     scrollRef,
     scrollTopPadding,
+    scrollContentPullStyle,
     scrollSnapHandler,
     onScrollBeginDrag,
     onScrollEndDrag,
     onMomentumScrollEnd,
     avatarTop,
+    actionsFloatTop,
+    actionsFloatStyle,
     nameStartY,
     statusStartY,
     avatarWrapStyle,
@@ -468,5 +537,6 @@ export function useProfileCollapseHeader({
     headerMiniAvatarStyle,
     headerUnderGlowStyle,
     profileChromeStackStyle,
+    nameHeaderChromeStackStyle,
   };
 }
