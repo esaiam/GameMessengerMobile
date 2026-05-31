@@ -334,7 +334,10 @@ export default function ContactProfileScreen({ route, navigation }) {
     avatarGlowRingSoftStyle,
     nameStyle,
     statusStyle,
+    headerStatusStyle,
     onNameLayout,
+    headerNameLeft,
+    headerStatusTop,
     headerHeight,
     headerUnderGlowTop,
     headerUnderGlowHeight,
@@ -780,6 +783,32 @@ export default function ContactProfileScreen({ route, navigation }) {
           <Animated.View
             pointerEvents="none"
             style={[
+              styles.headerStatusFloat,
+              { top: headerStatusTop, left: headerNameLeft },
+              headerStatusStyle,
+            ]}
+          >
+            <View style={styles.headerStatusRow}>
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: contactOnline ? V.accentSage : V.textMuted },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.headerStatusText,
+                  { color: contactOnline ? V.accentSage : V.textMuted },
+                ]}
+              >
+                {contactOnline ? 'в сети' : 'не в сети'}
+              </Text>
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents="none"
+            style={[
               styles.headerMiniAvatar,
               {
                 left: headerMiniAvatarLeft,
@@ -992,9 +1021,23 @@ const styles = StyleSheet.create({
   },
   nameFloat: {
     position: 'absolute',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '500',
+    lineHeight: 20,
     maxWidth: '92%',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
+  },
+  headerStatusFloat: {
+    position: 'absolute',
+  },
+  headerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerStatusText: {
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 16,
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   statusFloat: {

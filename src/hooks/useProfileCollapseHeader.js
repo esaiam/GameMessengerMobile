@@ -23,8 +23,8 @@ export const PROFILE_AVATAR_SIZE = 96;
 const AVATAR_MARGIN_TOP = -12;
 const NAME_MARGIN_TOP = 14;
 const ACTIONS_MARGIN_TOP = 20;
-/** Зазор между рядом кнопок и верхом большого аватара (профиль контакта) */
-const ACTIONS_ABOVE_AVATAR_GAP = 12;
+/** Зазор от низа шапки до верха ряда кнопок (профиль контакта) */
+const HEADER_TO_ACTIONS_TOP_GAP = 16;
 const SCROLL_CONTENT_LIFT = 36;
 /** Зазор медиа под шапкой в свёрнутом состоянии */
 const SCROLL_CONTENT_GAP_BELOW_HEADER = 16;
@@ -44,24 +44,40 @@ const NAME_FADE_SCROLL_START = 50;
 const NAME_HIDDEN_SCROLL_START = 70;
 const NAME_HEADER_SCROLL_START = 95;
 const NAME_HEADER_SCROLL_END = 120;
+/** Fade-in имени в шапке на 10ms позже (≈ scroll-lag при ~100ms прохода зоны) */
+const NAME_HEADER_OPACITY_DELAY_MS = 10;
+const NAME_HEADER_OPACITY_SCROLL_LAG =
+  (NAME_HEADER_OPACITY_DELAY_MS / 100) *
+  (NAME_HEADER_SCROLL_END - NAME_HEADER_SCROLL_START);
 const NAME_ARC_RADIUS = 60;
 /** Якорь имени под аватаром → смещение от центра орбиты (низ круга = старт) */
 const NAME_ORBIT_BELOW_CENTER = PROFILE_AVATAR_SIZE / 2 + NAME_MARGIN_TOP;
 export const HEADER_MINI_AVATAR_SIZE = CHAT_HEADER_AVATAR_SIZE;
 const HEADER_MINI_AVATAR_GAP = 8;
 const HEADER_BACK_SLOT_W = 40;
+/** Как ChatRoomHeader: back marginLeft −10, marginRight 1; avatar marginLeft 8 */
+const CHAT_HEADER_BACK_MARGIN_LEFT = -10;
+const CHAT_HEADER_BACK_MARGIN_RIGHT = 1;
+const CHAT_HEADER_AVATAR_MARGIN_LEFT = 8;
+/** Позиция статуса в шапке — как ChatRoomHeader (не трогает layout нижнего статуса) */
+const CHAT_HEADER_NAME_LINE_HEIGHT = 20;
+const CHAT_HEADER_STATUS_GAP = (2 * 2) / 3;
 const HEADER_UNDER_GLOW_HEIGHT = 32;
 /** Сдвиг вверх: яркий край градиента под непрозрачной шапкой */
 export const HEADER_UNDER_GLOW_LIFT_UP = 20;
 const PROFILE_CHROME_Z_BELOW_FLOAT = 8;
-/** Имя под шапкой (z8) во время дуги; в шапке — поверх неё */
-const NAME_BELOW_HEADER_Z = 6;
+/** Имя поверх шапки на всей дуге collapse */
 const NAME_ABOVE_HEADER_Z = 12;
 const STATUS_MARGIN_TOP = 6;
 const STATUS_LINE_HEIGHT = 13;
-const SNAP_COLLAPSE_THRESHOLD = 0.42;
+/** Пороги snap: верх мягче (легче раскрыть), низ туже (раньше фиксирует collapse) */
+const SNAP_EXPAND_THRESHOLD = 0.38;
+const SNAP_COLLAPSE_THRESHOLD = 0.34;
 const COLLAPSE_SNAP_ZONE_EXTRA = 12;
-const SNAP_SPRING = { damping: 22, stiffness: 280, mass: 0.85 };
+/** Раскрытие (y→0): мягкая пружина */
+const SNAP_SPRING_EXPAND = { damping: 30, stiffness: 165, mass: 1 };
+/** Сворачивание (y→collapse): тугая, короткая */
+const SNAP_SPRING_COLLAPSE = { damping: 24, stiffness: 440, mass: 0.72 };
 const SNAP_DRAG_MIN_PX = 8;
 
 /** Fade свечения вместе с появлением имени в шапке (профиль контакта). */
@@ -79,7 +95,8 @@ function snapHeaderSpring(offsetY, scrollRef, scrollY, snapDriving) {
   'worklet';
   cancelAnimation(scrollY);
   snapDriving.value = true;
-  scrollY.value = withSpring(offsetY, SNAP_SPRING, (finished) => {
+  const spring = offsetY <= 0 ? SNAP_SPRING_EXPAND : SNAP_SPRING_COLLAPSE;
+  scrollY.value = withSpring(offsetY, spring, (finished) => {
     if (finished) {
       snapDriving.value = false;
       scrollTo(scrollRef, 0, offsetY, false);
@@ -99,7 +116,7 @@ function calcSnapTarget(y, vy, dragDelta, dragStartY) {
   if (Math.abs(vy) > 0.35) {
     offsetY = vy > 0 ? 0 : PROFILE_COLLAPSE_DISTANCE;
   } else if (pullExpand) {
-    const committed = y <= PROFILE_COLLAPSE_DISTANCE * (1 - SNAP_COLLAPSE_THRESHOLD);
+    const committed = y <= PROFILE_COLLAPSE_DISTANCE * (1 - SNAP_EXPAND_THRESHOLD);
     offsetY = committed ? 0 : startOffset;
   } else if (pullCollapse) {
     const committed = y >= PROFILE_COLLAPSE_DISTANCE * SNAP_COLLAPSE_THRESHOLD;
@@ -150,24 +167,30 @@ export function useProfileCollapseHeader({
 
   const headerH = headerLayout.minHeight;
   const avatarTop = headerH + AVATAR_MARGIN_TOP + avatarTopExtra;
-  const nameEndY = headerLayout.paddingTop + headerLayout.contentMinHeight / 2 - 9;
+  const headerNameTop = headerLayout.paddingTop;
+  const nameEndY = headerNameTop;
   const nameStartY = avatarTop + PROFILE_AVATAR_SIZE + NAME_MARGIN_TOP;
   const statusStartY = nameStartY + NAME_LINE_HEIGHT + STATUS_MARGIN_TOP;
   const avatarLiftY =
     avatarTop -
     (headerLayout.paddingTop + headerLayout.contentMinHeight / 2 - PROFILE_AVATAR_SIZE / 2);
 
-  const headerMiniAvatarLeft = MESSENGER_HEADER_PADDING_HORIZONTAL + HEADER_BACK_SLOT_W;
-  const headerMiniAvatarTop =
-    headerLayout.paddingTop + (headerLayout.contentMinHeight - HEADER_MINI_AVATAR_SIZE) / 2;
-  const nameHeaderTx =
-    headerMiniAvatarLeft + HEADER_MINI_AVATAR_SIZE + HEADER_MINI_AVATAR_GAP - screenW / 2;
+  const headerMiniAvatarLeft =
+    MESSENGER_HEADER_PADDING_HORIZONTAL +
+    CHAT_HEADER_BACK_MARGIN_LEFT +
+    HEADER_BACK_SLOT_W +
+    CHAT_HEADER_BACK_MARGIN_RIGHT +
+    CHAT_HEADER_AVATAR_MARGIN_LEFT;
+  const headerMiniAvatarTop = headerNameTop;
+  const headerNameLeft =
+    headerMiniAvatarLeft + HEADER_MINI_AVATAR_SIZE + HEADER_MINI_AVATAR_GAP;
+  const nameHeaderTx = headerNameLeft - screenW / 2;
   const nameHeaderTy = nameEndY - nameStartY;
+  const headerStatusTop =
+    headerNameTop + CHAT_HEADER_NAME_LINE_HEIGHT + CHAT_HEADER_STATUS_GAP;
 
   const statusBlock = withStatusRow ? STATUS_MARGIN_TOP + STATUS_LINE_HEIGHT : 0;
-  const actionsFloatTop = withAvatarScrollGlow
-    ? avatarTop - ACTION_ROW_HEIGHT - ACTIONS_ABOVE_AVATAR_GAP
-    : 0;
+  const actionsFloatTop = withAvatarScrollGlow ? headerH + HEADER_TO_ACTIONS_TOP_GAP : 0;
   const scrollTopPadding = withAvatarScrollGlow
     ? AVATAR_MARGIN_TOP +
       avatarTopExtra +
@@ -292,8 +315,17 @@ export function useProfileCollapseHeader({
           [0, 1],
           Extrapolation.CLAMP,
         );
+        const headerOpacity = interpolate(
+          y,
+          [
+            NAME_HEADER_SCROLL_START + NAME_HEADER_OPACITY_SCROLL_LAG,
+            NAME_HEADER_SCROLL_END,
+          ],
+          [0, 1],
+          Extrapolation.CLAMP,
+        );
         return {
-          opacity: headerBlend,
+          opacity: headerOpacity,
           transform: [
             {
               translateX: -half + orbitX + (nameHeaderTx + half - orbitX) * headerBlend,
@@ -377,18 +409,29 @@ export function useProfileCollapseHeader({
 
   const nameHeaderChromeStackStyle = useAnimatedStyle(() => {
     if (!withAvatarScrollGlow) return {};
-    return {
-      zIndex:
-        scrollY.value >= NAME_HEADER_SCROLL_START
-          ? NAME_ABOVE_HEADER_Z
-          : NAME_BELOW_HEADER_Z,
-    };
+    return { zIndex: NAME_ABOVE_HEADER_Z };
   });
 
   const statusStyle = useAnimatedStyle(() => {
     const p = collapseP.value;
     return {
       opacity: interpolate(p, [0, 0.45, 1], [1, 0, 0], Extrapolation.CLAMP),
+    };
+  });
+
+  const headerStatusStyle = useAnimatedStyle(() => {
+    if (!withAvatarScrollGlow) return { opacity: 0 };
+    const y = scrollY.value;
+    return {
+      opacity: interpolate(
+        y,
+        [
+          NAME_HEADER_SCROLL_START + NAME_HEADER_OPACITY_SCROLL_LAG,
+          NAME_HEADER_SCROLL_END,
+        ],
+        [0, 1],
+        Extrapolation.CLAMP,
+      ),
     };
   });
 
@@ -527,8 +570,11 @@ export function useProfileCollapseHeader({
     avatarGlowRingSoftStyle,
     nameStyle,
     statusStyle,
+    headerStatusStyle,
     nameWidthSv,
     onNameLayout,
+    headerNameLeft,
+    headerStatusTop,
     headerHeight: headerH,
     headerUnderGlowTop: headerH - HEADER_UNDER_GLOW_LIFT_UP,
     headerUnderGlowHeight: HEADER_UNDER_GLOW_HEIGHT + HEADER_UNDER_GLOW_LIFT_UP,
