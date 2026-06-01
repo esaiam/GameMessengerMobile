@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -8,15 +7,53 @@ import {
   View,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
-import SafeBlurView from '../SafeBlurView';
 import tw from 'twrnc';
 import { Search } from '../../icons/lucideIcons';
 import { CHATS_SEARCH_HEADER_GAP_PX } from '../../hooks/useChatsSearchReveal';
-import {
-  SEARCH_CHATS_CAPSULE_RADIUS,
-  SEARCH_FIELD_LAYOUT,
-  V,
-} from '../../theme';
+import { SEARCH_FIELD_LAYOUT, V } from '../../theme';
+
+const TYPEWRITER_LETTER_MS = 280;
+const TYPEWRITER_HOLD_MS = 2200;
+
+function useTypewriterLabel(text, enabled) {
+  const [visible, setVisible] = useState('');
+
+  useEffect(() => {
+    if (!enabled) {
+      setVisible('');
+      return undefined;
+    }
+
+    let cancelled = false;
+    let index = 0;
+    let timeoutId;
+
+    const tick = () => {
+      if (cancelled) return;
+      setVisible(text.slice(0, index + 1));
+      if (index < text.length - 1) {
+        index += 1;
+        timeoutId = setTimeout(tick, TYPEWRITER_LETTER_MS);
+        return;
+      }
+      timeoutId = setTimeout(() => {
+        if (cancelled) return;
+        index = 0;
+        setVisible('');
+        timeoutId = setTimeout(tick, TYPEWRITER_LETTER_MS);
+      }, TYPEWRITER_HOLD_MS);
+    };
+
+    timeoutId = setTimeout(tick, TYPEWRITER_LETTER_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [text, enabled]);
+
+  return visible;
+}
+
 export default function ChatsCollapsibleSearchField({
   searchFieldHeight,
   searchBottomSpacingPx,
@@ -30,24 +67,23 @@ export default function ChatsCollapsibleSearchField({
   onBlur,
   placeholder = 'Поиск...',
 }) {
+  const [focused, setFocused] = useState(false);
+  const showTypewriter = !query && !focused;
+  const typewriterLabel = useTypewriterLabel(placeholder, showTypewriter);
+
   return (
     <Animated.View animatedProps={wrapAnimatedProps} style={wrapStyle}>
       <Animated.View style={[innerStyle, styles.searchInner]}>
         <View style={{ marginBottom: searchBottomSpacingPx }}>
-          <SafeBlurView
-            intensity={28}
-            tint="dark"
-            blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
+          <View
             style={[
               tw`flex-row items-center`,
               {
                 minHeight: searchFieldHeight,
-                borderRadius: SEARCH_CHATS_CAPSULE_RADIUS,
-                overflow: 'hidden',
                 paddingHorizontal: SEARCH_FIELD_LAYOUT.rowPaddingH,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: 'rgba(255,255,255,0.13)',
-                backgroundColor: 'rgba(255,255,255,0.06)',
+                backgroundColor: 'transparent',
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: V.border,
               },
             ]}
           >
@@ -57,25 +93,37 @@ export default function ChatsCollapsibleSearchField({
               color={V.textMuted}
               style={{ marginRight: 8, flexShrink: 0 }}
             />
-            <TextInput
-              ref={inputRef}
-              style={[
-                tw`flex-1 text-[15px]`,
-                {
-                  color: V.textPrimary,
-                  paddingVertical: 0,
-                  height: searchFieldHeight,
-                },
-              ]}
-              placeholder={placeholder}
-              placeholderTextColor={V.textMuted}
-              value={query}
-              onChangeText={onChangeQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-              onFocus={onFocus}
-              onBlur={onBlur}
-            />
+            <View style={styles.inputWrap}>
+              <TextInput
+                ref={inputRef}
+                style={[
+                  tw`flex-1 text-[15px]`,
+                  {
+                    color: V.textPrimary,
+                    paddingVertical: 0,
+                    height: searchFieldHeight,
+                  },
+                ]}
+                placeholder=""
+                value={query}
+                onChangeText={onChangeQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                onFocus={(e) => {
+                  setFocused(true);
+                  onFocus?.(e);
+                }}
+                onBlur={(e) => {
+                  setFocused(false);
+                  onBlur?.(e);
+                }}
+              />
+              {showTypewriter ? (
+                <View style={styles.typewriterOverlay} pointerEvents="none">
+                  <Text style={styles.typewriterText}>{typewriterLabel}</Text>
+                </View>
+              ) : null}
+            </View>
             {!!query && (
               <TouchableOpacity
                 onPress={() => onChangeQuery('')}
@@ -89,7 +137,7 @@ export default function ChatsCollapsibleSearchField({
                 </Text>
               </TouchableOpacity>
             )}
-          </SafeBlurView>
+          </View>
         </View>
       </Animated.View>
     </Animated.View>
@@ -99,5 +147,18 @@ export default function ChatsCollapsibleSearchField({
 const styles = StyleSheet.create({
   searchInner: {
     marginTop: CHATS_SEARCH_HEADER_GAP_PX,
+  },
+  inputWrap: {
+    flex: 1,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  typewriterOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+  },
+  typewriterText: {
+    fontSize: 15,
+    color: V.sageFocus,
   },
 });

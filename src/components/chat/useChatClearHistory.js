@@ -11,6 +11,7 @@ export default function useChatClearHistory({
   messagesRef,
   setMessages,
   chatSyncRef,
+  unpinMessage,
 }) {
   const executeClearHistory = useCallback(
     async (deleteForEveryone) => {
@@ -45,12 +46,13 @@ export default function useChatClearHistory({
         roomMessagesCache.set(roomId, []);
         if (deleteForEveryone) {
           chatSyncRef?.current?.clearThread?.();
+          await unpinMessage?.();
         }
       } catch (e) {
         Alert.alert('Ошибка', e?.message || 'Не удалось очистить переписку');
       }
     },
-    [roomId, nickname, otherPlayerName, messagesRef, setMessages, chatSyncRef],
+    [roomId, nickname, otherPlayerName, messagesRef, setMessages, chatSyncRef, unpinMessage],
   );
 
   return { executeClearHistory };

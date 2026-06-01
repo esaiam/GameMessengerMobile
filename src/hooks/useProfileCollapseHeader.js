@@ -36,7 +36,6 @@ export const PROFILE_COLLAPSE_DISTANCE = 132;
 const AVATAR_GLOW_SCROLL_PEAK = 80;
 const AVATAR_BORDER_SAGE = 'rgba(90,158,154,0.6)';
 const AVATAR_BORDER_SAGE_PEAK = 'rgba(90,158,154,0.9)';
-const AVATAR_GLOW_RING_RAMP = [0, AVATAR_GLOW_SCROLL_PEAK, PROFILE_COLLAPSE_DISTANCE];
 const NAME_LINE_HEIGHT = 22;
 /** Дуга имени (профиль контакта), px скролла */
 const NAME_ARC_SCROLL_END = 70;
@@ -44,6 +43,18 @@ const NAME_FADE_SCROLL_START = 50;
 const NAME_HIDDEN_SCROLL_START = 70;
 const NAME_HEADER_SCROLL_START = 95;
 const NAME_HEADER_SCROLL_END = 120;
+/** Пик подсветки — середина фазы подхода/захода под шапку (после parallax → до полного collapse). */
+const AVATAR_GLOW_HEADER_PEAK_SCROLL =
+  (AVATAR_GLOW_SCROLL_PEAK + PROFILE_COLLAPSE_DISTANCE) / 2;
+const AVATAR_GLOW_RING_RAMP = [
+  0,
+  28,
+  AVATAR_GLOW_HEADER_PEAK_SCROLL,
+  PROFILE_COLLAPSE_DISTANCE,
+];
+const AVATAR_GLOW_RING_OPACITY_RAMP = [0, 0.4, 0.88, 0];
+const AVATAR_GLOW_RING_SCALE_RAMP = [1, 1.05, 1.1, 1.02];
+const AVATAR_GLOW_FILL_MAX = 0.78;
 /** Fade-in имени в шапке на 10ms позже (≈ scroll-lag при ~100ms прохода зоны) */
 const NAME_HEADER_OPACITY_DELAY_MS = 10;
 const NAME_HEADER_OPACITY_SCROLL_LAG =
@@ -70,15 +81,23 @@ const PROFILE_CHROME_Z_BELOW_FLOAT = 8;
 const NAME_ABOVE_HEADER_Z = 12;
 const STATUS_MARGIN_TOP = 6;
 const STATUS_LINE_HEIGHT = 13;
-/** Пороги snap: верх мягче (легче раскрыть), низ туже (раньше фиксирует collapse) */
-const SNAP_EXPAND_THRESHOLD = 0.38;
-const SNAP_COLLAPSE_THRESHOLD = 0.34;
-const COLLAPSE_SNAP_ZONE_EXTRA = 12;
-/** Раскрытие (y→0): мягкая пружина */
-const SNAP_SPRING_EXPAND = { damping: 30, stiffness: 165, mass: 1 };
-/** Сворачивание (y→collapse): тугая, короткая */
-const SNAP_SPRING_COLLAPSE = { damping: 24, stiffness: 440, mass: 0.72 };
+/** Пороги snap: верх слабее, низ сильнее (позиция y, не dragStart). */
+const SNAP_EXPAND_THRESHOLD = 0.46;
+const SNAP_COLLAPSE_THRESHOLD = 0.33;
+/** Нейтральное отпускание: ниже этой доли collapse → вниз (bias к collapsed). */
+const SNAP_REST_MIDPOINT = 0.42;
+const COLLAPSE_SNAP_ZONE_EXTRA = 10;
+/** Раскрытие (y→0): мягче, меньше «магнита» сверху */
+const SNAP_SPRING_EXPAND = { damping: 32, stiffness: 148, mass: 1.05 };
+/** Сворачивание (y→collapse): тугая, без отскока снизу */
+const SNAP_SPRING_COLLAPSE = { damping: 34, stiffness: 590, mass: 0.54 };
+const SNAP_VELOCITY_EXPAND = 0.42;
+const SNAP_VELOCITY_COLLAPSE = 0.32;
 const SNAP_DRAG_MIN_PX = 8;
+/** Кнопки над аватаром (профиль контакта): быстрее аватара уходят под шапку. */
+const ACTIONS_PARALLAX_SLOW = 1.15;
+const ACTIONS_PARALLAX_FAST = 3.85;
+const ACTIONS_LIFT_SPEED = 1.85;
 
 /** Fade свечения вместе с появлением имени в шапке (профиль контакта). */
 function glowHeaderNameFade(y) {
@@ -89,6 +108,23 @@ function glowHeaderNameFade(y) {
     [1, 0],
     Extrapolation.CLAMP,
   );
+}
+
+/** Яркость подсветки: ноль в покое, максимум в середине захода под шапку, fade в конце. */
+function avatarGlowIntensity(y) {
+  'worklet';
+  return interpolate(
+    y,
+    [0, 24, AVATAR_GLOW_HEADER_PEAK_SCROLL, PROFILE_COLLAPSE_DISTANCE],
+    [0, 0.34, 1, 0],
+    Extrapolation.CLAMP,
+  );
+}
+
+/** Хвост: гасим только когда аватар почти скрыт за шапкой. */
+function avatarGlowTailFade(p) {
+  'worklet';
+  return interpolate(p, [0.84, 1], [1, 0], Extrapolation.CLAMP);
 }
 
 function snapHeaderSpring(offsetY, scrollRef, scrollY, snapDriving) {
@@ -104,26 +140,31 @@ function snapHeaderSpring(offsetY, scrollRef, scrollY, snapDriving) {
   });
 }
 
-function calcSnapTarget(y, vy, dragDelta, dragStartY) {
+function calcSnapTarget(y, vy, dragDelta) {
   if (y < 0 || y > PROFILE_COLLAPSE_DISTANCE + COLLAPSE_SNAP_ZONE_EXTRA) return -1;
-  const startOffset =
-    dragStartY >= PROFILE_COLLAPSE_DISTANCE * SNAP_COLLAPSE_THRESHOLD
-      ? PROFILE_COLLAPSE_DISTANCE
-      : 0;
+
+  const expandLine = PROFILE_COLLAPSE_DISTANCE * (1 - SNAP_EXPAND_THRESHOLD);
+  const collapseLine = PROFILE_COLLAPSE_DISTANCE * SNAP_COLLAPSE_THRESHOLD;
+  const restLine = PROFILE_COLLAPSE_DISTANCE * SNAP_REST_MIDPOINT;
+
   const pullExpand = dragDelta < -SNAP_DRAG_MIN_PX;
   const pullCollapse = dragDelta > SNAP_DRAG_MIN_PX;
+
   let offsetY;
-  if (Math.abs(vy) > 0.35) {
-    offsetY = vy > 0 ? 0 : PROFILE_COLLAPSE_DISTANCE;
+
+  // Как ProfileScreen: тянем вниз (раскрыть) → vy > 0; asymmetry — верх требует сильнее flick.
+  if (vy > SNAP_VELOCITY_EXPAND) {
+    offsetY = 0;
+  } else if (vy < -SNAP_VELOCITY_COLLAPSE) {
+    offsetY = PROFILE_COLLAPSE_DISTANCE;
   } else if (pullExpand) {
-    const committed = y <= PROFILE_COLLAPSE_DISTANCE * (1 - SNAP_EXPAND_THRESHOLD);
-    offsetY = committed ? 0 : startOffset;
+    offsetY = y <= expandLine ? 0 : PROFILE_COLLAPSE_DISTANCE;
   } else if (pullCollapse) {
-    const committed = y >= PROFILE_COLLAPSE_DISTANCE * SNAP_COLLAPSE_THRESHOLD;
-    offsetY = committed ? PROFILE_COLLAPSE_DISTANCE : startOffset;
+    offsetY = y >= collapseLine ? PROFILE_COLLAPSE_DISTANCE : 0;
   } else {
-    offsetY = startOffset;
+    offsetY = y >= restLine ? PROFILE_COLLAPSE_DISTANCE : 0;
   }
+
   if (Math.abs(y - offsetY) < 2) return -1;
   return offsetY;
 }
@@ -155,6 +196,19 @@ export function useProfileCollapseHeader({
       return -y * 0.5;
     }
     return -AVATAR_GLOW_SCROLL_PEAK * 0.5 - (y - AVATAR_GLOW_SCROLL_PEAK) * 1.5;
+  });
+
+  /** Кнопки над аватаром: быстрее уходят под шапку (parallax). */
+  const actionsParallaxY = useDerivedValue(() => {
+    if (!withAvatarScrollGlow) return 0;
+    const y = scrollY.value;
+    if (y <= AVATAR_GLOW_SCROLL_PEAK) {
+      return -y * ACTIONS_PARALLAX_SLOW;
+    }
+    return (
+      -AVATAR_GLOW_SCROLL_PEAK * ACTIONS_PARALLAX_SLOW -
+      (y - AVATAR_GLOW_SCROLL_PEAK) * ACTIONS_PARALLAX_FAST
+    );
   });
 
   const scrollDragRef = useRef(false);
@@ -247,30 +301,50 @@ export function useProfileCollapseHeader({
   const avatarGlowStyle = useAnimatedStyle(() => {
     if (!withAvatarScrollGlow) return {};
     const y = scrollY.value;
-    if (y >= NAME_HEADER_SCROLL_START) {
+    const peak = AVATAR_GLOW_HEADER_PEAK_SCROLL;
+    if (y <= peak) {
       return {
-        borderColor: interpolateColor(
-          y,
-          [NAME_HEADER_SCROLL_START, NAME_HEADER_SCROLL_END],
-          [AVATAR_BORDER_SAGE_PEAK, AVATAR_BORDER_SAGE],
-        ),
+        borderColor: interpolateColor(y, [0, peak], [
+          AVATAR_BORDER_SAGE,
+          AVATAR_BORDER_SAGE_PEAK,
+        ]),
       };
     }
     return {
-      borderColor: interpolateColor(y, [0, AVATAR_GLOW_SCROLL_PEAK], [
-        AVATAR_BORDER_SAGE,
+      borderColor: interpolateColor(y, [peak, PROFILE_COLLAPSE_DISTANCE], [
         AVATAR_BORDER_SAGE_PEAK,
+        AVATAR_BORDER_SAGE,
       ]),
+    };
+  });
+
+  const avatarGlowFillStyle = useAnimatedStyle(() => {
+    if (!withAvatarScrollGlow) return { opacity: 0 };
+    const y = scrollY.value;
+    const p = collapseP.value;
+    return {
+      opacity: avatarGlowIntensity(y) * avatarGlowTailFade(p) * AVATAR_GLOW_FILL_MAX,
     };
   });
 
   const avatarGlowRingStyle = useAnimatedStyle(() => {
     if (!withAvatarScrollGlow) return { opacity: 0 };
     const y = scrollY.value;
-    const glowOpacity = interpolate(y, AVATAR_GLOW_RING_RAMP, [0, 0.7, 0], Extrapolation.CLAMP);
-    const glowScale = interpolate(y, AVATAR_GLOW_RING_RAMP, [1, 1.08, 1.08], Extrapolation.CLAMP);
+    const p = collapseP.value;
+    const glowOpacity = interpolate(
+      y,
+      AVATAR_GLOW_RING_RAMP,
+      AVATAR_GLOW_RING_OPACITY_RAMP,
+      Extrapolation.CLAMP,
+    );
+    const glowScale = interpolate(
+      y,
+      AVATAR_GLOW_RING_RAMP,
+      AVATAR_GLOW_RING_SCALE_RAMP,
+      Extrapolation.CLAMP,
+    );
     return {
-      opacity: glowOpacity * glowHeaderNameFade(y),
+      opacity: glowOpacity * avatarGlowTailFade(p),
       transform: [{ scale: glowScale }],
     };
   });
@@ -278,10 +352,21 @@ export function useProfileCollapseHeader({
   const avatarGlowRingSoftStyle = useAnimatedStyle(() => {
     if (!withAvatarScrollGlow) return { opacity: 0 };
     const y = scrollY.value;
-    const glowOpacity = interpolate(y, AVATAR_GLOW_RING_RAMP, [0, 0.7, 0], Extrapolation.CLAMP);
-    const glowScale = interpolate(y, AVATAR_GLOW_RING_RAMP, [1, 1.08, 1.08], Extrapolation.CLAMP);
+    const p = collapseP.value;
+    const glowOpacity = interpolate(
+      y,
+      AVATAR_GLOW_RING_RAMP,
+      AVATAR_GLOW_RING_OPACITY_RAMP,
+      Extrapolation.CLAMP,
+    );
+    const glowScale = interpolate(
+      y,
+      AVATAR_GLOW_RING_RAMP,
+      AVATAR_GLOW_RING_SCALE_RAMP,
+      Extrapolation.CLAMP,
+    );
     return {
-      opacity: glowOpacity * 0.3 * glowHeaderNameFade(y),
+      opacity: glowOpacity * 0.3 * avatarGlowTailFade(p),
       transform: [{ scale: glowScale }],
     };
   });
@@ -456,26 +541,20 @@ export function useProfileCollapseHeader({
   const actionsFloatStyle = useAnimatedStyle(() => {
     if (!withAvatarScrollGlow) return {};
     const p = collapseP.value;
-    const lift = Math.sin(p * Math.PI * 0.5);
-    const y = scrollY.value;
-    let parallaxY = 0;
-    if (y <= AVATAR_GLOW_SCROLL_PEAK) {
-      parallaxY = -y * 0.5;
-    } else {
-      parallaxY = -AVATAR_GLOW_SCROLL_PEAK * 0.5 - (y - AVATAR_GLOW_SCROLL_PEAK) * 1.5;
-    }
+    const liftP = Math.min(p * ACTIONS_LIFT_SPEED, 1);
+    const lift = Math.sin(liftP * Math.PI * 0.5);
     return {
-      opacity: interpolate(p, [0, 0.55, 1], [1, 0.25, 0], Extrapolation.CLAMP),
+      opacity: interpolate(p, [0, 0.2, 0.45], [1, 0.15, 0], Extrapolation.CLAMP),
       transform: [
-        { translateY: -avatarLiftY * lift + parallaxY },
-        { scale: interpolate(p, [0, 1], [1, 0.38]) },
+        { translateY: -avatarLiftY * lift + actionsParallaxY.value },
+        { scale: interpolate(p, [0, 0.5, 0.72], [1, 0.38, 0.28], Extrapolation.CLAMP) },
       ],
     };
   });
 
   const snapIfNeeded = useCallback(
-    (y, vy, dragDelta, dragStartY) => {
-      const offsetY = calcSnapTarget(y, vy, dragDelta, dragStartY);
+    (y, vy, dragDelta) => {
+      const offsetY = calcSnapTarget(y, vy, dragDelta);
       if (offsetY < 0) return;
       runOnUI(snapHeaderSpring)(offsetY, scrollRef, scrollY, snapDriving);
     },
@@ -506,7 +585,7 @@ export function useProfileCollapseHeader({
       if (noMomentum) {
         scrollDragRef.current = false;
         resetPagerLock?.();
-        snapIfNeeded(y, vy, dragDelta, dragStartYRef.current);
+        snapIfNeeded(y, vy, dragDelta);
       }
     },
     [resetPagerLock, snapIfNeeded],
@@ -522,7 +601,7 @@ export function useProfileCollapseHeader({
       const vy = dragVyRef.current;
       const dragDelta = y - dragStartYRef.current;
       dragVyRef.current = 0;
-      snapIfNeeded(y, vy, dragDelta, dragStartYRef.current);
+      snapIfNeeded(y, vy, dragDelta);
     },
     [resetPagerLock, snapIfNeeded],
   );
@@ -566,6 +645,7 @@ export function useProfileCollapseHeader({
     statusStartY,
     avatarWrapStyle,
     avatarGlowStyle,
+    avatarGlowFillStyle,
     avatarGlowRingStyle,
     avatarGlowRingSoftStyle,
     nameStyle,

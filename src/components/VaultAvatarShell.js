@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { V } from '../theme';
 import { getInitials } from '../screens/chats/chatsFormat';
+import { AvatarUnderGlassStack } from './avatarFisheyeLens';
 
 const REF_SIZE = 52;
 const REF_INITIAL_FONT = 13;
@@ -31,7 +32,7 @@ export function VaultAvatarShell({ size = REF_SIZE, fill = false, children, styl
           fill && styles.fill,
         ]}
       >
-        {children}
+        <AvatarUnderGlassStack size={size}>{children}</AvatarUnderGlassStack>
       </View>
       <View
         pointerEvents="none"
@@ -72,8 +73,7 @@ const styles = StyleSheet.create({
     borderColor: V.vaultAvatarBorder,
     padding: 0,
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'relative',
   },
   fill: {
     backgroundColor: V.vaultAvatarFill,

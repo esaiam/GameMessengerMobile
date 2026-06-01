@@ -17,7 +17,11 @@ export default function ChatMessageContextMenuHost({
   onEditMessage,
   canEditSelectedMessage,
   onRequestDeleteConfirm,
-  onOpenImage }) {
+  onOpenImage,
+  onPinMessage,
+  pinLabel = 'Закрепить',
+  pinDisabled = false,
+}) {
   const canOpenImage =
     selectedMessage?.message_type === 'image' && !!selectedMessage?.media_url;
   if (!uiReady) return null;
@@ -51,7 +55,12 @@ export default function ChatMessageContextMenuHost({
         }
       }}
       onForward={() => Alert.alert('Переслать', 'Функция в разработке.')}
-      onPin={() => Alert.alert('Закрепить', 'Функция в разработке.')}
+      onPin={
+        pinDisabled || !selectedMessage || !onPinMessage
+          ? undefined
+          : () => onPinMessage(selectedMessage)
+      }
+      pinLabel={pinLabel}
       onDelete={onRequestDeleteConfirm}
     />
   );

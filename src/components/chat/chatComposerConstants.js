@@ -1,7 +1,15 @@
 import { TAB_BAR_LAYOUT } from '../../theme';
 
+/** Общая высота context-капсул: reply, edit, закреплённое сообщение */
+export const CHAT_CONTEXT_CAPSULE_H = 44;
+
 /** Reply-плашка над капсулой ввода */
-export const REPLY_TARGET_PREVIEW_H = 52;
+export const REPLY_TARGET_PREVIEW_H = CHAT_CONTEXT_CAPSULE_H;
+export const REPLY_TARGET_PREVIEW_RADIUS = 16;
+/** Зазор между reply/edit-капсулой и полем ввода */
+export const REPLY_TARGET_PREVIEW_GAP = 6;
+export const REPLY_TARGET_PREVIEW_OUTER_H =
+  REPLY_TARGET_PREVIEW_H + REPLY_TARGET_PREVIEW_GAP;
 export const EMOJI_PICKER_PANEL_H = 221;
 /** Видимая высота панели над клавиатурой при поиске GIF */
 export const EMOJI_GIF_EXPANDED_VISIBLE_H = 248;

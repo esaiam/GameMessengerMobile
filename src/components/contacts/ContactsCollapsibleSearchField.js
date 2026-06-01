@@ -1,8 +1,5 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Animated as RNAnimated,
-  Platform,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -10,18 +7,53 @@ import {
   View,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
-import SafeBlurView from '../SafeBlurView';
 import tw from 'twrnc';
-import { Search, UserPlus } from '../../icons/lucideIcons';
-import {
-  SEARCH_CONTACTS_CAPSULE_RADIUS,
-  SEARCH_FIELD_LAYOUT,
-  V,
-} from '../../theme';
+import { Search } from '../../icons/lucideIcons';
+import { SEARCH_FIELD_LAYOUT, V } from '../../theme';
 
-/**
- * Как ChatsCollapsibleSearchField + кнопка «пригласить» справа в капсуле (как в старом ContactsSearchHeader).
- */
+const TYPEWRITER_LETTER_MS = 280;
+const TYPEWRITER_HOLD_MS = 2200;
+
+function useTypewriterLabel(text, enabled) {
+  const [visible, setVisible] = useState('');
+
+  useEffect(() => {
+    if (!enabled) {
+      setVisible('');
+      return undefined;
+    }
+
+    let cancelled = false;
+    let index = 0;
+    let timeoutId;
+
+    const tick = () => {
+      if (cancelled) return;
+      setVisible(text.slice(0, index + 1));
+      if (index < text.length - 1) {
+        index += 1;
+        timeoutId = setTimeout(tick, TYPEWRITER_LETTER_MS);
+        return;
+      }
+      timeoutId = setTimeout(() => {
+        if (cancelled) return;
+        index = 0;
+        setVisible('');
+        timeoutId = setTimeout(tick, TYPEWRITER_LETTER_MS);
+      }, TYPEWRITER_HOLD_MS);
+    };
+
+    timeoutId = setTimeout(tick, TYPEWRITER_LETTER_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [text, enabled]);
+
+  return visible;
+}
+
+/** Как ChatsCollapsibleSearchField (поиск + typewriter). */
 export default function ContactsCollapsibleSearchField({
   searchFieldHeight,
   searchBottomSpacingPx,
@@ -33,74 +65,25 @@ export default function ContactsCollapsibleSearchField({
   onChangeQuery,
   onFocus,
   onBlur,
-  onOpenInvite,
   placeholder = 'Поиск по имени или @handle',
 }) {
-  const inviteScaleX = useRef(new RNAnimated.Value(1)).current;
-  const inviteScaleY = useRef(new RNAnimated.Value(1)).current;
-  const inviteRunAnimRef = useRef(null);
-
-  const onInvitePressIn = useCallback(() => {
-    inviteRunAnimRef.current?.stop?.();
-    inviteScaleX.stopAnimation?.();
-    inviteScaleY.stopAnimation?.();
-    inviteScaleX.setValue(1);
-    inviteScaleY.setValue(1);
-
-    const anim = RNAnimated.sequence([
-      RNAnimated.parallel([
-        RNAnimated.timing(inviteScaleX, {
-          toValue: 1.08,
-          duration: 95,
-          useNativeDriver: true,
-        }),
-        RNAnimated.timing(inviteScaleY, {
-          toValue: 0.84,
-          duration: 95,
-          useNativeDriver: true,
-        }),
-      ]),
-      RNAnimated.parallel([
-        RNAnimated.spring(inviteScaleX, {
-          toValue: 1,
-          friction: 3,
-          tension: 200,
-          useNativeDriver: true,
-        }),
-        RNAnimated.spring(inviteScaleY, {
-          toValue: 1,
-          friction: 3,
-          tension: 200,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]);
-
-    inviteRunAnimRef.current = anim;
-    anim.start();
-  }, [inviteScaleX, inviteScaleY]);
-
-  const inviteSize = searchFieldHeight;
+  const [focused, setFocused] = useState(false);
+  const showTypewriter = !query && !focused;
+  const typewriterLabel = useTypewriterLabel(placeholder, showTypewriter);
 
   return (
     <Animated.View animatedProps={wrapAnimatedProps} style={wrapStyle}>
       <Animated.View style={innerStyle}>
         <View style={{ marginBottom: searchBottomSpacingPx }}>
-          <SafeBlurView
-            intensity={28}
-            tint="dark"
-            blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
+          <View
             style={[
               tw`flex-row items-center`,
               {
                 minHeight: searchFieldHeight,
-                borderRadius: SEARCH_CONTACTS_CAPSULE_RADIUS,
-                overflow: 'hidden',
-                paddingLeft: SEARCH_FIELD_LAYOUT.rowPaddingH,
-                paddingRight: 0,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: 'rgba(255,255,255,0.13)',
-                backgroundColor: 'rgba(255,255,255,0.06)',
+                paddingHorizontal: SEARCH_FIELD_LAYOUT.rowPaddingH,
+                backgroundColor: 'transparent',
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: V.border,
               },
             ]}
           >
@@ -110,25 +93,39 @@ export default function ContactsCollapsibleSearchField({
               color={V.textMuted}
               style={{ marginRight: 8, flexShrink: 0 }}
             />
-            <TextInput
-              ref={inputRef}
-              style={[
-                tw`flex-1 text-[15px]`,
-                {
-                  color: V.textPrimary,
-                  paddingVertical: 0,
-                  height: searchFieldHeight,
-                },
-              ]}
-              placeholder={placeholder}
-              placeholderTextColor={V.textMuted}
-              value={query}
-              onChangeText={onChangeQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-              onFocus={onFocus}
-              onBlur={onBlur}
-            />
+            <View style={styles.inputWrap}>
+              <TextInput
+                ref={inputRef}
+                style={[
+                  tw`flex-1 text-[15px]`,
+                  {
+                    color: V.textPrimary,
+                    paddingVertical: 0,
+                    height: searchFieldHeight,
+                  },
+                ]}
+                placeholder=""
+                value={query}
+                onChangeText={onChangeQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                onFocus={(e) => {
+                  setFocused(true);
+                  onFocus?.(e);
+                }}
+                onBlur={(e) => {
+                  setFocused(false);
+                  onBlur?.(e);
+                }}
+              />
+              {showTypewriter ? (
+                <View style={styles.typewriterOverlay} pointerEvents="none">
+                  <Text style={styles.typewriterText} numberOfLines={1}>
+                    {typewriterLabel}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
             {!!query && (
               <TouchableOpacity
                 onPress={() => onChangeQuery('')}
@@ -142,32 +139,25 @@ export default function ContactsCollapsibleSearchField({
                 </Text>
               </TouchableOpacity>
             )}
-
-            <Pressable
-              onPress={onOpenInvite}
-              onPressIn={onInvitePressIn}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{ marginLeft: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Коды приглашений"
-            >
-              <RNAnimated.View
-                style={{
-                  width: inviteSize,
-                  height: inviteSize,
-                  borderRadius: inviteSize / 2,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: V.sageSubtle,
-                  transform: [{ scaleX: inviteScaleX }, { scaleY: inviteScaleY }],
-                }}
-              >
-                <UserPlus size={16} color={V.accentSage} strokeWidth={1.5} />
-              </RNAnimated.View>
-            </Pressable>
-          </SafeBlurView>
+          </View>
         </View>
       </Animated.View>
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  inputWrap: {
+    flex: 1,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  typewriterOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+  },
+  typewriterText: {
+    fontSize: 15,
+    color: V.sageFocus,
+  },
+});

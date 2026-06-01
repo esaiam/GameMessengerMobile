@@ -25,6 +25,8 @@ import EmojiPickerPanel from './EmojiPickerPanel';
 import { V, TAB_BAR_LAYOUT, COMPOSER_LAYOUT, COMPOSER_CAPSULE_RADIUS } from '../../theme';
 import {
   REPLY_TARGET_PREVIEW_H,
+  REPLY_TARGET_PREVIEW_RADIUS,
+  REPLY_TARGET_PREVIEW_GAP,
   INPUT_BAR_ICON,
   INPUT_BAR_EMOJI_ICON,
   INPUT_BAR_CLIP_MIC_SHIFT,
@@ -57,6 +59,78 @@ function ComposerCapsuleShell({ children, style, intensity, blurReductionFactor,
     </SafeBlurView>
   );
 }
+
+function ComposerContextStrip({ accentColor, title, preview, onDismiss }) {
+  return (
+    <View style={composerContextStripStyles.shell}>
+      <View style={composerContextStripStyles.capsule}>
+        <View
+          style={[
+            composerContextStripStyles.textCol,
+            { borderLeftColor: accentColor },
+          ]}
+        >
+          <Text
+            style={[composerContextStripStyles.title, { color: accentColor }]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          <Text style={composerContextStripStyles.preview} numberOfLines={1}>
+            {preview}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={onDismiss} style={composerContextStripStyles.closeBtn}>
+          <X size={16} color={V.textMuted} strokeWidth={1.5} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const composerContextStripStyles = StyleSheet.create({
+  shell: {
+    paddingHorizontal: TAB_BAR_LAYOUT.horizontalPad,
+    paddingBottom: REPLY_TARGET_PREVIEW_GAP,
+  },
+  capsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: REPLY_TARGET_PREVIEW_H,
+    borderRadius: REPLY_TARGET_PREVIEW_RADIUS,
+    backgroundColor: V.bgSurface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+    overflow: 'hidden',
+    paddingHorizontal: 12,
+  },
+  textCol: {
+    flex: 1,
+    minWidth: 0,
+    borderLeftWidth: 2,
+    paddingLeft: 10,
+  },
+  title: {
+    fontSize: 11,
+    fontWeight: '500',
+    lineHeight: 14,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
+  },
+  preview: {
+    marginTop: 1,
+    fontSize: 11,
+    fontWeight: '400',
+    lineHeight: 14,
+    color: V.textSecondary,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
+  },
+  closeBtn: {
+    width: 36,
+    height: REPLY_TARGET_PREVIEW_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 /**
  * Нижний блок чата: reply-плашка, панель эмодзи, капсула ввода (blur), VoiceRecorder.
@@ -180,53 +254,23 @@ export default function ChatComposer({
 
         {visibleEditTarget ? (
           <Reanimated.View style={[{ overflow: 'hidden' }, replyTargetAnimatedStyle]}>
-            <View
-              style={[
-                tw`flex-row items-center px-3 py-2`,
-                {
-                  height: REPLY_TARGET_PREVIEW_H,
-                  backgroundColor: V.bgSurface,
-                  borderTopWidth: 0.5,
-                  borderTopColor: V.border}]}
-            >
-              <View style={[tw`flex-1 pl-2`, { borderLeftWidth: 2, borderLeftColor: V.accentGold }]}>
-                <Text style={[tw`text-[10px] font-medium`, { color: V.accentGold }]} numberOfLines={1}>
-                  Редактирование
-                </Text>
-                <Text style={[tw`text-[10px]`, { color: V.textSecondary }]} numberOfLines={1}>
-                  {visibleEditTarget.text}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={onDismissEdit} style={tw`ml-2 p-1`}>
-                <X size={16} color={V.textMuted} strokeWidth={1.5} />
-              </TouchableOpacity>
-            </View>
+            <ComposerContextStrip
+              accentColor={V.accentGold}
+              title="Редактирование"
+              preview={visibleEditTarget.text}
+              onDismiss={onDismissEdit}
+            />
           </Reanimated.View>
         ) : null}
 
         {visibleReplyTo && !visibleEditTarget ? (
           <Reanimated.View style={[{ overflow: 'hidden' }, replyTargetAnimatedStyle]}>
-            <View
-              style={[
-                tw`flex-row items-center px-3 py-2`,
-                {
-                  height: REPLY_TARGET_PREVIEW_H,
-                  backgroundColor: V.bgSurface,
-                  borderTopWidth: 0.5,
-                  borderTopColor: V.border}]}
-            >
-              <View style={[tw`flex-1 pl-2`, { borderLeftWidth: 2, borderLeftColor: V.accentSage }]}>
-                <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]} numberOfLines={1}>
-                  {visibleReplyTo.player_name}
-                </Text>
-                <Text style={[tw`text-[10px]`, { color: V.textSecondary }]} numberOfLines={1}>
-                  {visibleReplyTo.text}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={onDismissReply} style={tw`ml-2 p-1`}>
-                <X size={16} color={V.textMuted} strokeWidth={1.5} />
-              </TouchableOpacity>
-            </View>
+            <ComposerContextStrip
+              accentColor={V.accentSage}
+              title={visibleReplyTo.player_name}
+              preview={visibleReplyTo.text}
+              onDismiss={onDismissReply}
+            />
           </Reanimated.View>
         ) : null}
 

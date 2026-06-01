@@ -74,6 +74,8 @@ import { parsePicInlineQuery } from '../lib/parsePicInlineQuery';
 import { parseGifInlineQuery } from '../lib/parseGifInlineQuery';
 import useChatInlineMediaSend from './chat/useChatInlineMediaSend';
 import useChatClearHistory from './chat/useChatClearHistory';
+import useChatPinnedMessage from './chat/useChatPinnedMessage';
+import ChatPinnedBar, { CHAT_PINNED_BAR_H } from './chat/ChatPinnedBar';
 import useChatInputSettling from './chat/useChatInputSettling';
 import { formatDateKey } from './chat/chatMessageListFormat';
 import { useNavigation } from '@react-navigation/native';
@@ -155,6 +157,7 @@ export default function Chat({
   const [calendarOverlay, setCalendarOverlay] = useState(null);
   const [uiReady, setUiReady] = useState(false);
   const [headerOverlayH, setHeaderOverlayH] = useState(0);
+  const [pinnedBarH, setPinnedBarH] = useState(0);
   const [ariaGaugesH, setAriaGaugesH] = useState(48);
   /** Зеркалит `ariaState` из `ChatRoomHeader` (тот же fetch, что был у колец) для `AriaStateGauges`. */
   const [ariaState, setAriaState] = useState(null);
@@ -169,8 +172,9 @@ export default function Chat({
     if (chatRoomHeader == null) return;
     if (headerOverlayH <= 0) return;
     const gaugesH = isAriaChat ? ariaGaugesH : 0;
-    onTopOverlayHeight?.(headerOverlayH + gaugesH);
-  }, [chatRoomHeader, headerOverlayH, isAriaChat, ariaGaugesH, onTopOverlayHeight]);
+    const pinH = !isAriaChat && pinnedBarH > 0 ? pinnedBarH : 0;
+    onTopOverlayHeight?.(headerOverlayH + gaugesH + pinH);
+  }, [chatRoomHeader, headerOverlayH, isAriaChat, ariaGaugesH, pinnedBarH, onTopOverlayHeight]);
 
   const { armComposerInsetSettling, listScrollSuppressRefs, keyboardSettlingRef } =
     useChatInputSettling(showEmojiPicker);
@@ -260,6 +264,15 @@ export default function Chat({
     return map;
   }, [formattedMessages]);
 
+  const messageIdToIndexMap = useMemo(() => {
+    const map = new Map();
+    for (let i = 0; i < formattedMessages.length; i++) {
+      const row = formattedMessages[i];
+      if (row?.id != null) map.set(row.id, i);
+    }
+    return map;
+  }, [formattedMessages]);
+
   const openCalendarFromSeparator = useCallback((anchor, dateKey, _dateLabel) => {
     setCalendarOverlay({ anchor, dateKey });
   }, []);
@@ -280,6 +293,21 @@ export default function Chat({
         viewPosition: 0.5 });
     }, 180);
   }, [isAriaChat, dateKeyToIndexMap, flatListRef]);
+
+  const scrollToMessageById = useCallback((messageId) => {
+    const idx = messageIdToIndexMap.get(messageId);
+    if (idx == null) {
+      Alert.alert('Сообщение', 'Не удалось найти сообщение в ленте.');
+      return;
+    }
+    setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: idx,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }, 120);
+  }, [messageIdToIndexMap, flatListRef]);
 
   const messagesMap = useMemo(
     () => new Map(messages.map((m) => [m.id, m])),
@@ -491,6 +519,49 @@ export default function Chat({
     [nickname],
   );
 
+  const {
+    pinnedMessage,
+    togglePinForMessage,
+    unpinMessage,
+    isMessagePinned,
+  } = useChatPinnedMessage({
+    roomId,
+    isAriaChat,
+    nickname,
+    messages,
+    setMessages,
+    decryptMsg,
+    filterHiddenForMeKeepingDeleting,
+    filterExpired,
+  });
+
+  const unpinMessageIfMatches = useCallback(
+    async (messageId) => {
+      if (isMessagePinned(messageId)) {
+        await unpinMessage();
+      }
+    },
+    [isMessagePinned, unpinMessage],
+  );
+
+  useEffect(() => {
+    setPinnedBarH(0);
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!pinnedMessage) setPinnedBarH(0);
+  }, [pinnedMessage]);
+
+  const pinDisabled =
+    isAriaChat ||
+    !roomId ||
+    selectedMessage?._isOptimistic === true;
+
+  const contextMenuPinLabel = useMemo(() => {
+    if (!selectedMessage?.id) return 'Закрепить';
+    return isMessagePinned(selectedMessage.id) ? 'Открепить' : 'Закрепить';
+  }, [selectedMessage?.id, isMessagePinned]);
+
   const onOpenMessageMenu = useCallback((event, item) => {
     const x = event?.nativeEvent?.pageX ?? 0;
     const y = event?.nativeEvent?.pageY ?? 0;
@@ -598,7 +669,9 @@ export default function Chat({
     setDeletingIds,
     setDeleteConfirmVisible,
     setSelectedMessage,
-    chatSyncRef: vaultChatSyncRef });
+    chatSyncRef: vaultChatSyncRef,
+    unpinMessageIfMatches,
+  });
 
   const { executeClearHistory: executeClearHistoryCore } = useChatClearHistory({
     roomId,
@@ -607,6 +680,7 @@ export default function Chat({
     messagesRef,
     setMessages,
     chatSyncRef: vaultChatSyncRef,
+    unpinMessage,
   });
 
   const executeClearHistory = useCallback(
@@ -859,7 +933,7 @@ export default function Chat({
     chatRoomHeader != null &&
     typeof listPaddingTop === 'number' &&
     listPaddingTop > 0
-      ? listPaddingTop + CHAT_HEADER_TO_LIST_GAP_PX
+      ? listPaddingTop + CHAT_HEADER_TO_LIST_GAP_PX + (pinnedBarH > 0 ? pinnedBarH : 0)
       : listPaddingTop;
 
   const ariaComposerSurfaceProps = useMemo(
@@ -908,8 +982,14 @@ export default function Chat({
         onReplyToMessage={setReplyTarget}
         onEditMessage={startEditMessage}
         canEditSelectedMessage={canEditSelectedMessage}
-        onRequestDeleteConfirm={() => setDeleteConfirmVisible(true)}
+        onRequestDeleteConfirm={() => {
+          setMenuVisible(false);
+          setDeleteConfirmVisible(true);
+        }}
         onOpenImage={(uri) => setFullScreenImage(uri)}
+        onPinMessage={togglePinForMessage}
+        pinLabel={contextMenuPinLabel}
+        pinDisabled={pinDisabled}
         deleteConfirmVisible={deleteConfirmVisible}
         onCloseDeleteConfirm={closeDeleteConfirm}
         onDeleteForMe={deleteMessageForMe}
@@ -1107,6 +1187,27 @@ export default function Chat({
                 elevation: 49 }}
             >
               <AriaStateGauges state={ariaState} onHeightChange={setAriaGaugesH} />
+            </View>
+          ) : pinnedMessage ? (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: 'absolute',
+                top: headerOverlayH,
+                left: 0,
+                right: 0,
+                zIndex: 49,
+                elevation: 49 }}
+              onLayout={(e) => {
+                const h = e.nativeEvent.layout.height;
+                if (h > 0 && h !== pinnedBarH) setPinnedBarH(h);
+              }}
+            >
+              <ChatPinnedBar
+                message={pinnedMessage}
+                onPress={() => scrollToMessageById(pinnedMessage.id)}
+                onUnpin={unpinMessage}
+              />
             </View>
           ) : null}
         </>

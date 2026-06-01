@@ -26,6 +26,9 @@ export default function ChatOverlays({
   canEditSelectedMessage,
   onRequestDeleteConfirm,
   onOpenImage,
+  onPinMessage,
+  pinLabel,
+  pinDisabled,
   deleteConfirmVisible,
   onCloseDeleteConfirm,
   onDeleteForMe,
@@ -76,6 +79,9 @@ export default function ChatOverlays({
         canEditSelectedMessage={canEditSelectedMessage}
         onRequestDeleteConfirm={onRequestDeleteConfirm}
         onOpenImage={onOpenImage}
+        onPinMessage={onPinMessage}
+        pinLabel={pinLabel}
+        pinDisabled={pinDisabled}
       />
       <ChatDeleteMessageModal
         uiReady={uiReady}

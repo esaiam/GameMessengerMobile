@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import tw from 'twrnc';
 import SafeBlurView from './SafeBlurView';
 import { UserAvatar } from './UserAvatar';
+import { AvatarUnderGlassStack } from './avatarFisheyeLens';
 import { ArrowLeft, X, Copy, Forward, Trash2 } from '../icons/lucideIcons';
 import { V } from '../theme';
 import { fetchAriaState } from '../lib/aria';
@@ -206,7 +207,7 @@ export default function ChatRoomHeader({
           style={[
             StyleSheet.absoluteFillObject,
             {
-              backgroundColor: V.bgElevated,
+              backgroundColor: V.bgChatsScreen,
               opacity: HEADER_FROST_TINT_OPACITY }]}
         />
         <View
@@ -279,12 +280,17 @@ export default function ChatRoomHeader({
             >
             <View style={{ marginLeft: 8 }}>
               {isAriaHeader ? (
-                <Image
-                  source={require('../../assets/images/aria_avatar.png')}
-                  style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }}
-                  resizeMode="cover"
-                  accessibilityLabel="Ария"
-                />
+                <AvatarUnderGlassStack size={AVATAR_SIZE}>
+                  <Image
+                    source={require('../../assets/images/aria_avatar.png')}
+                    style={{
+                      width: AVATAR_SIZE,
+                      height: AVATAR_SIZE,
+                    }}
+                    resizeMode="cover"
+                    accessibilityLabel="Ария"
+                  />
+                </AvatarUnderGlassStack>
               ) : (
                 <UserAvatar name={title || 'Чат'} uri={null} size={AVATAR_SIZE} />
               )}

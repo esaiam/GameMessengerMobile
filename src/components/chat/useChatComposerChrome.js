@@ -11,7 +11,7 @@ import {
   cancelAnimation } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation, useKeyboardHandler } from 'react-native-keyboard-controller';
 import {
-  REPLY_TARGET_PREVIEW_H,
+  REPLY_TARGET_PREVIEW_OUTER_H,
   EMOJI_GIF_EXPANDED_VISIBLE_H } from './chatComposerConstants';
 import { REPLY_TARGET_ANIM_MS } from './replyTargetLayoutAnimation';
 import {
@@ -122,9 +122,9 @@ export default function useChatComposerChrome({
   const replyTargetAnimatedStyle = useAnimatedStyle(() => {
     const p = replyTargetProgress.value;
     return {
-      height: REPLY_TARGET_PREVIEW_H * p,
+      height: REPLY_TARGET_PREVIEW_OUTER_H * p,
       opacity: p,
-      transform: [{ translateY: (1 - p) * REPLY_TARGET_PREVIEW_H }] };
+      transform: [{ translateY: (1 - p) * REPLY_TARGET_PREVIEW_OUTER_H }] };
   });
 
   const emojiWobbleRotate = useRef(new Animated.Value(0)).current;

@@ -27,7 +27,9 @@ export default function useChatMessageMutations({
   setDeletingIds,
   setDeleteConfirmVisible,
   setSelectedMessage,
-  chatSyncRef }) {
+  chatSyncRef,
+  unpinMessageIfMatches,
+}) {
   const removeMessageFromState = useCallback(
     (messageId) => {
       setMessages((prev) => {
@@ -219,9 +221,10 @@ export default function useChatMessageMutations({
         next.delete(messageId);
         return next;
       });
+      await unpinMessageIfMatches?.(messageId);
       chatSyncRef?.current?.hideMessage?.(messageId);
     },
-    [isAriaChat, deleteAriaMessage, messages, nickname, peerName, popMessage, removeMessageFromState, roomId, setDeletingIds, chatSyncRef],
+    [isAriaChat, deleteAriaMessage, messages, nickname, peerName, popMessage, removeMessageFromState, roomId, setDeletingIds, chatSyncRef, unpinMessageIfMatches],
   );
 
   return {

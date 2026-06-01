@@ -56,7 +56,9 @@ export type MessageContextMenuProps = {
   onOpen?: () => void;
   onCopy: () => void;
   onForward: () => void;
-  onPin: () => void;
+  onPin?: () => void;
+  /** «Закрепить» или «Открепить» */
+  pinLabel?: string;
   onDelete: () => void;
   position: MessageContextMenuPosition;
 };
@@ -139,6 +141,7 @@ export default function MessageContextMenu({
   onCopy,
   onForward,
   onPin,
+  pinLabel = 'Закрепить',
   onDelete,
   position }: MessageContextMenuProps) {
   const [rendered, setRendered] = useState(false);
@@ -312,12 +315,16 @@ export default function MessageContextMenu({
               onPress={() => run(onForward)}
             />
             <View style={styles.rowDivider} />
-            <MenuRow
-              icon={<Pin {...ICON_PROPS} />}
-              label="Закрепить"
-              onPress={() => run(onPin)}
-            />
-            <View style={styles.rowDivider} />
+            {onPin ? (
+              <>
+                <MenuRow
+                  icon={<Pin {...ICON_PROPS} />}
+                  label={pinLabel}
+                  onPress={() => run(onPin)}
+                />
+                <View style={styles.rowDivider} />
+              </>
+            ) : null}
             <MenuRow
               icon={<Trash2 size={20} color={V.dangerMuted} strokeWidth={1.5} />}
               label="Удалить"

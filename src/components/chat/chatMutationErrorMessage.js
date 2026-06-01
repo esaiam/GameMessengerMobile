@@ -16,7 +16,24 @@ export function chatMutationErrorMessage(error, fallback) {
   if (/Failed to fetch|Network request failed|timeout/i.test(msg)) {
     return 'Нет связи с сервером. Проверь интернет и попробуй ещё раз.';
   }
-  if (/edited_at|schema cache|PGRST204/i.test(msg)) {
+  if (
+    (code === 'PGRST204' && /pinned_message_id/i.test(msg)) ||
+    /Could not find the ['"]pinned_message_id['"] column/i.test(msg) ||
+    /column rooms\.pinned_message_id does not exist/i.test(msg)
+  ) {
+    return 'На сервере нет колонки pinned_message_id. В Supabase SQL Editor выполни миграцию docs/migrations/20260531_rooms_pinned_message.sql и NOTIFY pgrst, \'reload schema\';';
+  }
+  if (
+    code === '23503' ||
+    /rooms_pinned_message_id_fkey|foreign key constraint.*pinned_message_id/i.test(msg)
+  ) {
+    return 'Не удалось закрепить: сообщение не найдено на сервере. Дождись отправки или выбери другое сообщение.';
+  }
+  if (
+    (code === 'PGRST204' && /edited_at/i.test(msg)) ||
+    /Could not find the ['"]edited_at['"] column/i.test(msg) ||
+    /column messages\.edited_at does not exist/i.test(msg)
+  ) {
     return 'На сервере нет колонки edited_at. В Supabase SQL Editor выполни миграцию docs/migrations/20260530_messages_edited_at.sql и NOTIFY pgrst, \'reload schema\';';
   }
 

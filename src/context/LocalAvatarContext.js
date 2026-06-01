@@ -5,6 +5,20 @@ import { File, Paths } from 'expo-file-system';
 const AVATAR_STORAGE_KEY = '@vault_local_avatar_path';
 const AVATAR_FILENAME = 'profile_avatar.jpg';
 
+/** Путь без ?v= — в AsyncStorage только file URI. */
+function stripCacheQuery(uri) {
+  if (!uri) return null;
+  const q = uri.indexOf('?');
+  return q === -1 ? uri : uri.slice(0, q);
+}
+
+/** RN Image кэширует по uri; при перезаписи того же файла нужен bust. */
+function withCacheBust(path, bust) {
+  const base = stripCacheQuery(path);
+  if (!base) return null;
+  return `${base}?v=${bust}`;
+}
+
 const LocalAvatarContext = createContext(null);
 
 export function LocalAvatarProvider({ children }) {
@@ -13,7 +27,7 @@ export function LocalAvatarProvider({ children }) {
 
   const refreshAvatar = useCallback(async () => {
     try {
-      const stored = await AsyncStorage.getItem(AVATAR_STORAGE_KEY);
+      const stored = stripCacheQuery(await AsyncStorage.getItem(AVATAR_STORAGE_KEY));
       if (!stored) {
         setAvatarUri(null);
         return;
@@ -24,7 +38,7 @@ export function LocalAvatarProvider({ children }) {
         setAvatarUri(null);
         return;
       }
-      setAvatarUri(stored);
+      setAvatarUri(withCacheBust(stored, 0));
     } catch {
       setAvatarUri(null);
     }
@@ -47,12 +61,13 @@ export function LocalAvatarProvider({ children }) {
     const destFile = new File(Paths.document, AVATAR_FILENAME);
     try {
       if (destFile.exists) {
-        destFile.delete();
+        await destFile.delete();
       }
       const srcFile = new File(sourceUri);
-      srcFile.copy(destFile);
-      await AsyncStorage.setItem(AVATAR_STORAGE_KEY, destFile.uri);
-      setAvatarUri(destFile.uri);
+      await srcFile.copy(destFile);
+      const path = destFile.uri;
+      await AsyncStorage.setItem(AVATAR_STORAGE_KEY, path);
+      setAvatarUri(withCacheBust(path, Date.now()));
     } catch {
       throw new Error('SAVE_FAILED');
     }
@@ -60,11 +75,11 @@ export function LocalAvatarProvider({ children }) {
 
   const removeAvatar = useCallback(async () => {
     try {
-      const stored = await AsyncStorage.getItem(AVATAR_STORAGE_KEY);
+      const stored = stripCacheQuery(await AsyncStorage.getItem(AVATAR_STORAGE_KEY));
       if (stored) {
         const file = new File(stored);
         if (file.exists) {
-          file.delete();
+          await file.delete();
         }
       }
     } catch {

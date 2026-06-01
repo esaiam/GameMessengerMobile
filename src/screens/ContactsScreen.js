@@ -13,6 +13,7 @@ import {
 } from '../hooks/useChatsSearchReveal';
 import { useChatsScreenPagerScroll } from '../hooks/useChatsScreenPagerScroll';
 import ContactsCollapsibleSearchField from '../components/contacts/ContactsCollapsibleSearchField';
+import ContactsInviteFab from '../components/contacts/ContactsInviteFab';
 import ContactsListRow from '../components/contacts/ContactsListRow';
 import ContactsScreenHeader from '../components/contacts/ContactsScreenHeader';
 import ContactsScreenFlatList, {
@@ -247,8 +248,11 @@ export default function ContactsScreen({ route, navigation }) {
               onChangeQuery={setQ}
               onFocus={() => setSearchFocused(true)}
               onBlur={onSearchBlur}
-              onOpenInvite={openInviteFriends}
             />
+          </View>
+
+          <View style={styles.fabOverlay} pointerEvents="box-none">
+            <ContactsInviteFab onPress={openInviteFriends} />
           </View>
 
           <View style={styles.headerOverlay} pointerEvents="box-none">
@@ -282,5 +286,9 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 2,
     backgroundColor: 'transparent',
+  },
+  fabOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 3,
   },
 });

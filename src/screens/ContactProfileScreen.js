@@ -330,6 +330,7 @@ export default function ContactProfileScreen({ route, navigation }) {
     statusStartY,
     avatarWrapStyle,
     avatarGlowStyle,
+    avatarGlowFillStyle,
     avatarGlowRingStyle,
     avatarGlowRingSoftStyle,
     nameStyle,
@@ -759,6 +760,10 @@ export default function ContactProfileScreen({ route, navigation }) {
             />
             <Animated.View style={[styles.avatarGlowRing, avatarGlowStyle]}>
               <UserAvatar name={peerName || '?'} uri={null} size={PROFILE_AVATAR_SIZE} />
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.avatarGlowFill, avatarGlowFillStyle]}
+              />
             </Animated.View>
           </View>
         </Animated.View>
@@ -1018,6 +1023,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: PROFILE_AVATAR_SIZE / 2,
     overflow: 'hidden',
+  },
+  avatarGlowFill: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: PROFILE_AVATAR_SIZE / 2,
+    backgroundColor: V.accentSage,
   },
   nameFloat: {
     position: 'absolute',

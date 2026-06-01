@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, TouchableOpacity } from 'react-native';
+import { Image, TouchableOpacity, View } from 'react-native';
+import { AvatarUnderGlassStack } from './avatarFisheyeLens';
 import { VaultEmptyAvatar } from './VaultAvatarShell';
 
 /**
@@ -7,11 +8,14 @@ import { VaultEmptyAvatar } from './VaultAvatarShell';
  */
 export function UserAvatar({ name, uri, size = 56, onPress, style }) {
   const inner = uri ? (
-    <Image
-      source={{ uri }}
-      style={[{ width: size, height: size, borderRadius: size / 2 }, style]}
-      resizeMode="cover"
-    />
+    <AvatarUnderGlassStack size={size}>
+      <Image
+        key={uri}
+        source={{ uri }}
+        style={[{ width: size, height: size }, style]}
+        resizeMode="cover"
+      />
+    </AvatarUnderGlassStack>
   ) : (
     <VaultEmptyAvatar name={name} size={size} style={style} />
   );

@@ -1,93 +1,188 @@
-import React from 'react';
-import { Modal, Pressable, View, Text, StyleSheet } from 'react-native';
-import tw from 'twrnc';
-import { Check, Users } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, View, Text, StyleSheet, Platform } from 'react-native';
+import { Check } from '../../icons/lucideIcons';
 import { V } from '../../theme';
+import ProfileGlassModal from '../ProfileGlassModal';
 
-/** Подтверждение удаления: для себя / для всех */
+/** Подтверждение удаления сообщения — тот же паттерн, что ChatClearHistoryConfirmModal. */
 export default function ChatDeleteMessageModal({
   uiReady,
   visible,
   onClose,
   messageId,
   onDeleteForMe,
-  onDeleteForAll }) {
+  onDeleteForAll,
+  confirmDisabled = false,
+}) {
+  const [deleteForEveryone, setDeleteForEveryone] = useState(false);
+
+  useEffect(() => {
+    if (visible) setDeleteForEveryone(false);
+  }, [visible]);
+
   if (!uiReady) return null;
 
+  const handleConfirm = async () => {
+    if (messageId == null || confirmDisabled) return;
+    onClose();
+    if (deleteForEveryone) await onDeleteForAll(messageId);
+    else await onDeleteForMe(messageId);
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <ProfileGlassModal
+      visible={visible}
+      onClose={confirmDisabled ? () => {} : onClose}
+      keyboardAvoiding={false}
+    >
+      <View style={styles.header}>
+        <Text style={styles.title}>Удалить сообщение?</Text>
+        <Text style={styles.description}>
+          Сообщение исчезнет из чата согласно выбранному варианту.
+        </Text>
+      </View>
+
       <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Закрыть"
-        style={[tw`flex-1 justify-center items-center px-6`, { backgroundColor: 'rgba(0,0,0,0.225)' }]}
-        onPress={onClose}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: deleteForEveryone }}
+        accessibilityLabel="Удалить у всех"
+        onPress={confirmDisabled ? undefined : () => setDeleteForEveryone((v) => !v)}
+        style={({ pressed }) => [
+          styles.checkboxRow,
+          !confirmDisabled && pressed && { backgroundColor: V.hoverBg },
+        ]}
       >
-        <Pressable
-          onPress={() => {}}
+        <View
           style={[
-            tw`w-full max-w-sm rounded-[12px] overflow-hidden`,
-            {
-              backgroundColor: V.bgElevated,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: V.border }]}
+            styles.checkboxBox,
+            { backgroundColor: deleteForEveryone ? V.sageSubtle : 'transparent' },
+          ]}
         >
-          <View style={tw`px-5 pt-5 pb-2`}>
-            <Text style={[tw`text-[16px]`, { color: V.textPrimary, fontWeight: '500' }]}>
-              Удалить сообщение?
-            </Text>
-            <Text style={[tw`text-[13px] mt-2`, { color: V.textSecondary, fontWeight: '400' }]}>
-              Выберите, для кого удалить сообщение.
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Удалить только у себя"
-            onPress={async () => {
-              if (messageId == null) return;
-              onClose();
-              await onDeleteForMe(messageId);
-            }}
-            style={({ pressed }) => [
-              tw`flex-row items-center px-5 py-3.5`,
-              pressed && { backgroundColor: V.hoverBg }]}
-          >
-            <Check size={20} color={V.accentSage} strokeWidth={1.5} />
-            <Text style={[tw`text-[15px] ml-3 flex-1`, { color: V.textPrimary, fontWeight: '400' }]}>
-              Только у меня
-            </Text>
-          </Pressable>
-          <View style={[tw`h-[0.5px] mx-5`, { backgroundColor: V.border }]} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Удалить у всех в чате"
-            onPress={async () => {
-              if (messageId == null) return;
-              onClose();
-              await onDeleteForAll(messageId);
-            }}
-            style={({ pressed }) => [
-              tw`flex-row items-center px-5 py-3.5`,
-              pressed && { backgroundColor: V.hoverBg }]}
-          >
-            <Users size={20} color="#E05A5A" strokeWidth={1.5} />
-            <Text style={[tw`text-[15px] ml-3 flex-1`, { color: '#E05A5A', fontWeight: '400' }]}>
-              Удалить у собеседника тоже
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Отмена"
-            onPress={onClose}
-            style={({ pressed }) => [
-              tw`items-center py-3.5 mb-1 mx-3 rounded-[10px]`,
-              pressed && { backgroundColor: V.hoverBg }]}
-          >
-            <Text style={[tw`text-[15px]`, { color: V.textSecondary, fontWeight: '400' }]}>
-              Отмена
-            </Text>
-          </Pressable>
-        </Pressable>
+          {deleteForEveryone ? <Check size={14} color={V.accentSage} strokeWidth={1.5} /> : null}
+        </View>
+        <Text
+          style={[
+            styles.checkboxText,
+            Platform.OS === 'android' ? { includeFontPadding: false } : null,
+          ]}
+        >
+          Удалить у всех
+        </Text>
       </Pressable>
-    </Modal>
+
+      <View style={styles.divider} />
+
+      <View style={styles.actionsRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Отмена"
+          disabled={confirmDisabled}
+          onPress={confirmDisabled ? undefined : onClose}
+          hitSlop={10}
+          style={({ pressed }) => [
+            styles.actionBtn,
+            confirmDisabled ? styles.actionDisabled : null,
+            !confirmDisabled && pressed ? styles.actionPressed : null,
+          ]}
+        >
+          <Text style={styles.actionCancelText}>Отмена</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Удалить"
+          disabled={confirmDisabled}
+          onPress={confirmDisabled ? undefined : handleConfirm}
+          hitSlop={10}
+          style={({ pressed }) => [
+            styles.actionBtn,
+            confirmDisabled ? styles.actionDisabled : null,
+            !confirmDisabled && pressed ? styles.actionPressed : null,
+          ]}
+        >
+          <Text style={styles.actionDangerText}>Удалить</Text>
+        </Pressable>
+      </View>
+    </ProfileGlassModal>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    paddingTop: 4,
+    paddingHorizontal: 2,
+    paddingBottom: 6,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: V.textPrimary,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  description: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: V.textSecondary,
+    textAlign: 'center',
+    lineHeight: 17,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    marginTop: 10,
+  },
+  checkboxBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxText: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 14,
+    fontWeight: '400',
+    color: V.textPrimary,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: V.border,
+    marginTop: 10,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 14,
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  actionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+  },
+  actionPressed: {
+    backgroundColor: V.hoverBg,
+  },
+  actionDisabled: {
+    opacity: 0.45,
+  },
+  actionCancelText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: V.textSecondary,
+  },
+  actionDangerText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: V.dangerMuted,
+  },
+});
