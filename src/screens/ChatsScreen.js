@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import Animated from 'react-native-reanimated';
+import Animated, { useSharedValue } from 'react-native-reanimated';
 import tw from 'twrnc';
 import { useAndroidTabOverscroll } from '../hooks/useAndroidTabOverscroll';
 import { useMainTabsNavigationOptional } from '../context/MainTabsNavigationContext';
@@ -15,9 +15,11 @@ import {
   CHATS_SEARCH_BOTTOM_SPACING_PX,
 } from '../hooks/useChatsSearchReveal';
 import { useChatsScreenPagerScroll } from '../hooks/useChatsScreenPagerScroll';
+import { useAriaOverscroll } from '../hooks/useAriaOverscroll';
 import ChatsListRow from '../components/chats/ChatsListRow';
 import ChatsHeaderGlow from '../components/chats/ChatsHeaderGlow';
 import ChatsScreenHeader from '../components/chats/ChatsScreenHeader';
+import AriaPanelOverlay from '../components/chats/AriaPanelOverlay';
 import ChatsCollapsibleSearchField from '../components/chats/ChatsCollapsibleSearchField';
 import ChatsScreenFlatList from '../components/chats/ChatsScreenFlatList';
 import { clearPreviewCache } from './chats/chatsPreviewCache';
@@ -62,6 +64,13 @@ export default function ChatsScreen({ route, navigation }) {
   const acquirePagerLock = mainTabsNav?.acquirePagerInteractionLock;
   const releasePagerLock = mainTabsNav?.releasePagerInteractionLock;
   const resetPagerLock = mainTabsNav?.resetPagerInteractionLock;
+  const acquireTabBarSuppress = mainTabsNav?.acquireTabBarSuppress;
+  const releaseTabBarSuppress = mainTabsNav?.releaseTabBarSuppress;
+
+  const ariaPullReleasePx = useSharedValue(0);
+  const ariaPullReleaseTick = useSharedValue(0);
+  const ariaCommittedSv = useSharedValue(0);
+  const ariaPullProgress = useSharedValue(0);
 
   const {
     SEARCH_FIELD_H,
@@ -80,7 +89,33 @@ export default function ChatsScreen({ route, navigation }) {
     iconStyle,
     listScrollAnimatedProps,
     listTopInsetStyle,
-  } = useChatsSearchReveal(q, searchFocused, headerLayout.minHeight);
+  } = useChatsSearchReveal(
+    q,
+    searchFocused,
+    headerLayout.minHeight,
+    ariaPullReleasePx,
+    ariaPullReleaseTick,
+    ariaCommittedSv,
+    ariaPullProgress,
+  );
+
+  const {
+    ariaGlowIntensity,
+    ariaVisible,
+    openAriaPanel,
+    closeAriaPanel,
+  } = useAriaOverscroll({
+    topPullPx,
+    searchDragActive,
+    ariaPullReleasePx,
+    ariaPullReleaseTick,
+    ariaCommittedSv,
+    ariaPullProgress,
+    acquirePagerLock,
+    releasePagerLock,
+    acquireTabBarSuppress,
+    releaseTabBarSuppress,
+  });
 
   const {
     onListScrollBeginDrag,
@@ -201,7 +236,10 @@ export default function ChatsScreen({ route, navigation }) {
   return (
     <TabBackground backgroundColor={V.bgChatsScreen}>
       <GestureDetector gesture={chatsGesture}>
-        <Animated.View style={[tw`flex-1`, topPullBounceStyle]}>
+        <Animated.View
+          style={[tw`flex-1`, topPullBounceStyle]}
+          pointerEvents={ariaVisible ? 'none' : 'auto'}
+        >
           <Animated.View
             style={[StyleSheet.absoluteFillObject, styles.listLayer, bottomBounceStyle]}
           >
@@ -228,18 +266,6 @@ export default function ChatsScreen({ route, navigation }) {
           </Animated.View>
 
           <View
-            style={[styles.headerGlowOverlay, headerGlowShellStyle]}
-            pointerEvents="none"
-          >
-            <ChatsHeaderGlow
-              topPullPx={topPullPx}
-              listScrollY={listScrollY}
-              searchDragActive={searchDragActive}
-              androidOverscrollY={androidOverscrollY}
-            />
-          </View>
-
-          <View
             style={[styles.searchOverlay, { top: headerLayout.minHeight }]}
             pointerEvents="box-none"
           >
@@ -256,21 +282,43 @@ export default function ChatsScreen({ route, navigation }) {
               onBlur={onSearchBlur}
             />
           </View>
-
-          <View style={[styles.headerOverlay, headerShellStyle]} pointerEvents="box-none">
-            <ChatsScreenHeader
-              blurExtendTop={headerLayout.blurExtendTop}
-              containerStyle={headerLayout.containerStyle}
-              selectionMode={selectionMode}
-              selectedCount={selectedRoomIds.size}
-              onExitSelection={exitSelectionMode}
-              onOpenDeleteConfirm={openDeleteConfirm}
-              searchIconStyle={iconStyle}
-              onOpenSearch={onOpenSearch}
-            />
-          </View>
         </Animated.View>
       </GestureDetector>
+
+      <AriaPanelOverlay
+        pullProgress={ariaPullProgress}
+        committedSv={ariaCommittedSv}
+        committed={ariaVisible}
+        onClose={closeAriaPanel}
+        headerMinHeight={headerLayout.minHeight}
+      />
+
+      <View
+        style={[styles.headerGlowOverlay, headerGlowShellStyle]}
+        pointerEvents="none"
+      >
+        <ChatsHeaderGlow
+          topPullPx={topPullPx}
+          listScrollY={listScrollY}
+          searchDragActive={searchDragActive}
+          androidOverscrollY={androidOverscrollY}
+        />
+      </View>
+
+      <View style={[styles.headerOverlay, headerShellStyle]} pointerEvents="box-none">
+        <ChatsScreenHeader
+          blurExtendTop={headerLayout.blurExtendTop}
+          containerStyle={headerLayout.containerStyle}
+          selectionMode={selectionMode}
+          selectedCount={selectedRoomIds.size}
+          onExitSelection={exitSelectionMode}
+          onOpenDeleteConfirm={openDeleteConfirm}
+          searchIconStyle={iconStyle}
+          onOpenSearch={onOpenSearch}
+          ariaGlowIntensity={ariaGlowIntensity}
+          onOpenAria={openAriaPanel}
+        />
+      </View>
 
       <ChatClearHistoryConfirmModal
         uiReady
@@ -294,25 +342,26 @@ const styles = StyleSheet.create({
   listLayer: {
     zIndex: 0,
   },
-  headerGlowOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 1,
-    overflow: 'hidden',
-  },
   searchOverlay: {
     position: 'absolute',
     left: 0,
     right: 0,
-    zIndex: 1,
+    zIndex: 2,
     backgroundColor: V.bgChatsScreen,
+  },
+  headerGlowOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 8,
+    overflow: 'hidden',
   },
   headerOverlay: {
     position: 'absolute',
     left: 0,
     right: 0,
-    zIndex: 2,
+    zIndex: 10,
+    elevation: 10,
     backgroundColor: 'transparent',
     overflow: 'visible',
   },

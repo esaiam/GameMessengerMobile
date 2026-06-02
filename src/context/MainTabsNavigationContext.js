@@ -44,9 +44,16 @@ export function MainTabsNavigationProvider({ children }) {
   const pagerInteractionLockCountRef = useRef(0);
   const pagerInteractionLockedRef = useRef(false);
   const pagerLockListenerRef = useRef(null);
+  const tabBarSuppressCountRef = useRef(0);
+  const tabBarSuppressedRef = useRef(false);
+  const tabBarSuppressListenerRef = useRef(null);
 
   const notifyPagerLockChanged = useCallback(() => {
     pagerLockListenerRef.current?.(pagerInteractionLockedRef.current);
+  }, []);
+
+  const notifyTabBarSuppressChanged = useCallback(() => {
+    tabBarSuppressListenerRef.current?.(tabBarSuppressedRef.current);
   }, []);
 
   const acquirePagerInteractionLock = useCallback(() => {
@@ -77,6 +84,42 @@ export function MainTabsNavigationProvider({ children }) {
       notifyPagerLockChanged();
     }
   }, [notifyPagerLockChanged]);
+
+  const acquireTabBarSuppress = useCallback(() => {
+    tabBarSuppressCountRef.current += 1;
+    const next = tabBarSuppressCountRef.current > 0;
+    if (next !== tabBarSuppressedRef.current) {
+      tabBarSuppressedRef.current = next;
+      notifyTabBarSuppressChanged();
+    }
+  }, [notifyTabBarSuppressChanged]);
+
+  const releaseTabBarSuppress = useCallback(() => {
+    tabBarSuppressCountRef.current = Math.max(0, tabBarSuppressCountRef.current - 1);
+    const next = tabBarSuppressCountRef.current > 0;
+    if (next !== tabBarSuppressedRef.current) {
+      tabBarSuppressedRef.current = next;
+      notifyTabBarSuppressChanged();
+    }
+  }, [notifyTabBarSuppressChanged]);
+
+  const resetTabBarSuppress = useCallback(() => {
+    tabBarSuppressCountRef.current = 0;
+    if (tabBarSuppressedRef.current) {
+      tabBarSuppressedRef.current = false;
+      notifyTabBarSuppressChanged();
+    }
+  }, [notifyTabBarSuppressChanged]);
+
+  const registerTabBarSuppressListener = useCallback((listener) => {
+    tabBarSuppressListenerRef.current = listener ?? null;
+    listener?.(tabBarSuppressedRef.current);
+    return () => {
+      if (tabBarSuppressListenerRef.current === listener) {
+        tabBarSuppressListenerRef.current = null;
+      }
+    };
+  }, []);
 
   const registerPagerInteractionLockListener = useCallback((listener) => {
     pagerLockListenerRef.current = listener ?? null;
@@ -151,6 +194,10 @@ export function MainTabsNavigationProvider({ children }) {
       releasePagerInteractionLock,
       resetPagerInteractionLock,
       registerPagerInteractionLockListener,
+      acquireTabBarSuppress,
+      releaseTabBarSuppress,
+      resetTabBarSuppress,
+      registerTabBarSuppressListener,
     }),
     [
       registerMainTabsHandlers,
@@ -164,6 +211,10 @@ export function MainTabsNavigationProvider({ children }) {
       releasePagerInteractionLock,
       resetPagerInteractionLock,
       registerPagerInteractionLockListener,
+      acquireTabBarSuppress,
+      releaseTabBarSuppress,
+      resetTabBarSuppress,
+      registerTabBarSuppressListener,
     ],
   );
 

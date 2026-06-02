@@ -15,6 +15,7 @@ import {
 
 import { shouldFailHorizontalPan, VERTICAL_PAN_FAIL_OFFSET_X } from '../lib/verticalPanAxis';
 import { SEARCH_FIELD_LAYOUT } from '../theme';
+import { cappedRubberBandPullPx, computeAriaPullProgress } from './ariaPullProgress';
 import { tabOverscrollRubberBand } from './useAndroidTabOverscroll';
 
 const SPRING = { damping: 22, stiffness: 240, mass: 0.85 };
@@ -25,7 +26,7 @@ const SEARCH_DRAG_MIN_DY_PX = 4;
 const POINTER_OPEN_THRESHOLD = 0.06;
 const POINTER_CLOSE_THRESHOLD = 0.02;
 /** Сырой pull (px) после полного раскрытия поиска, до rubber-band всего экрана. */
-const TOP_PULL_CAP_PX = 200;
+const TOP_PULL_CAP_PX = 240;
 
 function snapExpandedTo(expanded, target) {
   'worklet';
@@ -108,7 +109,15 @@ export const CHATS_SEARCH_BOTTOM_SPACING_PX = 20;
  * После полного раскрытия — rubber-band шапки, поиска и списка вместе.
  * pointerEvents / scrollEnabled — без runOnJS на каждый кадр (Android jank).
  */
-export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
+export function useChatsSearchReveal(
+  q,
+  searchFocused,
+  headerMinHeightPx = 0,
+  ariaPullReleasePx,
+  ariaPullReleaseTick,
+  ariaCommittedSv,
+  ariaPullProgress,
+) {
   const SEARCH_FIELD_H = SEARCH_FIELD_LAYOUT.chatsHeight;
   const SEARCH_REVEAL_RANGE_PX =
     CHATS_SEARCH_HEADER_GAP_PX + SEARCH_FIELD_H + CHATS_SEARCH_BOTTOM_SPACING_PX;
@@ -228,6 +237,12 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
       })
       .onTouchesMove((e, state) => {
         'worklet';
+        if (ariaCommittedSv?.value > 0.5) {
+          if (!isActivated.value) {
+            state.fail();
+          }
+          return;
+        }
         if (locked.value) {
           if (!isActivated.value) {
             state.fail();
@@ -294,9 +309,20 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
           e.translationY,
           SEARCH_REVEAL_RANGE_PX,
         );
+        if (ariaPullProgress && ariaCommittedSv.value <= 0.5) {
+          cancelAnimation(ariaPullProgress);
+          ariaPullProgress.value = computeAriaPullProgress(topPullPx.value);
+        }
       })
       .onEnd(() => {
         'worklet';
+        const releasePullPx = topPullPx.value;
+        searchDragActive.value = false;
+        runOnJS(setSearchDragActiveJs)(false);
+        if (ariaPullReleasePx && ariaPullReleaseTick) {
+          ariaPullReleasePx.value = releasePullPx;
+          ariaPullReleaseTick.value += 1;
+        }
         snapTopPullTo(topPullPx, 0);
         if (locked.value) {
           expanded.value = 1;
@@ -334,6 +360,10 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
     searchDragActive,
     setListScrollEnabledIfChanged,
     setSearchDragActiveJs,
+    ariaPullReleasePx,
+    ariaPullReleaseTick,
+    ariaCommittedSv,
+    ariaPullProgress,
   ]);
 
   const searchBarWrapStyle = useAnimatedStyle(() => ({
@@ -369,7 +399,11 @@ export function useChatsSearchReveal(q, searchFocused, headerMinHeightPx = 0) {
   }));
 
   const topPullBounceStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: tabOverscrollRubberBand(topPullPx.value) }],
+    transform: [
+      {
+        translateY: tabOverscrollRubberBand(cappedRubberBandPullPx(topPullPx.value)),
+      },
+    ],
   }));
 
   const listTopInsetStyle = useAnimatedStyle(() => ({

@@ -1,8 +1,8 @@
-import React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useRef } from 'react';
+import { Animated as RNAnimated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import tw from 'twrnc';
-import { Search, Trash2 } from '../../icons/lucideIcons';
+import { Search, Sparkles, Trash2 } from '../../icons/lucideIcons';
 import SafeBlurView from '../SafeBlurView';
 import { V } from '../../theme';
 
@@ -10,6 +10,11 @@ const CHATS_HEADER_BLUR_INTENSITY_IOS = 100;
 const CHATS_HEADER_BLUR_INTENSITY_ANDROID = 60;
 /** Тинт поверх blur: ~10% — свечение под шапкой читается сильнее */
 const CHATS_HEADER_TINT_OPACITY = 0.1;
+const ARIA_ICON_SIZE = 18;
+const ARIA_GLOW_CIRCLE_SIZE = 32;
+const ARIA_SEARCH_ICON_GAP = 16;
+const ARIA_GLOW_SAGE = 'rgba(90,158,154,1)';
+const ARIA_GLOW_CIRCLE_BG = 'rgba(90,158,154,0.15)';
 
 function headerBackdropStyle(blurExtendTop) {
   if (!blurExtendTop) {
@@ -33,7 +38,19 @@ export default function ChatsScreenHeader({
   onOpenDeleteConfirm,
   searchIconStyle,
   onOpenSearch,
+  ariaGlowIntensity,
+  onOpenAria,
 }) {
+  const defaultAriaGlowIntensity = useRef(new RNAnimated.Value(0)).current;
+  const glowIntensity = ariaGlowIntensity ?? defaultAriaGlowIntensity;
+  const AnimatedSparkles = useMemo(
+    () => RNAnimated.createAnimatedComponent(Sparkles),
+    [],
+  );
+  const ariaIconColor = glowIntensity.interpolate({
+    inputRange: [0, 1],
+    outputRange: [V.textMuted, ARIA_GLOW_SAGE],
+  });
   const backdropStyle = headerBackdropStyle(blurExtendTop);
 
   return (
@@ -91,16 +108,42 @@ export default function ChatsScreenHeader({
             </Text>
             <Text style={styles.subtitle}>SECURE SPACE</Text>
           </View>
-          <Animated.View style={searchIconStyle}>
+          <View style={styles.headerTrailing}>
             <TouchableOpacity
-              onPress={onOpenSearch}
+              onPress={onOpenAria}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
-              accessibilityLabel="Поиск"
+              accessibilityLabel="Aria"
+              style={styles.ariaIconButton}
             >
-              <Search size={18} strokeWidth={1.5} color={V.textMuted} />
+              <View style={styles.ariaIconShell}>
+                <RNAnimated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.ariaGlowCircle,
+                    { opacity: glowIntensity },
+                  ]}
+                />
+                <RNAnimated.View style={styles.ariaIconWrap}>
+                  <AnimatedSparkles
+                    size={ARIA_ICON_SIZE}
+                    strokeWidth={1.5}
+                    color={ariaIconColor}
+                  />
+                </RNAnimated.View>
+              </View>
             </TouchableOpacity>
-          </Animated.View>
+            <Animated.View style={searchIconStyle}>
+              <TouchableOpacity
+                onPress={onOpenSearch}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Поиск"
+              >
+                <Search size={18} strokeWidth={1.5} color={V.textMuted} />
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
         </>
       )}
     </View>
@@ -133,5 +176,27 @@ const styles = StyleSheet.create({
     letterSpacing: 0.12 * 9,
     color: V.accentSage,
     opacity: 0.6,
+  },
+  headerTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ariaIconButton: {
+    marginRight: ARIA_SEARCH_ICON_GAP,
+  },
+  ariaIconShell: {
+    width: ARIA_GLOW_CIRCLE_SIZE,
+    height: ARIA_GLOW_CIRCLE_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ariaGlowCircle: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: ARIA_GLOW_CIRCLE_BG,
+    borderRadius: ARIA_GLOW_CIRCLE_SIZE / 2,
+  },
+  ariaIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

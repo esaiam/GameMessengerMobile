@@ -52,6 +52,10 @@ const TAB_BAR_VISIBILITY_ANIMATED_ON = new Set([
   'Storage',
 ]);
 
+/** Длительность slide таб-бара (`GlassTabBar` T_VISIBILITY) + запас на возврат после Aria */
+const TAB_BAR_SLIDE_MS = 240;
+const TAB_BAR_SLIDE_RELEASE_MS = TAB_BAR_SLIDE_MS + 40;
+
 function ChatsStackNavigator({ initialParams }) {
   return (
     <ChatsStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 200 }}>
@@ -131,13 +135,35 @@ export function MainTabs({ navigation, route }) {
     setPagerNativeScrollEnabled,
     pagerNativeScrollEnabled,
     registerPagerInteractionLockListener,
+    registerTabBarSuppressListener,
   } = useMainTabsNavigation();
 
   const [pagerInteractionLocked, setPagerInteractionLocked] = useState(false);
+  const [tabBarSuppressed, setTabBarSuppressed] = useState(false);
+  const [tabBarSuppressAnimated, setTabBarSuppressAnimated] = useState(false);
 
   useEffect(() => registerPagerInteractionLockListener(setPagerInteractionLocked), [
     registerPagerInteractionLockListener,
   ]);
+
+  useEffect(() => {
+    return registerTabBarSuppressListener((suppressed) => {
+      setTabBarSuppressed(suppressed);
+      if (suppressed) {
+        setTabBarSuppressAnimated(true);
+      }
+    });
+  }, [registerTabBarSuppressListener]);
+
+  useEffect(() => {
+    if (tabBarSuppressed || !tabBarSuppressAnimated) {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setTabBarSuppressAnimated(false);
+    }, TAB_BAR_SLIDE_RELEASE_MS);
+    return () => clearTimeout(timer);
+  }, [tabBarSuppressed, tabBarSuppressAnimated]);
 
   const pagerScrollEnabled = pagerNativeScrollEnabled && !pagerInteractionLocked;
 
@@ -220,8 +246,8 @@ export function MainTabs({ navigation, route }) {
           activeIndex={activeIndex}
           tabs={TABS}
           onTabPress={handleTabPress}
-          visible={tabBarVisible}
-          visibilityAnimated={tabBarVisibilityAnimated}
+          visible={tabBarVisible && !tabBarSuppressed}
+          visibilityAnimated={tabBarVisibilityAnimated || tabBarSuppressAnimated}
         />
       </View>
   );
