@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import {
+  Keyboard,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -13,6 +20,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { ARIA_SNAP_OPEN_THRESHOLD } from '../../hooks/ariaPullProgress';
 import { Mic, Send } from '../../icons/lucideIcons';
 import { V } from '../../theme';
@@ -38,6 +46,8 @@ const CURTAIN_VISIBLE_FROM_PX = 28;
 // Closing should be easier than opening: small upward flick should dismiss.
 const DISMISS_CLOSE_THRESHOLD = 0.78;
 const DISMISS_CLOSE_VELOCITY_Y = -900;
+/** keyboardHeightLib < -threshold → KB open (same sign as chat composer). */
+const KB_OPEN_THRESHOLD_PX = 50;
 
 function CurtainNoise() {
   return (
@@ -85,10 +95,12 @@ export default function AriaPanelOverlay({
   const curtainMaxHeightSv = useSharedValue(curtainMaxHeight);
 
   const [draft, setDraft] = useState('');
+  const inputRef = useRef(null);
   const wasCommittedRef = useRef(false);
 
   const inputExpand = useSharedValue(0);
   const dismissStartProgress = useSharedValue(0);
+  const { height: keyboardHeightLib } = useReanimatedKeyboardAnimation();
 
   useEffect(() => {
     curtainMaxHeightSv.value = curtainMaxHeight;
@@ -97,6 +109,11 @@ export default function AriaPanelOverlay({
   const requestClose = useCallback(() => {
     onClose?.();
   }, [onClose]);
+
+  const dismissKeyboard = useCallback(() => {
+    inputRef.current?.blur();
+    Keyboard.dismiss();
+  }, []);
 
   useEffect(() => {
     if (committed) {
@@ -157,6 +174,9 @@ export default function AriaPanelOverlay({
         if (committedSv.value <= 0.5) {
           return;
         }
+        if (keyboardHeightLib.value < -KB_OPEN_THRESHOLD_PX) {
+          return;
+        }
         const maxH = curtainMaxHeightSv.value;
         if (maxH <= 0) {
           return;
@@ -173,6 +193,11 @@ export default function AriaPanelOverlay({
         if (committedSv.value <= 0.5) {
           return;
         }
+        if (keyboardHeightLib.value < -KB_OPEN_THRESHOLD_PX) {
+          runOnJS(dismissKeyboard)();
+          pullProgress.value = withSpring(1, COMMIT_SPRING);
+          return;
+        }
         const shouldDismiss =
           pullProgress.value < DISMISS_CLOSE_THRESHOLD ||
           (e.velocityY != null && e.velocityY < DISMISS_CLOSE_VELOCITY_Y);
@@ -182,7 +207,34 @@ export default function AriaPanelOverlay({
         }
         pullProgress.value = withSpring(1, COMMIT_SPRING);
       });
-  }, [committedSv, curtainMaxHeightSv, dismissStartProgress, pullProgress, requestClose]);
+  }, [
+    committedSv,
+    curtainMaxHeightSv,
+    dismissKeyboard,
+    dismissStartProgress,
+    keyboardHeightLib,
+    pullProgress,
+    requestClose,
+  ]);
+
+  const dismissKeyboardTap = useMemo(
+    () =>
+      Gesture.Tap().onEnd(() => {
+        'worklet';
+        if (committedSv.value <= 0.5) {
+          return;
+        }
+        if (keyboardHeightLib.value < -KB_OPEN_THRESHOLD_PX) {
+          runOnJS(dismissKeyboard)();
+        }
+      }),
+    [committedSv, dismissKeyboard, keyboardHeightLib],
+  );
+
+  const overlayGestures = useMemo(
+    () => Gesture.Simultaneous(dismissGesture, dismissKeyboardTap),
+    [dismissGesture, dismissKeyboardTap],
+  );
 
   const curtainStyle = useAnimatedStyle(() => {
     const height = pullProgress.value * curtainMaxHeightSv.value;
@@ -210,11 +262,13 @@ export default function AriaPanelOverlay({
       borderWidth: interpolate(reveal, [0, 0.22, 1], [0, 0, 0.5], Extrapolation.CLAMP),
       transform: [
         {
-          translateY: interpolate(reveal, [0, 1], [14, 0], Extrapolation.CLAMP),
+          translateY:
+            interpolate(reveal, [0, 1], [14, 0], Extrapolation.CLAMP) +
+            (isCommitted ? keyboardHeightLib.value : 0),
         },
       ],
     };
-  });
+  }, [keyboardHeightLib]);
 
   const inputContentStyle = useAnimatedStyle(() => {
     const isCommitted = committedSv.value > 0.5;
@@ -229,7 +283,7 @@ export default function AriaPanelOverlay({
   });
 
   return (
-    <GestureDetector gesture={dismissGesture}>
+    <GestureDetector gesture={overlayGestures}>
       <View
         style={styles.root}
         pointerEvents={committed ? 'box-none' : 'none'}
@@ -248,6 +302,7 @@ export default function AriaPanelOverlay({
               pointerEvents={committed ? 'auto' : 'none'}
             >
               <TextInput
+                ref={inputRef}
                 value={draft}
                 onChangeText={setDraft}
                 placeholder="Спроси Арию..."

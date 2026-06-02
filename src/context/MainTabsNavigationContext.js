@@ -47,6 +47,19 @@ export function MainTabsNavigationProvider({ children }) {
   const tabBarSuppressCountRef = useRef(0);
   const tabBarSuppressedRef = useRef(false);
   const tabBarSuppressListenerRef = useRef(null);
+  const ariaTabBarHideSvRef = useRef(null);
+  const [ariaTabBarHideRegistered, setAriaTabBarHideRegistered] = useState(false);
+
+  const registerAriaTabBarHideSv = useCallback((sv) => {
+    ariaTabBarHideSvRef.current = sv ?? null;
+    setAriaTabBarHideRegistered(!!sv);
+    return () => {
+      if (ariaTabBarHideSvRef.current === sv) {
+        ariaTabBarHideSvRef.current = null;
+        setAriaTabBarHideRegistered(false);
+      }
+    };
+  }, []);
 
   const notifyPagerLockChanged = useCallback(() => {
     pagerLockListenerRef.current?.(pagerInteractionLockedRef.current);
@@ -99,14 +112,6 @@ export function MainTabsNavigationProvider({ children }) {
     const next = tabBarSuppressCountRef.current > 0;
     if (next !== tabBarSuppressedRef.current) {
       tabBarSuppressedRef.current = next;
-      notifyTabBarSuppressChanged();
-    }
-  }, [notifyTabBarSuppressChanged]);
-
-  const resetTabBarSuppress = useCallback(() => {
-    tabBarSuppressCountRef.current = 0;
-    if (tabBarSuppressedRef.current) {
-      tabBarSuppressedRef.current = false;
       notifyTabBarSuppressChanged();
     }
   }, [notifyTabBarSuppressChanged]);
@@ -196,8 +201,10 @@ export function MainTabsNavigationProvider({ children }) {
       registerPagerInteractionLockListener,
       acquireTabBarSuppress,
       releaseTabBarSuppress,
-      resetTabBarSuppress,
       registerTabBarSuppressListener,
+      registerAriaTabBarHideSv,
+      ariaTabBarHideSv: ariaTabBarHideSvRef,
+      ariaTabBarHideRegistered,
     }),
     [
       registerMainTabsHandlers,
@@ -213,8 +220,9 @@ export function MainTabsNavigationProvider({ children }) {
       registerPagerInteractionLockListener,
       acquireTabBarSuppress,
       releaseTabBarSuppress,
-      resetTabBarSuppress,
       registerTabBarSuppressListener,
+      registerAriaTabBarHideSv,
+      ariaTabBarHideRegistered,
     ],
   );
 

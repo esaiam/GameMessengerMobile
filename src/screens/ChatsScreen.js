@@ -66,11 +66,20 @@ export default function ChatsScreen({ route, navigation }) {
   const resetPagerLock = mainTabsNav?.resetPagerInteractionLock;
   const acquireTabBarSuppress = mainTabsNav?.acquireTabBarSuppress;
   const releaseTabBarSuppress = mainTabsNav?.releaseTabBarSuppress;
+  const registerAriaTabBarHideSv = mainTabsNav?.registerAriaTabBarHideSv;
 
   const ariaPullReleasePx = useSharedValue(0);
   const ariaPullReleaseTick = useSharedValue(0);
   const ariaCommittedSv = useSharedValue(0);
   const ariaPullProgress = useSharedValue(0);
+  const ariaTabBarHideSv = useSharedValue(0);
+
+  useEffect(() => {
+    if (!registerAriaTabBarHideSv) {
+      return undefined;
+    }
+    return registerAriaTabBarHideSv(ariaTabBarHideSv);
+  }, [ariaTabBarHideSv, registerAriaTabBarHideSv]);
 
   const {
     SEARCH_FIELD_H,
@@ -111,6 +120,7 @@ export default function ChatsScreen({ route, navigation }) {
     ariaPullReleaseTick,
     ariaCommittedSv,
     ariaPullProgress,
+    ariaTabBarHideSv,
     acquirePagerLock,
     releasePagerLock,
     acquireTabBarSuppress,

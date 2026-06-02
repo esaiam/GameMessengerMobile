@@ -14,8 +14,20 @@ export const ARIA_SNAP_OPEN_THRESHOLD = 0.38;
 /** Таб-бар уезжает, когда шторка прошла 1/3 экрана вниз */
 export const ARIA_TAB_BAR_HIDE_PROGRESS = 1 / 3;
 
-/** Таб-бар возвращается, когда при закрытии шторка поднялась выше 1/3 */
-export const ARIA_TAB_BAR_SHOW_PROGRESS = 1 / 3;
+/** Таб-бар возвращается чуть ниже 1/3 — узкий гистерезис, без раннего появления при закрытии */
+export const ARIA_TAB_BAR_SHOW_PROGRESS = 0.31;
+
+/** 0..1 — синхронный slide таббара с шторкой (UI thread) */
+export function computeAriaTabBarHideFactor(progress) {
+  'worklet';
+  if (progress <= 0) {
+    return 0;
+  }
+  if (progress >= ARIA_TAB_BAR_HIDE_PROGRESS) {
+    return 1;
+  }
+  return progress / ARIA_TAB_BAR_HIDE_PROGRESS;
+}
 
 export function cappedRubberBandPullPx(rawPullPx) {
   'worklet';

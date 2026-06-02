@@ -7,6 +7,10 @@ import {
   Animated,
   Easing,
   useWindowDimensions } from 'react-native';
+import Reanimated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import SafeBlurView from './SafeBlurView';
 import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H } from '../theme';
 
@@ -17,12 +21,11 @@ const COMPRESS_SCALE = 0.36;
 const T_COMPRESS = 90;
 const T_MOVE = 140;
 const T_EXPAND = 100;
-const T_VISIBILITY = 240;
-const TAB_BAR_HIDE_FALLBACK =
-  TAB_BAR_LAYOUT.topPad
-  + TAB_BAR_INNER_ROW_H
-  + TAB_BAR_LAYOUT.screenBottomGap
-  + 48;
+const T_VISIBILITY = 120;
+
+function computeTabBarHideOffset(bottomGap) {
+  return TAB_BAR_LAYOUT.topPad + TAB_BAR_INNER_ROW_H + bottomGap;
+}
 
 function tabCenterLeft(layouts, index, size = HIGHLIGHT_SIZE) {
   const L = layouts[index];
@@ -36,6 +39,8 @@ export default function GlassTabBar({
   onTabPress,
   visible,
   visibilityAnimated = false,
+  onVisibilityAnimationEnd,
+  ariaTabBarHideSv = null,
   bottomInset,
 }) {
   const { width: windowWidth } = useWindowDimensions();
@@ -53,25 +58,77 @@ export default function GlassTabBar({
   const runVisibilityRef = useRef(null);
   const runIconAnimByKeyRef = useRef({}).current;
   const visibility = useRef(new Animated.Value(visible ? 0 : 1)).current;
-  const [hideOffset, setHideOffset] = useState(TAB_BAR_HIDE_FALLBACK);
+  const prevVisibleRef = useRef(visible);
+  const prevVisibilityAnimatedRef = useRef(visibilityAnimated);
+  const screenBottomGap = bottomInset ?? TAB_BAR_LAYOUT.screenBottomGap;
+  const hideOffsetPx = useRef(
+    new Animated.Value(computeTabBarHideOffset(screenBottomGap)),
+  ).current;
+  const hideOffsetReanimated = useSharedValue(computeTabBarHideOffset(screenBottomGap));
+  const ariaTabBarDrive = ariaTabBarHideSv != null;
 
   useEffect(() => {
-    runVisibilityRef.current?.stop?.();
+    const offset = computeTabBarHideOffset(screenBottomGap);
+    hideOffsetReanimated.value = offset;
+    if (!visible) return;
+    hideOffsetPx.setValue(offset);
+  }, [visible, screenBottomGap, hideOffsetPx, hideOffsetReanimated]);
+
+  useEffect(() => {
+    if (ariaTabBarDrive) {
+      if (!visibilityAnimated) {
+        visibility.setValue(visible ? 0 : 1);
+      }
+      return undefined;
+    }
+
     const toValue = visible ? 0 : 1;
+    const visibleChanged = prevVisibleRef.current !== visible;
+    const animatedModeChanged = prevVisibilityAnimatedRef.current !== visibilityAnimated;
+    prevVisibleRef.current = visible;
+    prevVisibilityAnimatedRef.current = visibilityAnimated;
+
+    if (!visibilityAnimated && !visibleChanged && animatedModeChanged) {
+      return undefined;
+    }
+
+    runVisibilityRef.current?.stop?.();
     if (!visibilityAnimated) {
-      visibility.setValue(toValue);
+      if (visibleChanged) {
+        visibility.setValue(toValue);
+        onVisibilityAnimationEnd?.({ finished: true, visible });
+      }
       return undefined;
     }
     const anim = Animated.timing(visibility, {
       toValue,
       duration: T_VISIBILITY,
       easing: Easing.inOut(Easing.cubic),
-      useNativeDriver: false,
+      useNativeDriver: true,
     });
     runVisibilityRef.current = anim;
-    anim.start();
+    anim.start(({ finished }) => {
+      onVisibilityAnimationEnd?.({ finished: !!finished, visible });
+    });
     return () => anim.stop();
-  }, [visible, visibilityAnimated, visibility]);
+  }, [
+    ariaTabBarDrive,
+    visible,
+    visibilityAnimated,
+    visibility,
+    onVisibilityAnimationEnd,
+  ]);
+
+  const ariaShellStyle = useAnimatedStyle(() => {
+    if (!ariaTabBarHideSv) {
+      return {};
+    }
+    return {
+      transform: [
+        { translateY: hideOffsetReanimated.value * ariaTabBarHideSv.value },
+      ],
+    };
+  }, [ariaTabBarHideSv, hideOffsetReanimated]);
 
   const getIconScale = (key) => {
     if (!iconScaleByKeyRef[key]) iconScaleByKeyRef[key] = new Animated.Value(1);
@@ -96,28 +153,43 @@ export default function GlassTabBar({
     tabLayouts.length >= n && tabLayouts.slice(0, n).every((L) => L && typeof L.x === 'number');
 
   useLayoutEffect(() => {
-    if (!visible || !layoutsReady) return;
+    if (!layoutsReady) return;
     const idx = activeIndex;
     const leftTo = tabCenterLeft(tabLayouts, idx);
     if (leftTo == null) return;
-    if (!layoutDoneRef.current) {
-      translateX.setValue(leftTo);
+
+    const snapHighlightTo = (left) => {
+      runAnimRef.current?.stop?.();
+      translateX.setValue(left);
       scale.setValue(1);
+    };
+
+    if (!layoutDoneRef.current) {
+      snapHighlightTo(leftTo);
       settledIndexRef.current = idx;
       layoutDoneRef.current = true;
       return;
     }
+
     const from = settledIndexRef.current;
     if (from === idx) {
       translateX.setValue(leftTo);
       return;
     }
-    const leftFrom = tabCenterLeft(tabLayouts, from);
-    if (leftFrom == null) {
-      translateX.setValue(leftTo);
+
+    if (!visible) {
+      snapHighlightTo(leftTo);
       settledIndexRef.current = idx;
       return;
     }
+
+    const leftFrom = tabCenterLeft(tabLayouts, from);
+    if (leftFrom == null) {
+      snapHighlightTo(leftTo);
+      settledIndexRef.current = idx;
+      return;
+    }
+
     runAnimRef.current?.stop?.();
     translateX.setValue(leftFrom);
     scale.setValue(1);
@@ -130,85 +202,101 @@ export default function GlassTabBar({
     anim.start(({ finished }) => { if (finished) settledIndexRef.current = idx; });
   }, [visible, activeIndex, layoutsReady, tabLayouts, translateX, scale]);
 
-  const screenBottomGap = bottomInset ?? TAB_BAR_LAYOUT.screenBottomGap;
   const activeTab = tabs[activeIndex];
   const highlightBg = activeTab?.name === 'Poker' ? V.gameBubbleBg : V.bgElevated;
-  const slideY = visibility.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, hideOffset],
-  });
-  const shellOpacity = visibility.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [1, 0.55, 0],
-  });
+  const slideY = ariaTabBarDrive ? null : Animated.multiply(visibility, hideOffsetPx);
+
+  const shellPadding = {
+    paddingHorizontal: tabBarHorizontalPad,
+    paddingBottom: screenBottomGap,
+    paddingTop: TAB_BAR_LAYOUT.topPad,
+  };
+
+  const handleShellLayout = (h) => {
+    if (h > 0) {
+      hideOffsetReanimated.value = h;
+      if (visible) {
+        hideOffsetPx.setValue(h);
+      }
+    }
+  };
+
+  const tabBarBody = (
+    <SafeBlurView
+      intensity={20}
+      tint="dark"
+      blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
+      style={styles.tabBarShell}
+    >
+      <View style={styles.glassTint} pointerEvents="none" />
+      <View style={styles.row}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.highlight,
+            { backgroundColor: highlightBg, transform: [{ translateX }, { scale }] },
+          ]}
+        />
+        {tabs.map((tab, index) => {
+          const isFocused = activeIndex === index;
+          const color = isFocused ? (tab.activeTint ?? DEFAULT_ACTIVE) : DEFAULT_INACTIVE;
+          const iconScaleAnim = getIconScale(tab.key);
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              accessibilityRole="button"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              onPress={() => { animateIconPress(tab.key); onTabPress(index); }}
+              onLayout={(e) => {
+                const { x, width } = e.nativeEvent.layout;
+                setTabLayouts((prev) => {
+                  const next = [...prev];
+                  while (next.length < n) next.push(null);
+                  next[index] = { x, width };
+                  return next;
+                });
+              }}
+              style={styles.tab}
+              activeOpacity={0.75}
+            >
+              <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
+                {tab.icon(color)}
+              </Animated.View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </SafeBlurView>
+  );
 
   return (
     <View
       style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
       pointerEvents={visible ? 'box-none' : 'none'}
     >
-      <Animated.View
-        onLayout={(e) => {
-          const h = e.nativeEvent.layout.height;
-          if (h > 0 && Math.abs(h - hideOffset) > 1) setHideOffset(h);
-        }}
-        style={[
-          styles.shell,
-          {
-            paddingHorizontal: tabBarHorizontalPad,
-            paddingBottom: screenBottomGap,
-            paddingTop: TAB_BAR_LAYOUT.topPad,
-            opacity: shellOpacity,
-            transform: [{ translateY: slideY }],
-          },
-        ]}
-      >
-      <SafeBlurView
-        intensity={20}
-        tint="dark"
-        blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
-        style={styles.tabBarShell}
-      >
-        <View style={styles.glassTint} pointerEvents="none" />
-        <View style={styles.row}>
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.highlight,
-              { backgroundColor: highlightBg, transform: [{ translateX }, { scale }] },
-            ]}
-          />
-          {tabs.map((tab, index) => {
-            const isFocused = activeIndex === index;
-            const color = isFocused ? (tab.activeTint ?? DEFAULT_ACTIVE) : DEFAULT_INACTIVE;
-            const iconScaleAnim = getIconScale(tab.key);
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                onPress={() => { animateIconPress(tab.key); onTabPress(index); }}
-                onLayout={(e) => {
-                  const { x, width } = e.nativeEvent.layout;
-                  setTabLayouts((prev) => {
-                    const next = [...prev];
-                    while (next.length < n) next.push(null);
-                    next[index] = { x, width };
-                    return next;
-                  });
-                }}
-                style={styles.tab}
-                activeOpacity={0.75}
-              >
-                <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-                  {tab.icon(color)}
-                </Animated.View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </SafeBlurView>
-      </Animated.View>
+      {ariaTabBarDrive ? (
+        <Reanimated.View
+          onLayout={(e) => {
+            handleShellLayout(e.nativeEvent.layout.height);
+          }}
+          style={[styles.shell, shellPadding, ariaShellStyle]}
+        >
+          {tabBarBody}
+        </Reanimated.View>
+      ) : (
+        <Animated.View
+          onLayout={(e) => {
+            handleShellLayout(e.nativeEvent.layout.height);
+          }}
+          style={[
+            styles.shell,
+            shellPadding,
+            slideY != null ? { transform: [{ translateY: slideY }] } : null,
+          ]}
+        >
+          {tabBarBody}
+        </Animated.View>
+      )}
     </View>
   );
 }

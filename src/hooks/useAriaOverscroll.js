@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated as RNAnimated } from 'react-native';
+import { Animated as RNAnimated, Keyboard, Platform } from 'react-native';
+import {
+  AndroidSoftInputModes,
+  KeyboardController,
+} from 'react-native-keyboard-controller';
 import {
   cancelAnimation,
   runOnJS,
@@ -13,6 +17,7 @@ import {
   ARIA_TAB_BAR_SHOW_PROGRESS,
   computeAriaGlowIntensity,
   computeAriaPullProgress,
+  computeAriaTabBarHideFactor,
 } from './ariaPullProgress';
 
 const GLOW_ANIM_DURATION_MS = 300;
@@ -30,6 +35,7 @@ export function useAriaOverscroll({
   ariaPullReleaseTick,
   ariaCommittedSv,
   ariaPullProgress,
+  ariaTabBarHideSv,
   acquirePagerLock,
   releasePagerLock,
   acquireTabBarSuppress,
@@ -42,18 +48,24 @@ export function useAriaOverscroll({
   const glowTargetRef = useRef(0);
   const pagerLockedRef = useRef(false);
   const tabBarSuppressedRef = useRef(false);
+  const tabBarSuppressLatchSv = useSharedValue(0);
+  const ariaReleaseLatchSv = useSharedValue(0);
+  const pagerLockedFromPullSv = useSharedValue(0);
 
   const setPagerLockedJs = useCallback(
     (locked) => {
       if (pagerLockedRef.current === locked) return;
       pagerLockedRef.current = locked;
+      if (!locked) {
+        pagerLockedFromPullSv.value = 0;
+      }
       if (locked) {
         acquirePagerLock?.();
       } else {
         releasePagerLock?.();
       }
     },
-    [acquirePagerLock, releasePagerLock],
+    [acquirePagerLock, pagerLockedFromPullSv, releasePagerLock],
   );
 
   const setTabBarSuppressedJs = useCallback(
@@ -79,9 +91,23 @@ export function useAriaOverscroll({
         tabBarSuppressedRef.current = false;
         releaseTabBarSuppress?.();
       }
+      if (ariaTabBarHideSv) {
+        ariaTabBarHideSv.value = 0;
+      }
     },
-    [releasePagerLock, releaseTabBarSuppress],
+    [ariaTabBarHideSv, releasePagerLock, releaseTabBarSuppress],
   );
+
+  /** Manual KB lift on Aria overlay — avoid window resize shrinking curtain height. */
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !ariaVisible) {
+      return undefined;
+    }
+    KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_NOTHING);
+    return () => {
+      KeyboardController.setDefaultMode();
+    };
+  }, [ariaVisible]);
 
   const animateGlowTo = useCallback(
     (toValue) => {
@@ -114,23 +140,49 @@ export function useAriaOverscroll({
     [ariaGlowIntensity],
   );
 
+  const resetTopPullPx = useCallback(() => {
+    cancelAnimation(topPullPx);
+    topPullPx.value = 0;
+  }, [topPullPx]);
+
   const commitOpenJs = useCallback(() => {
     if (ariaVisibleRef.current) {
       return;
     }
+    resetTopPullPx();
     ariaVisibleRef.current = true;
+    ariaReleaseLatchSv.value = 0;
+    tabBarSuppressLatchSv.value = 1;
+    if (ariaTabBarHideSv) {
+      ariaTabBarHideSv.value = 1;
+    }
+    setTabBarSuppressedJs(true);
     glowTargetRef.current = 1;
     ariaGlowIntensity.stopAnimation();
     ariaGlowIntensity.setValue(1);
     setAriaVisible(true);
-  }, [ariaGlowIntensity]);
+  }, [
+    ariaGlowIntensity,
+    ariaReleaseLatchSv,
+    ariaTabBarHideSv,
+    resetTopPullPx,
+    setTabBarSuppressedJs,
+    tabBarSuppressLatchSv,
+  ]);
 
   const openAriaPanel = useCallback(() => {
     if (ariaVisibleRef.current) {
       return;
     }
+    resetTopPullPx();
     ariaVisibleRef.current = true;
     ariaCommittedSv.value = 1;
+    ariaReleaseLatchSv.value = 0;
+    tabBarSuppressLatchSv.value = 1;
+    if (ariaTabBarHideSv) {
+      ariaTabBarHideSv.value = 1;
+    }
+    setTabBarSuppressedJs(true);
     glowTargetRef.current = 1;
     ariaGlowIntensity.stopAnimation();
     ariaGlowIntensity.setValue(1);
@@ -142,12 +194,25 @@ export function useAriaOverscroll({
     ariaCommittedSv,
     ariaGlowIntensity,
     ariaPullProgress,
+    ariaReleaseLatchSv,
+    ariaTabBarHideSv,
+    resetTopPullPx,
     setPagerLockedJs,
+    setTabBarSuppressedJs,
+    tabBarSuppressLatchSv,
   ]);
 
   const closeAriaPanel = useCallback(() => {
+    Keyboard.dismiss();
     ariaVisibleRef.current = false;
     ariaCommittedSv.value = 0;
+    resetTopPullPx();
+    ariaReleaseLatchSv.value = 0;
+    tabBarSuppressLatchSv.value = 0;
+    if (ariaTabBarHideSv) {
+      ariaTabBarHideSv.value = 0;
+    }
+    setTabBarSuppressedJs(false);
     glowTargetRef.current = 0;
     setAriaVisible(false);
     ariaGlowIntensity.stopAnimation();
@@ -159,6 +224,12 @@ export function useAriaOverscroll({
     cancelAnimation(ariaPullProgress);
     ariaPullProgress.value = withSpring(0, ARIA_SPRING, (finished) => {
       if (finished) {
+        ariaReleaseLatchSv.value = 0;
+        tabBarSuppressLatchSv.value = 0;
+        if (ariaTabBarHideSv) {
+          ariaTabBarHideSv.value = 0;
+        }
+        runOnJS(setTabBarSuppressedJs)(false);
         runOnJS(setPagerLockedJs)(false);
       }
     });
@@ -166,7 +237,13 @@ export function useAriaOverscroll({
     ariaCommittedSv,
     ariaGlowIntensity,
     ariaPullProgress,
+    ariaReleaseLatchSv,
+    ariaTabBarHideSv,
+    resetTopPullPx,
     setPagerLockedJs,
+    setTabBarSuppressedJs,
+    tabBarSuppressLatchSv,
+    ariaTabBarHideSv,
   ]);
 
   const syncGlowFromPull = useCallback(
@@ -177,6 +254,27 @@ export function useAriaOverscroll({
       setGlowImmediate(intensity);
     },
     [setGlowImmediate],
+  );
+
+  const finishAriaPullReleaseJs = useCallback(
+    (finished) => {
+      ariaReleaseLatchSv.value = 0;
+      if (finished) {
+        tabBarSuppressLatchSv.value = 0;
+        if (ariaTabBarHideSv) {
+          ariaTabBarHideSv.value = 0;
+        }
+        setTabBarSuppressedJs(false);
+        setPagerLockedJs(false);
+      }
+    },
+    [
+      ariaReleaseLatchSv,
+      ariaTabBarHideSv,
+      setPagerLockedJs,
+      setTabBarSuppressedJs,
+      tabBarSuppressLatchSv,
+    ],
   );
 
   useAnimatedReaction(
@@ -193,7 +291,8 @@ export function useAriaOverscroll({
       if (cur.dragging) {
         runOnJS(syncGlowFromPull)(computeAriaGlowIntensity(cur.pull));
         const progress = computeAriaPullProgress(cur.pull);
-        if (progress > 0.001) {
+        if (progress > 0.001 && pagerLockedFromPullSv.value === 0) {
+          pagerLockedFromPullSv.value = 1;
           runOnJS(setPagerLockedJs)(true);
         }
         return;
@@ -207,17 +306,35 @@ export function useAriaOverscroll({
   );
 
   useAnimatedReaction(
-    () => ariaPullProgress.value,
-    (progress) => {
-      if (progress >= ARIA_TAB_BAR_HIDE_PROGRESS) {
-        runOnJS(setTabBarSuppressedJs)(true);
+    () => ({
+      progress: ariaPullProgress.value,
+      pull: topPullPx.value,
+      committed: ariaCommittedSv.value > 0.5,
+      releaseLatched: ariaReleaseLatchSv.value,
+    }),
+    ({ progress, pull, committed, releaseLatched }) => {
+      const effectiveProgress = committed ? 1 : Math.max(progress, computeAriaPullProgress(pull));
+      if (ariaTabBarHideSv) {
+        ariaTabBarHideSv.value = computeAriaTabBarHideFactor(effectiveProgress);
+      }
+
+      const prevSuppressed = tabBarSuppressLatchSv.value;
+      let nextSuppressed = prevSuppressed;
+      if (effectiveProgress >= ARIA_TAB_BAR_HIDE_PROGRESS) {
+        nextSuppressed = 1;
+      } else if (
+        effectiveProgress <= ARIA_TAB_BAR_SHOW_PROGRESS
+        && releaseLatched === 0
+      ) {
+        nextSuppressed = 0;
+      }
+      if (nextSuppressed === prevSuppressed) {
         return;
       }
-      if (progress <= ARIA_TAB_BAR_SHOW_PROGRESS) {
-        runOnJS(setTabBarSuppressedJs)(false);
-      }
+      tabBarSuppressLatchSv.value = nextSuppressed;
+      runOnJS(setTabBarSuppressedJs)(nextSuppressed === 1);
     },
-    [setTabBarSuppressedJs],
+    [ariaReleaseLatchSv, ariaTabBarHideSv, setTabBarSuppressedJs, tabBarSuppressLatchSv],
   );
 
   useAnimatedReaction(
@@ -233,11 +350,15 @@ export function useAriaOverscroll({
         return;
       }
 
+      ariaReleaseLatchSv.value = 1;
       const pullPx = ariaPullReleasePx.value;
       const progress = computeAriaPullProgress(pullPx);
 
       if (progress >= ARIA_SNAP_OPEN_THRESHOLD) {
+        ariaReleaseLatchSv.value = 0;
         ariaCommittedSv.value = 1;
+        cancelAnimation(topPullPx);
+        topPullPx.value = 0;
         cancelAnimation(ariaPullProgress);
         ariaPullProgress.value = withSpring(1, ARIA_SPRING);
         runOnJS(commitOpenJs)();
@@ -245,18 +366,23 @@ export function useAriaOverscroll({
       }
       if (progress > 0.001) {
         cancelAnimation(ariaPullProgress);
+        cancelAnimation(topPullPx);
         ariaPullProgress.value = withSpring(0, ARIA_SPRING, (finished) => {
           if (finished) {
-            runOnJS(setPagerLockedJs)(false);
+            topPullPx.value = 0;
+            runOnJS(finishAriaPullReleaseJs)(true);
           }
         });
+        topPullPx.value = withSpring(0, ARIA_SPRING);
         runOnJS(animateGlowTo)(0);
       } else {
+        ariaReleaseLatchSv.value = 0;
+        topPullPx.value = 0;
         runOnJS(setPagerLockedJs)(false);
         runOnJS(animateGlowTo)(0);
       }
     },
-    [animateGlowTo, commitOpenJs, setPagerLockedJs],
+    [animateGlowTo, commitOpenJs, finishAriaPullReleaseJs, setPagerLockedJs],
   );
 
   return {

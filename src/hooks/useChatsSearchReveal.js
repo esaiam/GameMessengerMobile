@@ -323,7 +323,9 @@ export function useChatsSearchReveal(
           ariaPullReleasePx.value = releasePullPx;
           ariaPullReleaseTick.value += 1;
         }
-        snapTopPullTo(topPullPx, 0);
+        if (computeAriaPullProgress(releasePullPx) <= 0.001) {
+          snapTopPullTo(topPullPx, 0);
+        }
         if (locked.value) {
           expanded.value = 1;
           return;

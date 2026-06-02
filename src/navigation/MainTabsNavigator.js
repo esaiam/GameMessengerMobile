@@ -52,10 +52,6 @@ const TAB_BAR_VISIBILITY_ANIMATED_ON = new Set([
   'Storage',
 ]);
 
-/** Длительность slide таб-бара (`GlassTabBar` T_VISIBILITY) + запас на возврат после Aria */
-const TAB_BAR_SLIDE_MS = 240;
-const TAB_BAR_SLIDE_RELEASE_MS = TAB_BAR_SLIDE_MS + 40;
-
 function ChatsStackNavigator({ initialParams }) {
   return (
     <ChatsStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 200 }}>
@@ -136,11 +132,18 @@ export function MainTabs({ navigation, route }) {
     pagerNativeScrollEnabled,
     registerPagerInteractionLockListener,
     registerTabBarSuppressListener,
+    ariaTabBarHideSv,
+    ariaTabBarHideRegistered,
   } = useMainTabsNavigation();
 
   const [pagerInteractionLocked, setPagerInteractionLocked] = useState(false);
   const [tabBarSuppressed, setTabBarSuppressed] = useState(false);
   const [tabBarSuppressAnimated, setTabBarSuppressAnimated] = useState(false);
+  const tabBarSuppressedRef = useRef(false);
+
+  useEffect(() => {
+    tabBarSuppressedRef.current = tabBarSuppressed;
+  }, [tabBarSuppressed]);
 
   useEffect(() => registerPagerInteractionLockListener(setPagerInteractionLocked), [
     registerPagerInteractionLockListener,
@@ -149,21 +152,16 @@ export function MainTabs({ navigation, route }) {
   useEffect(() => {
     return registerTabBarSuppressListener((suppressed) => {
       setTabBarSuppressed(suppressed);
-      if (suppressed) {
-        setTabBarSuppressAnimated(true);
-      }
+      setTabBarSuppressAnimated(suppressed);
     });
   }, [registerTabBarSuppressListener]);
 
-  useEffect(() => {
-    if (tabBarSuppressed || !tabBarSuppressAnimated) {
-      return undefined;
+  const handleTabBarVisibilityAnimationEnd = useCallback(({ finished, visible: isVisible }) => {
+    if (!finished || !isVisible || tabBarSuppressedRef.current) {
+      return;
     }
-    const timer = setTimeout(() => {
-      setTabBarSuppressAnimated(false);
-    }, TAB_BAR_SLIDE_RELEASE_MS);
-    return () => clearTimeout(timer);
-  }, [tabBarSuppressed, tabBarSuppressAnimated]);
+    setTabBarSuppressAnimated(false);
+  }, []);
 
   const pagerScrollEnabled = pagerNativeScrollEnabled && !pagerInteractionLocked;
 
@@ -211,6 +209,7 @@ export function MainTabs({ navigation, route }) {
   }, [switchToTab]);
 
   const initialParams = { nickname };
+  const tabBarAriaPullDrive = activeIndex === 0 && ariaTabBarHideRegistered;
 
   return (
     <View style={{ flex: 1, backgroundColor: V.bgChatsScreen }}>
@@ -246,8 +245,12 @@ export function MainTabs({ navigation, route }) {
           activeIndex={activeIndex}
           tabs={TABS}
           onTabPress={handleTabPress}
-          visible={tabBarVisible && !tabBarSuppressed}
-          visibilityAnimated={tabBarVisibilityAnimated || tabBarSuppressAnimated}
+          visible={tabBarVisible && (!tabBarSuppressed || tabBarAriaPullDrive)}
+          visibilityAnimated={
+            tabBarVisibilityAnimated || (tabBarSuppressAnimated && !tabBarAriaPullDrive)
+          }
+          ariaTabBarHideSv={tabBarAriaPullDrive ? ariaTabBarHideSv.current : null}
+          onVisibilityAnimationEnd={handleTabBarVisibilityAnimationEnd}
         />
       </View>
   );
