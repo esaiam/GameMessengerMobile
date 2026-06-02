@@ -1,4 +1,4 @@
-import { getBlockedPeers } from './blockedContacts';
+import { getBlockedPeers, normalizePeerHandle } from './blockedContacts';
 import { getHiddenChatRoomIds } from './hiddenChats';
 
 /** Убирает заблокированных и «удалённые у меня» диалоги из списка чатов. */
@@ -9,7 +9,7 @@ export async function filterVisibleChatRows(nickname, rows) {
     getHiddenChatRoomIds(nickname)]);
   return rows.filter((r) => {
     if (r.isAria) return true;
-    if (blocked.has(r.contactName)) return false;
+    if (blocked.has(normalizePeerHandle(r.contactName))) return false;
     if (r.roomId && hiddenRooms.has(r.roomId)) return false;
     return true;
   });

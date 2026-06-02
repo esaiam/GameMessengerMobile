@@ -18,9 +18,11 @@ import ContactProfileScreen from '../screens/ContactProfileScreen';
 import { MessageCircle, Layers, User, Users } from '../icons/lucideIcons';
 import { V } from '../theme';
 import { splitDetailApi } from '../context/SplitDetailContext';
+import { useSplitDetail } from '../context/SplitDetailContext';
+import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import {
   CONTACT_PROFILE_STACK_SCREEN_OPTIONS,
-  getDeepestRouteName,
+  getTabBarDeepestRoute,
   isPagerNativeScrollEnabled,
 } from './mainTabPagerGesturePolicy';
 
@@ -45,8 +47,11 @@ const HIDE_TAB_BAR_ON = new Set([
   'Storage',
 ]);
 
-/** Скрытие/показ таббара с slide — только подэкраны профиля */
+/** Скрытие/показ таббара с slide — стек чатов/контактов и подэкраны профиля (200 ms, как native-stack). */
 const TAB_BAR_VISIBILITY_ANIMATED_ON = new Set([
+  'ChatRoom',
+  'Room',
+  'ContactProfile',
   'InviteFriends',
   'BlockedContacts',
   'Storage',
@@ -125,6 +130,9 @@ export function MainTabs({ navigation, route }) {
   const [tabBarVisible, setTabBarVisible] = useState(true);
   const [tabBarVisibilityAnimated, setTabBarVisibilityAnimated] = useState(false);
   const prevDeepestRouteRef = useRef(null);
+  const isSplit = useIsSplitLayout();
+  const { currentDetail } = useSplitDetail();
+  const splitDetailType = isSplit ? currentDetail?.type ?? null : null;
   const nickname = route.params?.nickname;
   const {
     registerMainTabsHandlers,
@@ -174,7 +182,7 @@ export function MainTabs({ navigation, route }) {
   const applyRootNavState = useCallback(
     (state) => {
       if (!state) return;
-      const deepest = getDeepestRouteName(state);
+      const deepest = getTabBarDeepestRoute(state, splitDetailType);
       const prevDeepest = prevDeepestRouteRef.current;
       prevDeepestRouteRef.current = deepest;
       setTabBarVisible(!HIDE_TAB_BAR_ON.has(deepest));
@@ -182,9 +190,11 @@ export function MainTabs({ navigation, route }) {
         TAB_BAR_VISIBILITY_ANIMATED_ON.has(deepest)
           || TAB_BAR_VISIBILITY_ANIMATED_ON.has(prevDeepest),
       );
-      setPagerNativeScrollEnabled(isPagerNativeScrollEnabled({ navigationState: state }));
+      setPagerNativeScrollEnabled(
+        isPagerNativeScrollEnabled({ navigationState: state, splitDetailType }),
+      );
     },
-    [setPagerNativeScrollEnabled],
+    [setPagerNativeScrollEnabled, splitDetailType],
   );
 
   useEffect(() => {
@@ -203,13 +213,19 @@ export function MainTabs({ navigation, route }) {
     });
   }, [navigation, applyRootNavState]);
 
+  useEffect(() => {
+    applyRootNavState(navigation.getState());
+  }, [splitDetailType, applyRootNavState, navigation]);
+
   const handleTabPress = useCallback((index) => {
     splitDetailApi.clearContactProfile?.();
     switchToTab(index);
   }, [switchToTab]);
 
   const initialParams = { nickname };
-  const tabBarAriaPullDrive = activeIndex === 0 && ariaTabBarHideRegistered;
+  /** Aria UI-drive только на списке чатов; на ChatRoom/Room `tabBarVisible` = false */
+  const tabBarAriaPullDrive =
+    activeIndex === 0 && ariaTabBarHideRegistered && tabBarVisible;
 
   return (
     <View style={{ flex: 1, backgroundColor: V.bgChatsScreen }}>

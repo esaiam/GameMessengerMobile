@@ -44,6 +44,7 @@ import {
   isBlocked,
 } from '../lib/blockedContacts';
 import { hideChatRoom } from '../lib/hiddenChats';
+import { requestChatsListReload } from '../lib/chatsListSync';
 import { hideAllRoomMessagesForMe, hideMessagesForMe } from '../lib/hideRoomMessagesForMe';
 import { getContactAlias, setContactAlias } from '../lib/contactAliases';
 import { supabase } from '../lib/supabase';
@@ -469,6 +470,7 @@ export default function ContactProfileScreen({ route, navigation }) {
         await hideChatRoom(nickname, roomId);
         await pruneDialogsCache();
       }
+      requestChatsListReload();
       Alert.alert('Готово', `${peerName} заблокирован.`);
       leaveContactProfileAfterDestructiveAction(navigation, { afterBlock: true });
     } catch (e) {
@@ -484,6 +486,7 @@ export default function ContactProfileScreen({ route, navigation }) {
     try {
       await unblockPeer(nickname, peerName);
       setBlocked(false);
+      requestChatsListReload();
       Alert.alert('Готово', `${peerName} разблокирован.`);
     } catch (e) {
       Alert.alert('Ошибка', e?.message || 'Не удалось разблокировать');

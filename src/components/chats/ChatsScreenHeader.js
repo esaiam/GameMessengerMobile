@@ -6,8 +6,8 @@ import { Search, Sparkles, Trash2 } from '../../icons/lucideIcons';
 import SafeBlurView from '../SafeBlurView';
 import { V } from '../../theme';
 
-const CHATS_HEADER_BLUR_INTENSITY_IOS = 100;
-const CHATS_HEADER_BLUR_INTENSITY_ANDROID = 60;
+const CHATS_HEADER_BLUR_INTENSITY_IOS = 65;
+const CHATS_HEADER_BLUR_INTENSITY_ANDROID = 42;
 /** Тинт поверх blur: ~10% — свечение под шапкой читается сильнее */
 const CHATS_HEADER_TINT_OPACITY = 0.1;
 const ARIA_ICON_SIZE = 18;

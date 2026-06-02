@@ -122,6 +122,7 @@ export default function Chat({
   const messages = ariaControlled ? ariaMessages : internalMessages;
   const setMessages = ariaControlled ? setAriaMessages : setInternalMessages;
   const [messagesLoading, setMessagesLoading] = useState(true);
+  const [initialHistoryReady, setInitialHistoryReady] = useState(isAriaChat);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const [visibleReplyTo, setVisibleReplyTo] = useState(null);
@@ -225,6 +226,10 @@ export default function Chat({
     setEditTarget(null);
   }, [roomId]);
 
+  useEffect(() => {
+    setInitialHistoryReady(isAriaChat);
+  }, [roomId, isAriaChat]);
+
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -240,6 +245,7 @@ export default function Chat({
     messages,
     listScrollSuppressRefs,
     isAriaChat ? null : listOpacity,
+    initialHistoryReady,
   );
 
   const ephemeralClockTick = useChatEphemeralClockTick(messages, renderPausedRef);
@@ -731,6 +737,14 @@ export default function Chat({
     messagesLoading,
   });
 
+  const handleInitialPageLoaded = useCallback(
+    (fetchedCount) => {
+      onInitialPageLoaded(fetchedCount);
+      setInitialHistoryReady(true);
+    },
+    [onInitialPageLoaded],
+  );
+
   useChatRoomEffects({
     roomId,
     nickname,
@@ -759,7 +773,7 @@ export default function Chat({
     setMessages,
     setMessagesLoading,
     messagesRef,
-    onInitialPageLoaded,
+    onInitialPageLoaded: handleInitialPageLoaded,
     chatSyncRef: vaultChatSyncRef });
 
   const {

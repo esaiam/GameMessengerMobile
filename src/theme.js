@@ -127,7 +127,7 @@ export const SEARCH_CONTACTS_CAPSULE_RADIUS = SEARCH_FIELD_LAYOUT.contactsRowHei
 export const COMPOSER_LAYOUT = {
   innerHeight: 44 };
 
-export const COMPOSER_CAPSULE_RADIUS = COMPOSER_LAYOUT.innerHeight / 2;
+export const COMPOSER_CAPSULE_RADIUS = 24;
 
 /** Поле нард: Muted Bronze — тёплый премиум-стол в духе gold/cream UI */
 export const boardPalette = {

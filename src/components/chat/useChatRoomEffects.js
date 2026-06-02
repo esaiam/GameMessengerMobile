@@ -105,6 +105,7 @@ export default function useChatRoomEffects({
       if (cancelled || !data) {
         setMessagesLoading(false);
         listOpacity.value = 1;
+        onInitialPageLoaded?.(0);
         return;
       }
 

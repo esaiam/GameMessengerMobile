@@ -21,7 +21,8 @@ const COMPRESS_SCALE = 0.36;
 const T_COMPRESS = 90;
 const T_MOVE = 140;
 const T_EXPAND = 100;
-const T_VISIBILITY = 120;
+/** Совпадает с `animationDuration` native-stack в `MainTabsNavigator`. */
+const T_VISIBILITY = 200;
 
 function computeTabBarHideOffset(bottomGap) {
   return TAB_BAR_LAYOUT.topPad + TAB_BAR_INNER_ROW_H + bottomGap;
@@ -75,6 +76,14 @@ export default function GlassTabBar({
   }, [visible, screenBottomGap, hideOffsetPx, hideOffsetReanimated]);
 
   useEffect(() => {
+    if (!visible && !ariaTabBarDrive) {
+      runVisibilityRef.current?.stop?.();
+      visibility.setValue(1);
+      prevVisibleRef.current = false;
+    }
+  }, [visible, ariaTabBarDrive, visibility]);
+
+  useEffect(() => {
     if (ariaTabBarDrive) {
       if (!visibilityAnimated) {
         visibility.setValue(visible ? 0 : 1);
@@ -123,12 +132,13 @@ export default function GlassTabBar({
     if (!ariaTabBarHideSv) {
       return {};
     }
+    const hideFactor = visible ? ariaTabBarHideSv.value : 1;
     return {
       transform: [
-        { translateY: hideOffsetReanimated.value * ariaTabBarHideSv.value },
+        { translateY: hideOffsetReanimated.value * hideFactor },
       ],
     };
-  }, [ariaTabBarHideSv, hideOffsetReanimated]);
+  }, [ariaTabBarHideSv, hideOffsetReanimated, visible]);
 
   const getIconScale = (key) => {
     if (!iconScaleByKeyRef[key]) iconScaleByKeyRef[key] = new Animated.Value(1);

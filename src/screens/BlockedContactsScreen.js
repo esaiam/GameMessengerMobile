@@ -15,6 +15,7 @@ import { V } from '../theme';
 import TabOverscrollFlatList from '../components/TabOverscrollFlatList';
 import { ArrowLeft } from '../icons/lucideIcons';
 import { getBlockedPeers, unblockPeer } from '../lib/blockedContacts';
+import { requestChatsListReload } from '../lib/chatsListSync';
 import { normalizeUserPair } from '../utils/roomIds';
 import { useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
 import { useNicknameFromRoute } from '../hooks/useNicknameFromRoute';
@@ -63,6 +64,7 @@ export default function BlockedContactsScreen({ route, navigation }) {
       try {
         await unblockPeer(nickname, peerHandle);
         setPeers((prev) => prev.filter((p) => p !== peerHandle));
+        requestChatsListReload();
       } catch (e) {
         Alert.alert('Ошибка', e?.message || 'Не удалось разблокировать');
       } finally {
@@ -158,8 +160,8 @@ export default function BlockedContactsScreen({ route, navigation }) {
             Заблокированные
           </Text>
           <Text style={[tw`text-[12px] mb-4`, { color: V.textSecondary, lineHeight: 18 }]}>
-            Эти пользователи скрыты из чатов и контактов. Разблокируйте, чтобы снова писать и видеть
-            переписку.
+            Блокировка на сервере: заблокированные не могут вам писать. Разблокируйте, чтобы снова
+            видеть переписку и писать.
           </Text>
 
           <View style={tw`flex-1`}>

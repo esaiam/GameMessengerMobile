@@ -6,13 +6,12 @@ import { CHATS_LIST_POLL_MS } from '../screens/chats/chatsConstants';
 import { fetchChatsRows } from '../screens/chats/fetchChatsRows';
 import { loadDialogsCache, saveDialogsCache } from '../utils/dialogsCache';
 import { filterVisibleChatRows } from '../lib/filterVisibleChats';
-import { getBlockedPeers } from '../lib/blockedContacts';
+import { getBlockedPeers, normalizePeerHandle } from '../lib/blockedContacts';
 import { unhideChatRoom } from '../lib/hiddenChats';
 import { registerChatsListReload } from '../lib/chatsListSync';
 
 const MESSAGE_PREVIEW_SELECT =
   'id, room_id, text, message_type, created_at, player_name';
-const BLOCKED_CACHE_MS = 30_000;
 const LOAD_DEBOUNCE_MS = 400;
 
 export function useChatsRoomsLoader(nickname) {
@@ -23,7 +22,6 @@ export function useChatsRoomsLoader(nickname) {
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
-  const blockedCacheRef = useRef({ at: 0, set: new Set() });
   const loadDebounceRef = useRef(null);
 
   /** Полная загрузка с сервера */
@@ -53,12 +51,12 @@ export function useChatsRoomsLoader(nickname) {
     if (!nickname) return;
 
     let cancelled = false;
-    loadDialogsCache(nickname).then((cached) => {
+    loadDialogsCache(nickname).then(async (cached) => {
+      if (cancelled || !cached?.length) return;
+      const visible = await filterVisibleChatRows(nickname, cached);
       if (cancelled) return;
-      if (cached && cached.length > 0) {
-        rowsCacheRef.current = { nickname, rows: cached };
-        setRows(cached);
-      }
+      rowsCacheRef.current = { nickname, rows: visible };
+      setRows(visible);
     });
 
     return () => {
@@ -116,16 +114,6 @@ export function useChatsRoomsLoader(nickname) {
   useEffect(() => {
     if (!nickname) return;
 
-    const getBlockedCached = async () => {
-      const now = Date.now();
-      if (now - blockedCacheRef.current.at < BLOCKED_CACHE_MS) {
-        return blockedCacheRef.current.set;
-      }
-      const set = await getBlockedPeers(nickname);
-      blockedCacheRef.current = { at: now, set };
-      return set;
-    };
-
     const scheduleLoad = () => {
       if (loadDebounceRef.current) clearTimeout(loadDebounceRef.current);
       loadDebounceRef.current = setTimeout(() => {
@@ -150,7 +138,7 @@ export function useChatsRoomsLoader(nickname) {
         return;
       }
 
-      const blocked = await getBlockedCached();
+      const blocked = await getBlockedPeers(nickname);
       const idx = rowsRef.current.findIndex((r) => r.roomId === roomId);
       if (idx === -1) {
         await unhideChatRoom(nickname, roomId);
@@ -158,7 +146,7 @@ export function useChatsRoomsLoader(nickname) {
         return;
       }
       const row = rowsRef.current[idx];
-      if (blocked.has(row.contactName)) return;
+      if (blocked.has(normalizePeerHandle(row.contactName))) return;
 
       await unhideChatRoom(nickname, roomId);
 

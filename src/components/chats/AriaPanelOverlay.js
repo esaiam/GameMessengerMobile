@@ -25,7 +25,7 @@ import { ARIA_SNAP_OPEN_THRESHOLD } from '../../hooks/ariaPullProgress';
 import { Mic, Send } from '../../icons/lucideIcons';
 import { V } from '../../theme';
 
-const INPUT_PANEL_H = 110;
+const INPUT_PANEL_H = 100;
 const INPUT_BOTTOM = 8;
 const INPUT_HORIZONTAL = 14;
 const INPUT_TEXT_H = 52;
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     bottom: INPUT_BOTTOM,
     backgroundColor: PANEL_BG,
     borderColor: PANEL_BORDER,
-    borderRadius: 18,
+    borderRadius: 24,
     overflow: 'hidden',
   },
   inputContent: {

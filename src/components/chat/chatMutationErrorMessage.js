@@ -10,6 +10,9 @@ export function chatMutationErrorMessage(error, fallback) {
   if (code === '42501' || /permission denied|row-level security|violates row-level/i.test(msg)) {
     return 'Нет прав изменить сообщение. Убедись, что ты вошёл в аккаунт и это твой чат.';
   }
+  if (/blocked_peer/i.test(msg)) {
+    return 'Сообщение не отправлено: контакт заблокирован.';
+  }
   if (code === 'PGRST301' || /jwt expired|invalid jwt|not authenticated/i.test(msg)) {
     return 'Сессия истекла. Выйди из приложения и войди снова.';
   }

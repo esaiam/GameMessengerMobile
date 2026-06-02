@@ -3,6 +3,8 @@ import { Alert } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { encryptMessage } from '../../utils/VaultCrypto';
 import { refreshChatsListAfterMessage } from '../../lib/chatsListSync';
+import { chatMutationErrorMessage } from './chatMutationErrorMessage';
+import { isBlocked } from '../../lib/blockedContacts';
 
 export default function useChatSendText({
   text,
@@ -25,6 +27,14 @@ export default function useChatSendText({
 
     if (!otherPlayerName) {
       Alert.alert('Ошибка', 'Не удалось определить получателя');
+      return;
+    }
+
+    if (await isBlocked(nickname, otherPlayerName)) {
+      Alert.alert(
+        'Контакт заблокирован',
+        'Разблокируйте в Профиль → Заблокированные контакты.',
+      );
       return;
     }
 
@@ -70,7 +80,10 @@ export default function useChatSendText({
       setReplyTarget(replySnapshot);
       const detail = e?.message || String(e);
       if (__DEV__) console.warn('Chat insert error:', detail);
-      Alert.alert('Ошибка', detail || 'Не удалось отправить сообщение');
+      Alert.alert(
+        'Ошибка',
+        chatMutationErrorMessage(e, detail || 'Не удалось отправить сообщение'),
+      );
     } finally {
       sendInProgressRef.current = false;
     }

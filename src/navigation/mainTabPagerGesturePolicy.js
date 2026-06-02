@@ -27,11 +27,19 @@ export function getDeepestRouteName(state) {
 }
 
 /**
- * Нативный горизонтальный скролл PagerView.
- * Только по стеку навигации — split-detail не учитываем (иначе ломаются тапы в ChatsList).
+ * Эффективный «текущий» экран для таббара / pager lock.
+ * На планшете чат/нарды в правой колонке (`TabletSplitShell`) не попадают в React Navigation state.
  */
-export function isPagerNativeScrollEnabled({ navigationState }) {
-  const deepest = getDeepestRouteName(navigationState);
+export function getTabBarDeepestRoute(navigationState, splitDetailType) {
+  if (splitDetailType) return splitDetailType;
+  return getDeepestRouteName(navigationState);
+}
+
+/**
+ * Нативный горизонтальный скролл PagerView.
+ */
+export function isPagerNativeScrollEnabled({ navigationState, splitDetailType }) {
+  const deepest = getTabBarDeepestRoute(navigationState, splitDetailType);
   if (deepest && PAGER_SWIPE_DISABLED_DEEPEST.has(deepest)) return false;
   return true;
 }
