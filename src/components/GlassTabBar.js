@@ -159,6 +159,10 @@ export default function GlassTabBar({
   };
 
   const n = tabs.length;
+  const rowPaddingH =
+    n === 3
+      ? TAB_BAR_LAYOUT.rowPaddingH + (TAB_BAR_LAYOUT.threeTabRowPaddingHExtra ?? 16)
+      : TAB_BAR_LAYOUT.rowPaddingH;
   const layoutsReady =
     tabLayouts.length >= n && tabLayouts.slice(0, n).every((L) => L && typeof L.x === 'number');
 
@@ -212,8 +216,6 @@ export default function GlassTabBar({
     anim.start(({ finished }) => { if (finished) settledIndexRef.current = idx; });
   }, [visible, activeIndex, layoutsReady, tabLayouts, translateX, scale]);
 
-  const activeTab = tabs[activeIndex];
-  const highlightBg = activeTab?.name === 'Poker' ? V.gameBubbleBg : V.bgElevated;
   const slideY = ariaTabBarDrive ? null : Animated.multiply(visibility, hideOffsetPx);
 
   const shellPadding = {
@@ -239,12 +241,12 @@ export default function GlassTabBar({
       style={styles.tabBarShell}
     >
       <View style={styles.glassTint} pointerEvents="none" />
-      <View style={styles.row}>
+      <View style={[styles.row, { paddingHorizontal: rowPaddingH }]}>
         <Animated.View
           pointerEvents="none"
           style={[
             styles.highlight,
-            { backgroundColor: highlightBg, transform: [{ translateX }, { scale }] },
+            { backgroundColor: V.bgElevated, transform: [{ translateX }, { scale }] },
           ]}
         />
         {tabs.map((tab, index) => {

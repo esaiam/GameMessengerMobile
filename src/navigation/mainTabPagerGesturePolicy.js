@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-/** Экраны, где нативный свайп PagerView мешает нардам / чату / профилю контакта / подэкранам профиля. */
+/** Экраны, где горизонтальный свайп между табами мешает нардам / чату / профилю контакта / подэкранам профиля. */
 export const PAGER_SWIPE_DISABLED_DEEPEST = new Set([
   'Room',
   'ChatRoom',
@@ -27,7 +27,7 @@ export function getDeepestRouteName(state) {
 }
 
 /**
- * Эффективный «текущий» экран для таббара / pager lock.
+ * Эффективный «текущий» экран для таббара / блокировки свайпа табов.
  * На планшете чат/нарды в правой колонке (`TabletSplitShell`) не попадают в React Navigation state.
  */
 export function getTabBarDeepestRoute(navigationState, splitDetailType) {
@@ -35,9 +35,7 @@ export function getTabBarDeepestRoute(navigationState, splitDetailType) {
   return getDeepestRouteName(navigationState);
 }
 
-/**
- * Нативный горизонтальный скролл PagerView.
- */
+/** Горизонтальный свайп между корневыми табами (material-top-tabs). */
 export function isPagerNativeScrollEnabled({ navigationState, splitDetailType }) {
   const deepest = getTabBarDeepestRoute(navigationState, splitDetailType);
   if (deepest && PAGER_SWIPE_DISABLED_DEEPEST.has(deepest)) return false;

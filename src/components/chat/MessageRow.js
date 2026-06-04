@@ -164,6 +164,8 @@ const MessageRow = React.memo(
 
     const bubbleMaxW = env.windowWidth * 0.75;
     const ariaImageMaxW = env.windowWidth - 24;
+    /** В панели Aria горизонталь только у contentContainer списка (16px). */
+    const rowEdgePadTw = listExtra.ariaPlainPanel ? '' : 'px-4';
 
     const bubbleRadii = isMine
       ? {
@@ -186,11 +188,16 @@ const MessageRow = React.memo(
       (item.aria_voice_message === true ||
         !item.message_type ||
         item.message_type === 'text');
-    const textTimeColor = isMine ? V.outBubbleTime : V.inBubbleTime;
-    const textBodyColor = isMine ? V.outBubbleText : V.inBubbleText;
-    const legacyTimeColor = isMine
-      ? 'rgba(186, 222, 218, 0.52)'
-      : 'rgba(168, 162, 152, 0.58)';
+    /** В панели Aria исходящие — тот же chrome, что входящие в обычном чате. */
+    const ariaPanelUserAsIncoming = listExtra.ariaPlainPanel && isMine;
+    const textTimeColor =
+      isMine && !ariaPanelUserAsIncoming ? V.outBubbleTime : V.inBubbleTime;
+    const textBodyColor =
+      isMine && !ariaPanelUserAsIncoming ? V.outBubbleText : V.inBubbleText;
+    const legacyTimeColor =
+      isMine && !ariaPanelUserAsIncoming
+        ? 'rgba(186, 222, 218, 0.52)'
+        : 'rgba(168, 162, 152, 0.58)';
     const ariaTextBodyStyle = {
       fontSize: MSG_TEXT_SIZE,
       fontWeight: '400',
@@ -426,19 +433,78 @@ const MessageRow = React.memo(
       </>
     );
 
+    const ariaPlainIncoming = listExtra.ariaPlainPanel && !isMine;
+    const dateSeparatorEl =
+      item._showDate ? (
+        <ChatDateSeparator
+          label={item._dateLabel}
+          withTopGap={index < listLength - 1}
+          onPress={
+            env.onDateSeparatorPress
+              ? (anchor) => env.onDateSeparatorPress(anchor, item._dateKey, item._dateLabel)
+              : undefined
+          }
+        />
+      ) : null;
+
+    if (ariaPlainIncoming && isAriaTyping) {
+      return (
+        <View style={{ marginBottom: rowMarginBottom, zIndex: index }}>
+          {dateSeparatorEl}
+          <View style={{ paddingVertical: 8, alignItems: 'flex-start' }}>
+            <AriaTypingDots />
+          </View>
+        </View>
+      );
+    }
+
+    if (ariaPlainIncoming && isTextMessage && !isAriaVoiceBubble) {
+      const plainBodyStyle = {
+        fontSize: MSG_TEXT_SIZE,
+        fontWeight: '400',
+        lineHeight: MSG_LINE_HEIGHT,
+        color: V.textPrimary,
+      };
+      return (
+        <View style={{ marginBottom: rowMarginBottom, zIndex: index }}>
+          {dateSeparatorEl}
+          <Animated.View
+            style={{
+              opacity: messageRowAnims.opacity,
+              transform: [{ scale: messageRowAnims.scale }],
+            }}
+          >
+            <View style={{ paddingVertical: 8, alignItems: 'flex-start', maxWidth: '100%' }}>
+              {useAriaLinks ? (
+                <LinkifyMessageText text={item.text} style={plainBodyStyle} />
+              ) : (
+                <Text style={plainBodyStyle}>{item.text}</Text>
+              )}
+              {ariaGeneratedAttachment ? (
+                <View style={{ marginTop: 8, alignSelf: 'flex-start' }}>
+                  <AriaGeneratedAttachment
+                    attachment={ariaGeneratedAttachment}
+                    layoutMaxWidth={
+                      ariaGeneratedAttachment?.mime_type === 'image/png'
+                        ? ariaImageMaxW
+                        : bubbleMaxW
+                    }
+                    formattedTime={item._formattedTime}
+                    isRead={!!item.read_at}
+                    isMine={false}
+                    onImagePress={(uri) => env.setFullScreenImage?.(uri)}
+                  />
+                </View>
+              ) : null}
+            </View>
+          </Animated.View>
+        </View>
+      );
+    }
+
     return (
       <View style={{ marginBottom: rowMarginBottom, zIndex: index }}>
-        {item._showDate && (
-          <ChatDateSeparator
-            label={item._dateLabel}
-            withTopGap={index < listLength - 1}
-            onPress={
-              env.onDateSeparatorPress
-                ? (anchor) => env.onDateSeparatorPress(anchor, item._dateKey, item._dateLabel)
-                : undefined
-            }
-          />
-        )}
+        {dateSeparatorEl}
         {isAriaTyping ? (
           <Animated.View
             style={{
@@ -447,7 +513,7 @@ const MessageRow = React.memo(
           >
             <View
               style={[
-                tw`flex-row items-end px-4`,
+                tw`flex-row items-end ${rowEdgePadTw}`,
                 isSelected && {backgroundColor: MESSAGE_ROW_SELECTION_BG}]}
             >
               <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start' }}>
@@ -485,7 +551,7 @@ const MessageRow = React.memo(
           >
             <View
               style={[
-                tw`${isMine ? 'items-end' : 'items-start'} px-4`,
+                tw`${isMine ? 'items-end' : 'items-start'} ${rowEdgePadTw}`,
                 isSelected && { backgroundColor: MESSAGE_ROW_SELECTION_BG }]}
             >
               {!isMine && (
@@ -533,7 +599,7 @@ const MessageRow = React.memo(
             >
               <View
                 style={[
-                  tw`${isMine ? 'items-end' : 'items-start'} px-4`,
+                  tw`${isMine ? 'items-end' : 'items-start'} ${rowEdgePadTw}`,
                   isSelected && { backgroundColor: MESSAGE_ROW_SELECTION_BG }]}
               >
                 <View
@@ -561,7 +627,7 @@ const MessageRow = React.memo(
                         isMine={isMine}
                         onReply={fireReply}
                       >
-                        {isMine ? (
+                        {isMine && !listExtra.ariaPlainPanel ? (
                           <OutgoingBubble
                             message={item}
                             bubbleMaxW={bubbleMaxW}
@@ -576,7 +642,7 @@ const MessageRow = React.memo(
                         ) : (
                           <BubbleMaterial
                             bubbleMaxW={bubbleMaxW}
-                            alignSelf="flex-start"
+                            alignSelf={isMine ? 'flex-end' : 'flex-start'}
                             bubbleRadii={bubbleRadii}
                             isEphemeral={isEphemeral}
                             selectionMode={listExtra.selectionMode}

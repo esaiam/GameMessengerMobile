@@ -14,7 +14,7 @@ function applyProfileStackNav(nav, screen, params) {
   return true;
 }
 
-export const PROFILE_TAB_INDEX = 3;
+export const PROFILE_TAB_INDEX = 2;
 
 /** Для вызовов вне React (navigateToBlockedContacts и т.п.) */
 export const mainTabsNavigationApi = {

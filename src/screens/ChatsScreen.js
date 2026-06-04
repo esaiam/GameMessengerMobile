@@ -16,6 +16,7 @@ import {
 } from '../hooks/useChatsSearchReveal';
 import { useChatsScreenPagerScroll } from '../hooks/useChatsScreenPagerScroll';
 import { useAriaOverscroll } from '../hooks/useAriaOverscroll';
+import { useAriaChatSession } from '../hooks/useAriaChatSession';
 import ChatsListRow from '../components/chats/ChatsListRow';
 import ChatsHeaderGlow from '../components/chats/ChatsHeaderGlow';
 import ChatsScreenHeader from '../components/chats/ChatsScreenHeader';
@@ -32,6 +33,7 @@ import {
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import { useSplitDetail } from '../context/SplitDetailContext';
 import ChatClearHistoryConfirmModal from '../components/chat/ChatClearHistoryConfirmModal';
+import ChatHeaderOverflowMenuModal from '../components/chat/ChatHeaderOverflowMenuModal';
 import { V } from '../theme';
 
 function ChatsListTopInset({ style }) {
@@ -48,6 +50,9 @@ export default function ChatsScreen({ route, navigation }) {
 
   const [q, setQ] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
+  const [ariaOverflowVisible, setAriaOverflowVisible] = useState(false);
+  const [ariaClearConfirmVisible, setAriaClearConfirmVisible] = useState(false);
+  const [ariaClearInProgress, setAriaClearInProgress] = useState(false);
   const searchInputRef = useRef(null);
   const headerLayout = useMessengerHeaderLayout();
 
@@ -127,6 +132,20 @@ export default function ChatsScreen({ route, navigation }) {
     releaseTabBarSuppress,
   });
 
+  const { ariaMessages, ariaResolvedNickname, sendToAria, ariaOnline, clearAriaHistory } =
+    useAriaChatSession(ariaVisible, nickname);
+
+  const confirmAriaClearHistory = useCallback(async () => {
+    if (ariaClearInProgress) return;
+    setAriaClearInProgress(true);
+    try {
+      await clearAriaHistory();
+      setAriaClearConfirmVisible(false);
+    } finally {
+      setAriaClearInProgress(false);
+    }
+  }, [ariaClearInProgress, clearAriaHistory]);
+
   const {
     onListScrollBeginDrag,
     onListScrollEndDrag,
@@ -166,6 +185,7 @@ export default function ChatsScreen({ route, navigation }) {
     navigation,
     isSplit,
     setDetailParams,
+    openAriaPanel,
   });
 
   const {
@@ -301,6 +321,12 @@ export default function ChatsScreen({ route, navigation }) {
         committed={ariaVisible}
         onClose={closeAriaPanel}
         headerMinHeight={headerLayout.minHeight}
+        ariaMessages={ariaMessages}
+        ariaDisplayNickname={
+          ariaResolvedNickname !== null ? ariaResolvedNickname : nickname
+        }
+        sendToAria={sendToAria}
+        ariaOnline={ariaOnline}
       />
 
       <View
@@ -327,8 +353,36 @@ export default function ChatsScreen({ route, navigation }) {
           onOpenSearch={onOpenSearch}
           ariaGlowIntensity={ariaGlowIntensity}
           onOpenAria={openAriaPanel}
+          ariaPanelOpen={ariaVisible}
+          onOpenAriaOverflow={() => setAriaOverflowVisible(true)}
         />
       </View>
+
+      <ChatHeaderOverflowMenuModal
+        uiReady
+        visible={ariaOverflowVisible}
+        onClose={() => setAriaOverflowVisible(false)}
+        onClearHistory={() => {
+          setAriaOverflowVisible(false);
+          setAriaClearConfirmVisible(true);
+        }}
+      />
+
+      <ChatClearHistoryConfirmModal
+        uiReady
+        visible={ariaClearConfirmVisible}
+        confirmDisabled={ariaClearInProgress}
+        onClose={() => {
+          if (!ariaClearInProgress) setAriaClearConfirmVisible(false);
+        }}
+        onConfirm={() => {
+          void confirmAriaClearHistory();
+        }}
+        title="Очистить переписку?"
+        description="Переписка с Aria будет удалена безвозвратно."
+        confirmLabel="Очистить"
+        showEveryoneCheckbox={false}
+      />
 
       <ChatClearHistoryConfirmModal
         uiReady

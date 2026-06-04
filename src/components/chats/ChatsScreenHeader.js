@@ -2,7 +2,9 @@ import React, { useMemo, useRef } from 'react';
 import { Animated as RNAnimated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import tw from 'twrnc';
-import { Search, Sparkles, Trash2 } from '../../icons/lucideIcons';
+import { ARIA_CONTACT } from '../../lib/aria';
+import { EllipsisVertical, Search, Sparkles, Trash2 } from '../../icons/lucideIcons';
+import { CHAT_HEADER_AVATAR_SIZE, ICON_SELECTION_ACTION } from '../ChatRoomHeader';
 import SafeBlurView from '../SafeBlurView';
 import { V } from '../../theme';
 
@@ -40,6 +42,8 @@ export default function ChatsScreenHeader({
   onOpenSearch,
   ariaGlowIntensity,
   onOpenAria,
+  ariaPanelOpen = false,
+  onOpenAriaOverflow,
 }) {
   const defaultAriaGlowIntensity = useRef(new RNAnimated.Value(0)).current;
   const glowIntensity = ariaGlowIntensity ?? defaultAriaGlowIntensity;
@@ -99,6 +103,30 @@ export default function ChatsScreenHeader({
           >
             <Trash2 size={20} color={V.dangerMuted} strokeWidth={1.5} />
           </TouchableOpacity>
+        </>
+      ) : ariaPanelOpen ? (
+        <>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title} numberOfLines={1}>
+              {ARIA_CONTACT.display_name}
+            </Text>
+            <Text style={styles.subtitle}>AI</Text>
+          </View>
+          <View style={styles.ariaMenuSlot}>
+            <TouchableOpacity
+              onPress={onOpenAriaOverflow}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Меню чата"
+              style={styles.ariaMenuTouch}
+            >
+              <EllipsisVertical
+                size={ICON_SELECTION_ACTION}
+                color={V.textPrimary}
+                strokeWidth={1.5}
+              />
+            </TouchableOpacity>
+          </View>
         </>
       ) : (
         <>
@@ -198,5 +226,18 @@ const styles = StyleSheet.create({
   ariaIconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  /** Слот ⋮ как `headerRightTrailing` в ChatRoomHeader */
+  ariaMenuSlot: {
+    width: ICON_SELECTION_ACTION,
+    height: CHAT_HEADER_AVATAR_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ariaMenuTouch: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

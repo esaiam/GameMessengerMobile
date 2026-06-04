@@ -91,7 +91,7 @@ export const GAME_NO_OVERSCROLL_PROPS = {
 export const TAB_BAR_LAYOUT = {
   horizontalPad: 14,
   /** Доп. отступ капсулы таб-бара от краёв экрана с каждой стороны (к `GlassTabBar` formula). */
-  screenSideInsetExtra: 16,
+  screenSideInsetExtra: 56,
   floatBottom: 4,
   /** Зазор между нижней гранью капсулы таб-бара и низом экрана (`GlassTabBar`). */
   screenBottomGap: 8,
@@ -99,6 +99,8 @@ export const TAB_BAR_LAYOUT = {
   /** Высота стеклянной капсулы таб-бара (`GlassTabBar` / `SafeBlurView`). */
   shellHeight: 52,
   rowPaddingH: 8,
+  /** Доп. padding ряда при 3 вкладках — иконки не разъезжаются шире, чем при 4. */
+  threeTabRowPaddingHExtra: 16,
   rowPaddingV: 15,
   iconSize: 22,
   topCornerRadius: 32,

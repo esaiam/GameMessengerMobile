@@ -15,7 +15,9 @@ export default function ChatClearHistoryConfirmModal({
   description = 'Сообщения исчезнут из списка согласно выбранному варианту.',
   confirmLabel = 'Очистить',
   checkboxLabel = 'Удалить у всех',
-  confirmDisabled = false }) {
+  confirmDisabled = false,
+  showEveryoneCheckbox = true,
+}) {
   const [deleteForEveryone, setDeleteForEveryone] = useState(false);
 
   useEffect(() => {
@@ -35,35 +37,40 @@ export default function ChatClearHistoryConfirmModal({
         <Text style={styles.description}>{description}</Text>
       </View>
 
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: deleteForEveryone }}
-        accessibilityLabel="Удалить у всех"
-        onPress={confirmDisabled ? undefined : () => setDeleteForEveryone((v) => !v)}
-        style={({ pressed }) => [
-          styles.checkboxRow,
-          !confirmDisabled && pressed && { backgroundColor: V.hoverBg },
-        ]}
-      >
-        <View
-          style={[
-            styles.checkboxBox,
-            { backgroundColor: deleteForEveryone ? V.sageSubtle : 'transparent' },
-          ]}
-        >
-          {deleteForEveryone ? <Check size={14} color={V.accentSage} strokeWidth={1.5} /> : null}
-        </View>
-        <Text
-          style={[
-            styles.checkboxText,
-            Platform.OS === 'android' ? { includeFontPadding: false } : null,
-          ]}
-        >
-          {checkboxLabel}
-        </Text>
-      </Pressable>
-
-      <View style={styles.divider} />
+      {showEveryoneCheckbox ? (
+        <>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: deleteForEveryone }}
+            accessibilityLabel="Удалить у всех"
+            onPress={confirmDisabled ? undefined : () => setDeleteForEveryone((v) => !v)}
+            style={({ pressed }) => [
+              styles.checkboxRow,
+              !confirmDisabled && pressed && { backgroundColor: V.hoverBg },
+            ]}
+          >
+            <View
+              style={[
+                styles.checkboxBox,
+                { backgroundColor: deleteForEveryone ? V.sageSubtle : 'transparent' },
+              ]}
+            >
+              {deleteForEveryone ? (
+                <Check size={14} color={V.accentSage} strokeWidth={1.5} />
+              ) : null}
+            </View>
+            <Text
+              style={[
+                styles.checkboxText,
+                Platform.OS === 'android' ? { includeFontPadding: false } : null,
+              ]}
+            >
+              {checkboxLabel}
+            </Text>
+          </Pressable>
+          <View style={styles.divider} />
+        </>
+      ) : null}
 
       <View style={styles.actionsRow}>
         <Pressable

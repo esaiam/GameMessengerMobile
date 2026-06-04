@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
-import { ARIA_CONTACT, ARIA_ROOM_ID } from '../../lib/aria';
 import { isBlocked } from '../../lib/blockedContacts';
 import { navigateToBlockedContacts } from '../../lib/navigateToBlockedContacts';
 
@@ -9,23 +8,12 @@ export function useChatsNavigateToChat({
   navigation,
   isSplit,
   setDetailParams,
+  openAriaPanel,
 }) {
   return useCallback(
     async (item) => {
       if (item.isAria) {
-        const params = {
-          roomId: ARIA_ROOM_ID,
-          isAriaChat: true,
-          contact: ARIA_CONTACT,
-          nickname,
-          title: ARIA_CONTACT.display_name,
-          peerName: ARIA_CONTACT.display_name,
-        };
-        if (isSplit) {
-          setDetailParams({ type: 'ChatRoom', params });
-        } else {
-          navigation.navigate('ChatRoom', params);
-        }
+        openAriaPanel?.();
         return;
       }
       if (await isBlocked(nickname, item.contactName)) {
@@ -55,6 +43,6 @@ export function useChatsNavigateToChat({
         navigation.navigate('Room', params);
       }
     },
-    [nickname, navigation, isSplit, setDetailParams],
+    [nickname, navigation, isSplit, setDetailParams, openAriaPanel],
   );
 }

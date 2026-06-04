@@ -19,6 +19,7 @@ export default function useChatMessageListRender({
   activatedVideoIds,
   replyToMessage,
   isAriaChat,
+  ariaPlainPanel = false,
   openCalendarFromSeparator,
   activeVoiceUri,
   activePlayerStatus,
@@ -57,8 +58,15 @@ export default function useChatMessageListRender({
   );
 
   const listExtraDataStable = useMemo(
-    () => ({ selectionMode, selectedHash, renderableVideoIds, onUnlockVideo, isAriaChat }),
-    [selectionMode, selectedHash, renderableVideoIds, onUnlockVideo, isAriaChat],
+    () => ({
+      selectionMode,
+      selectedHash,
+      renderableVideoIds,
+      onUnlockVideo,
+      isAriaChat,
+      ariaPlainPanel,
+    }),
+    [selectionMode, selectedHash, renderableVideoIds, onUnlockVideo, isAriaChat, ariaPlainPanel],
   );
 
   const voiceProgressSig = useMemo(() => {

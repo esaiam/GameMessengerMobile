@@ -268,9 +268,25 @@ export const ARIA_MESSAGE_TYPING = 'aria_typing';
 
 export const ARIA_TYPING_ROW_ID = 'aria-typing-local';
 
+/** Макс. сообщений в ленте и в `aria_messages` (без typing). */
+export const ARIA_CHAT_MAX_STORED_MESSAGES = 20;
+
 /** Сообщение для истории API и сохранения (не строка typing). */
 export function isAriaPersistableMessage(m) {
   return m.message_type !== ARIA_MESSAGE_TYPING && !m.isTyping;
+}
+
+/** Оставляет последние N persistable; typing-строки не считаются и остаются в хвосте. */
+export function trimAriaDisplayMessages(messages, maxCount = ARIA_CHAT_MAX_STORED_MESSAGES) {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return messages;
+  }
+  const typingRows = messages.filter((m) => !isAriaPersistableMessage(m));
+  const persistable = messages.filter(isAriaPersistableMessage);
+  if (persistable.length <= maxCount) {
+    return messages;
+  }
+  return [...persistable.slice(-maxCount), ...typingRows];
 }
 
 function historyRoleFromMessage(m) {
@@ -285,7 +301,7 @@ function historyRoleFromMessage(m) {
  */
 export function buildAriaRequestHistory(messages, opts = {}) {
   const filtered = messages.filter(isAriaPersistableMessage);
-  const mapped = filtered.slice(-20).map((m) => ({
+  const mapped = filtered.slice(-ARIA_CHAT_MAX_STORED_MESSAGES).map((m) => ({
     role: historyRoleFromMessage(m),
     text: typeof m.text === 'string' ? m.text : '' }));
   if (opts.lastUserTextOverride) {
