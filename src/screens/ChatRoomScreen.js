@@ -12,10 +12,12 @@ import { usePresence } from '../hooks/usePresence';
 import { useAriaChatSession } from '../hooks/useAriaChatSession';
 import { Phone } from '../icons/lucideIcons';
 import { useMessengerScreenBackHandler } from '../lib/safeGoBack';
+import { useIsFocused } from '@react-navigation/native';
 
 export default function ChatRoomScreen({ route, navigation }) {
   const { nickname, roomId, roomCode, title, peerName, isAriaChat, contact } = route.params || {};
   const insets = useSafeAreaInsets();
+  const roomFocused = useIsFocused();
   useMessengerScreenBackHandler(navigation);
 
   const {
@@ -57,6 +59,7 @@ export default function ChatRoomScreen({ route, navigation }) {
   const chatRoomHeader = useMemo(
     () => ({
       title: headerTitle,
+      peerHandle: isAriaChat ? null : peerName || title || null,
       contactOnline,
       navigation,
       ...(isAriaChat ? { ariaOnline } : {}),
@@ -85,7 +88,7 @@ export default function ChatRoomScreen({ route, navigation }) {
             }
           : {}),
     }),
-    [headerTitle, contactOnline, navigation, isAriaChat, ariaOnline, roomId],
+    [headerTitle, peerName, title, contactOnline, navigation, isAriaChat, ariaOnline, roomId],
   );
 
   useEffect(() => {
@@ -118,6 +121,7 @@ export default function ChatRoomScreen({ route, navigation }) {
           listPaddingTop={listPaddingTop}
           chatRoomHeader={chatRoomHeader}
           onTopOverlayHeight={setFrostedHeaderH}
+          roomFocused={roomFocused}
         />
       )}
       {isAriaChat ? (

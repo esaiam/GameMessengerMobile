@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import {
   View,
   TouchableOpacity,
@@ -30,6 +30,7 @@ import { useMessengerScreenBackHandler } from '../lib/safeGoBack';
 
 export default function GameScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const roomFocused = useIsFocused();
   useMessengerScreenBackHandler(navigation);
   const { width: windowW, height: windowH } = useWindowDimensions();
   const shortestSide = Math.min(windowW, windowH);
@@ -449,6 +450,7 @@ export default function GameScreen({ route, navigation }) {
             roomCode={room?.code}
             nickname={nickname}
             peerName={opponentName}
+            roomFocused={roomFocused}
             renderPausedRef={renderPausedRef}
             diceBusyRef={diceBusyRef}
             chatFlushDeferredRef={chatFlushDeferredRef}
@@ -458,6 +460,7 @@ export default function GameScreen({ route, navigation }) {
             onTopOverlayHeight={setFrostedHeaderH}
             chatRoomHeader={{
               title: opponentName || 'Чат',
+              peerHandle: opponentName || null,
               contactOnline: selfPlay ? true : opponentOnline,
               navigation,
               onHeaderPress: opponentName

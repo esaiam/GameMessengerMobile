@@ -5,8 +5,12 @@ import {
   crypto_box_NONCEBYTES,
   randombytes_buf,
 } from 'react-native-libsodium';
-import { getOrCreateKeyPair, KeyPair } from './VaultKeyStore';
-import { fetchPublicKey } from './VaultKeyServer';
+import { loadKeyPair, KeyPair } from './VaultKeyStore';
+import {
+  fetchPublicKey,
+  resolveRecipientPublicKeyB64,
+  ensureUserIdentityKeys,
+} from './VaultKeyServer';
 
 export type EncryptedPayload = string; // base64(nonce + ciphertext)
 
@@ -37,7 +41,8 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
  */
 export async function encryptMessage(
   plaintext: string,
-  recipientPlayerName: string
+  recipientPlayerName: string,
+  myPlayerName: string
 ): Promise<EncryptedPayload> {
   if (!plaintext || plaintext.trim() === '') {
     throw new Error('Нельзя зашифровать пустое сообщение');
@@ -45,8 +50,14 @@ export async function encryptMessage(
 
   await ready;
 
-  const myKeyPair: KeyPair = await getOrCreateKeyPair();
-  const recipientPubKeyB64 = await fetchPublicKey(recipientPlayerName);
+  await ensureUserIdentityKeys(myPlayerName);
+  const myKeyPair: KeyPair | null = await loadKeyPair(myPlayerName);
+  if (!myKeyPair) {
+    throw new Error(
+      `VaultCrypto: нет ключей для «${myPlayerName}». Войдите с устройства, где создан аккаунт.`
+    );
+  }
+  const recipientPubKeyB64 = await resolveRecipientPublicKeyB64(recipientPlayerName);
 
   if (!recipientPubKeyB64) {
     throw new Error(`VaultCrypto: публичный ключ получателя «${recipientPlayerName}» не найден`);
@@ -76,7 +87,8 @@ export async function encryptMessage(
  */
 export async function decryptMessage(
   payload: EncryptedPayload,
-  senderPlayerName: string
+  senderPlayerName: string,
+  myPlayerName: string
 ): Promise<string | null> {
   try {
     // nonce (24 bytes) + MAC (16 bytes) = 40 bytes → ~54 base64 chars minimum
@@ -84,7 +96,8 @@ export async function decryptMessage(
 
     await ready;
 
-    const myKeyPair: KeyPair = await getOrCreateKeyPair();
+    const myKeyPair: KeyPair | null = await loadKeyPair(myPlayerName);
+    if (!myKeyPair) return null;
     const senderPubKeyB64 = await fetchPublicKey(senderPlayerName);
 
     if (!senderPubKeyB64) return null;

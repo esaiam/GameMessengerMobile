@@ -8,6 +8,7 @@ import { TAB_BAR_LAYOUT, V } from '../../theme';
 export const CONTACTS_INVITE_FAB_SIZE = 56;
 const INVITE_ICON_SIZE = 24;
 const TAB_CLEARANCE_PX = 12;
+const GLOW_RING_INSET = 8;
 
 export default function ContactsInviteFab({ onPress }) {
   const insets = useSafeAreaInsets();
@@ -79,16 +80,37 @@ export default function ContactsInviteFab({ onPress }) {
     >
       <RNAnimated.View
         style={[
-          styles.circle,
+          styles.fabStack,
           {
             width: CONTACTS_INVITE_FAB_SIZE,
             height: CONTACTS_INVITE_FAB_SIZE,
-            borderRadius: CONTACTS_INVITE_FAB_SIZE / 2,
             transform: [{ scaleX }, { scaleY }],
           },
         ]}
       >
-        <UserPlus size={INVITE_ICON_SIZE} color={V.accentSage} strokeWidth={1.5} />
+        <RNAnimated.View
+          style={[
+            styles.glowRing,
+            {
+              width: CONTACTS_INVITE_FAB_SIZE + GLOW_RING_INSET * 2,
+              height: CONTACTS_INVITE_FAB_SIZE + GLOW_RING_INSET * 2,
+              borderRadius: (CONTACTS_INVITE_FAB_SIZE + GLOW_RING_INSET * 2) / 2,
+            },
+          ]}
+          pointerEvents="none"
+        />
+        <RNAnimated.View
+          style={[
+            styles.circle,
+            {
+              width: CONTACTS_INVITE_FAB_SIZE,
+              height: CONTACTS_INVITE_FAB_SIZE,
+              borderRadius: CONTACTS_INVITE_FAB_SIZE / 2,
+            },
+          ]}
+        >
+          <UserPlus size={INVITE_ICON_SIZE} color={V.accentGold} strokeWidth={1.5} />
+        </RNAnimated.View>
       </RNAnimated.View>
     </Pressable>
   );
@@ -98,12 +120,27 @@ const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
     zIndex: 3,
+    overflow: 'visible',
+  },
+  fabStack: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  glowRing: {
+    position: 'absolute',
+    backgroundColor: V.goldGlow,
   },
   circle: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: V.sageSubtle,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: V.sageBorder,
+    backgroundColor: V.goldFabBg,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: V.goldBorderStrong,
+    shadowColor: V.accentGold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 14,
+    elevation: 10,
   },
 });

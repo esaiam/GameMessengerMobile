@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
-import { View, Text, Animated, Pressable } from 'react-native';
+import { View, Text, Animated, Pressable, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import tw from 'twrnc';
 import { V } from '../../theme';
 import { Mic } from '../../icons/lucideIcons';
@@ -190,6 +190,18 @@ const MessageRow = React.memo(
         item.message_type === 'text');
     /** В панели Aria исходящие — тот же chrome, что входящие в обычном чате. */
     const ariaPanelUserAsIncoming = listExtra.ariaPlainPanel && isMine;
+    /** В панели Aria — выделение и копирование текста. */
+    const textSelectable = !!listExtra.ariaPlainPanel;
+    const bubbleSwipeEnabled = !listExtra.selectionMode && !listExtra.ariaPlainPanel;
+    const TextMessageWrapper = textSelectable ? View : Pressable;
+    const textMessageWrapperProps = textSelectable
+      ? { style: { width: '100%' } }
+      : {
+          onPress: handleMessagePress,
+          onLongPress: emitMessageLongPress,
+          delayLongPress: 400,
+          style: { width: '100%' },
+        };
     const textTimeColor =
       isMine && !ariaPanelUserAsIncoming ? V.outBubbleTime : V.inBubbleTime;
     const textBodyColor =
@@ -318,14 +330,21 @@ const MessageRow = React.memo(
                   fontWeight: '400',
                   lineHeight: MSG_LINE_HEIGHT,
                   color: textBodyColor}}
+                selectable={textSelectable}
               >
                 {item.text}
               </Text>
             </View>
           ) : useAriaLinks ? (
-            <LinkifyMessageText text={item.text} style={ariaTextBodyStyle} />
+            <LinkifyMessageText
+              text={item.text}
+              style={ariaTextBodyStyle}
+              selectable={textSelectable}
+            />
           ) : (
-            <Text style={ariaTextBodyStyle}>{item.text}</Text>
+            <Text style={ariaTextBodyStyle} selectable={textSelectable}>
+              {item.text}
+            </Text>
           )}
           <View
             style={{
@@ -387,6 +406,7 @@ const MessageRow = React.memo(
               lineHeight: MSG_LINE_HEIGHT,
               fontStyle: 'italic',
               color: V.textSecondary}}
+            selectable={textSelectable}
           >
             {item.transcription}
           </Text>
@@ -400,26 +420,48 @@ const MessageRow = React.memo(
         <ChatReplyPreview replyMsg={replyMsg} />
         <View style={imageRowStyles.row}>
           {isMine ? <View style={imageRowStyles.chromeHit} /> : null}
-          <ChatImageMessage
-            uri={item.media_url}
-            caption={item.text}
-            formattedTime={item._formattedTime}
-            isRead={!!item.read_at}
-            isMine={isMine}
-            isGif={isGifMediaUrl(item.media_url)}
-            layoutMaxWidth={
-              isGifMediaUrl(item.media_url)
-                ? Math.floor(env.windowWidth * 0.86)
-                : bubbleMaxW
-            }
-            isEphemeral={isEphemeral}
-            expiresAt={item.expires_at}
-            isSelected={isSelected}
-            isUploading={item._isOptimistic === true}
-            onPress={handleImagePress}
-            onCaptionPress={handleMessagePress}
-            onLongPress={emitMessageLongPress}
-          />
+          {Array.isArray(item.media_urls) && item.media_urls.length > 1 ? (
+            <ChatMultiImageGrid
+              urls={item.media_urls}
+              caption={item.text}
+              layoutMaxWidth={bubbleMaxW}
+              formattedTime={item._formattedTime}
+              isRead={!!item.read_at}
+              isMine={isMine}
+              isEphemeral={isEphemeral}
+              expiresAt={item.expires_at}
+              isSelected={isSelected}
+              isUploading={item._isOptimistic === true}
+              selectionMode={listExtra.selectionMode}
+              item={item}
+              onMessagePress={onMessagePress}
+              onOpenImage={(uri) => env.setFullScreenImage?.(uri)}
+              onDoubleTapHeart={fireHeartReaction}
+              onCaptionPress={handleMessagePress}
+              onLongPress={emitMessageLongPress}
+            />
+          ) : (
+            <ChatImageMessage
+              uri={item.media_url}
+              caption={item.text}
+              formattedTime={item._formattedTime}
+              isRead={!!item.read_at}
+              isMine={isMine}
+              isGif={isGifMediaUrl(item.media_url)}
+              layoutMaxWidth={
+                isGifMediaUrl(item.media_url)
+                  ? Math.floor(env.windowWidth * 0.86)
+                  : bubbleMaxW
+              }
+              isEphemeral={isEphemeral}
+              expiresAt={item.expires_at}
+              isSelected={isSelected}
+              isUploading={item._isOptimistic === true}
+              onPress={handleImagePress}
+              onCaptionPress={handleMessagePress}
+              onLongPress={emitMessageLongPress}
+            />
+          )}
           {!isMine ? <View style={imageRowStyles.chromeHit} /> : null}
         </View>
       </>
@@ -476,9 +518,15 @@ const MessageRow = React.memo(
           >
             <View style={{ paddingVertical: 8, alignItems: 'flex-start', maxWidth: '100%' }}>
               {useAriaLinks ? (
-                <LinkifyMessageText text={item.text} style={plainBodyStyle} />
+                <LinkifyMessageText
+                  text={item.text}
+                  style={plainBodyStyle}
+                  selectable={textSelectable}
+                />
               ) : (
-                <Text style={plainBodyStyle}>{item.text}</Text>
+                <Text style={plainBodyStyle} selectable={textSelectable}>
+                  {item.text}
+                </Text>
               )}
               {ariaGeneratedAttachment ? (
                 <View style={{ marginTop: 8, alignSelf: 'flex-start' }}>
@@ -569,7 +617,7 @@ const MessageRow = React.memo(
               )}
               <View style={bubbleAnchorStyle}>
                 <MessageBubbleSwipeWrap
-                  enabled={!listExtra.selectionMode}
+                  enabled={bubbleSwipeEnabled}
                   isMine={isMine}
                   onReply={fireReply}
                 >
@@ -591,12 +639,7 @@ const MessageRow = React.memo(
               opacity: messageRowAnims.opacity,
               transform: [{ scale: messageRowAnims.scale }] }}
           >
-            <Pressable
-              onPress={handleMessagePress}
-              onLongPress={emitMessageLongPress}
-              delayLongPress={400}
-              style={{ width: '100%' }}
-            >
+            <TextMessageWrapper {...textMessageWrapperProps}>
               <View
                 style={[
                   tw`${isMine ? 'items-end' : 'items-start'} ${rowEdgePadTw}`,
@@ -623,7 +666,7 @@ const MessageRow = React.memo(
                   <View style={bubbleAnchorStyle}>
                     <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
                       <MessageBubbleSwipeWrap
-                        enabled={!listExtra.selectionMode}
+                        enabled={bubbleSwipeEnabled}
                         isMine={isMine}
                         onReply={fireReply}
                       >
@@ -671,7 +714,7 @@ const MessageRow = React.memo(
                   ) : null}
                 </View>
               </View>
-            </Pressable>
+            </TextMessageWrapper>
           </Animated.View>
         )}
       </View>
@@ -729,5 +772,326 @@ const imageRowStyles = {
   chromeHit: {
     flex: 1,
     alignSelf: 'stretch' } };
+
+const GRID_GAP = 2;
+const GRID_RADIUS = 8;
+
+function ChatMultiImageGridCell({
+  uri,
+  width,
+  height,
+  borderRadii,
+  showMoreOverlay,
+  moreCount,
+  selectionMode,
+  item,
+  onMessagePress,
+  onOpenImage,
+  onDoubleTapHeart,
+  onLongPress,
+}) {
+  const handlePress = useDoubleTapPress(
+    (e) => {
+      if (selectionMode) onMessagePress(e, item);
+      else onOpenImage(uri);
+    },
+    onDoubleTapHeart,
+  );
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      onLongPress={onLongPress}
+      delayLongPress={400}
+      style={({ pressed }) => [
+        multiImageGridStyles.cell,
+        { width, height },
+        borderRadii,
+        pressed && multiImageGridStyles.cellPressed,
+      ]}
+    >
+      <Image source={{ uri }} style={multiImageGridStyles.cellImage} resizeMode="cover" />
+      {showMoreOverlay ? (
+        <View pointerEvents="none" style={multiImageGridStyles.moreOverlay}>
+          <Text style={multiImageGridStyles.moreOverlayText}>+{moreCount}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function ChatMultiImageGrid({
+  urls,
+  caption,
+  layoutMaxWidth,
+  formattedTime,
+  isRead,
+  isMine,
+  isEphemeral,
+  expiresAt,
+  isSelected,
+  isUploading,
+  selectionMode,
+  item,
+  onMessagePress,
+  onOpenImage,
+  onDoubleTapHeart,
+  onCaptionPress,
+  onLongPress,
+}) {
+  const hasCaption = Boolean(String(caption || '').trim());
+  const gridW = Math.floor(layoutMaxWidth);
+  const half = (gridW - GRID_GAP) / 2;
+  const count = urls.length;
+  const R = GRID_RADIUS;
+
+  const cellProps = {
+    selectionMode,
+    item,
+    onMessagePress,
+    onOpenImage,
+    onDoubleTapHeart,
+    onLongPress,
+  };
+
+  let gridBody = null;
+
+  if (count === 2) {
+    gridBody = (
+      <View style={[multiImageGridStyles.row, { width: gridW }]}>
+        <ChatMultiImageGridCell
+          uri={urls[0]}
+          width={half}
+          height={half}
+          borderRadii={{ borderTopLeftRadius: R, borderBottomLeftRadius: R }}
+          {...cellProps}
+        />
+        <ChatMultiImageGridCell
+          uri={urls[1]}
+          width={half}
+          height={half}
+          borderRadii={{ borderTopRightRadius: R, borderBottomRightRadius: R }}
+          {...cellProps}
+        />
+      </View>
+    );
+  } else if (count === 3) {
+    gridBody = (
+      <View style={{ width: gridW, gap: GRID_GAP }}>
+        <ChatMultiImageGridCell
+          uri={urls[0]}
+          width={gridW}
+          height={half}
+          borderRadii={{ borderTopLeftRadius: R, borderTopRightRadius: R }}
+          {...cellProps}
+        />
+        <View style={multiImageGridStyles.row}>
+          <ChatMultiImageGridCell
+            uri={urls[1]}
+            width={half}
+            height={half}
+            borderRadii={{ borderBottomLeftRadius: R }}
+            {...cellProps}
+          />
+          <ChatMultiImageGridCell
+            uri={urls[2]}
+            width={half}
+            height={half}
+            borderRadii={{ borderBottomRightRadius: R }}
+            {...cellProps}
+          />
+        </View>
+      </View>
+    );
+  } else {
+    const visible = urls.slice(0, 4);
+    const extraCount = count - 4;
+    gridBody = (
+      <View style={{ width: gridW, gap: GRID_GAP }}>
+        <View style={multiImageGridStyles.row}>
+          <ChatMultiImageGridCell
+            uri={visible[0]}
+            width={half}
+            height={half}
+            borderRadii={{ borderTopLeftRadius: R }}
+            {...cellProps}
+          />
+          <ChatMultiImageGridCell
+            uri={visible[1]}
+            width={half}
+            height={half}
+            borderRadii={{ borderTopRightRadius: R }}
+            {...cellProps}
+          />
+        </View>
+        <View style={multiImageGridStyles.row}>
+          <ChatMultiImageGridCell
+            uri={visible[2]}
+            width={half}
+            height={half}
+            borderRadii={{ borderBottomLeftRadius: R }}
+            {...cellProps}
+          />
+          <ChatMultiImageGridCell
+            uri={visible[3]}
+            width={half}
+            height={half}
+            borderRadii={{ borderBottomRightRadius: R }}
+            showMoreOverlay={extraCount > 0}
+            moreCount={extraCount}
+            {...cellProps}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  const wrapPress = (child, pressHandler) => {
+    if (!pressHandler && !onLongPress) return child;
+    return (
+      <Pressable
+        onPress={pressHandler}
+        onLongPress={onLongPress}
+        delayLongPress={400}
+        style={({ pressed }) => (pressed ? multiImageGridStyles.cellPressed : null)}
+      >
+        {child}
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={{ maxWidth: gridW, alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
+      <View
+        style={[
+          multiImageGridStyles.gridWrap,
+          { width: gridW },
+          isEphemeral && multiImageGridStyles.gridWrapEphemeral,
+          isSelected && multiImageGridStyles.gridWrapSelected,
+        ]}
+      >
+        {gridBody}
+        {isUploading ? (
+          <View pointerEvents="none" style={multiImageGridStyles.uploadOverlay}>
+            <ActivityIndicator color={V.accentSage} size="small" />
+          </View>
+        ) : null}
+        <View pointerEvents="none" style={multiImageGridStyles.metaOverlay}>
+          {isEphemeral ? <ChatEphemeralCountdown expiresAt={expiresAt} /> : null}
+          <Text style={multiImageGridStyles.timeText}>{formattedTime}</Text>
+          <ChatReadCheck isRead={isRead} isMine={isMine} variant="overlay" />
+        </View>
+      </View>
+      {hasCaption
+        ? wrapPress(
+            <View
+              style={[
+                multiImageGridStyles.captionBox,
+                { maxWidth: gridW },
+                isMine ? multiImageGridStyles.captionBoxMine : multiImageGridStyles.captionBoxTheir,
+                isEphemeral && multiImageGridStyles.gridWrapEphemeral,
+                isSelected && multiImageGridStyles.gridWrapSelected,
+              ]}
+            >
+              <Text
+                style={{
+                  fontSize: MSG_TEXT_SIZE,
+                  fontWeight: '400',
+                  lineHeight: MSG_LINE_HEIGHT,
+                  color: V.textPrimary,
+                }}
+              >
+                {caption}
+              </Text>
+            </View>,
+            onCaptionPress,
+          )
+        : null}
+    </View>
+  );
+}
+
+const multiImageGridStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap: GRID_GAP,
+  },
+  gridWrap: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+    backgroundColor: V.bgElevated,
+  },
+  gridWrapEphemeral: {
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: V.accentGold,
+  },
+  gridWrapSelected: {
+    borderWidth: 2,
+    borderColor: V.accentSage,
+  },
+  cell: {
+    overflow: 'hidden',
+    backgroundColor: V.bgElevated,
+  },
+  cellPressed: {
+    opacity: 0.92,
+  },
+  cellImage: {
+    width: '100%',
+    height: '100%',
+  },
+  moreOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  moreOverlayText: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.95)',
+  },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    zIndex: 2,
+  },
+  metaOverlay: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    zIndex: 3,
+  },
+  timeText: {
+    fontSize: TS_TEXT_SIZE,
+    fontWeight: '400',
+    color: 'rgba(255, 255, 255, 0.88)',
+  },
+  captionBox: {
+    marginTop: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: GRID_RADIUS,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+  },
+  captionBoxMine: {
+    backgroundColor: V.bgElevated,
+  },
+  captionBoxTheir: {
+    backgroundColor: V.inBubbleBg,
+  },
+});
 
 export default MessageRow;

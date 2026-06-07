@@ -10,6 +10,7 @@ import { useNicknameFromRoute } from '../hooks/useNicknameFromRoute';
 import { useChatsSelection } from '../hooks/useChatsSelection';
 import TabBackground from '../components/TabBackground';
 import { useChatsRoomsLoader } from '../hooks/useChatsRoomsLoader';
+import { useChatReadCursors } from '../hooks/useChatReadCursors';
 import {
   useChatsSearchReveal,
   CHATS_SEARCH_BOTTOM_SPACING_PX,
@@ -64,6 +65,7 @@ export default function ChatsScreen({ route, navigation }) {
   );
 
   const { rows, removeRowsByRoomIds } = useChatsRoomsLoader(nickname);
+  const { cursors, isRowUnread } = useChatReadCursors(nickname);
 
   const mainTabsNav = useMainTabsNavigationOptional();
   const acquirePagerLock = mainTabsNav?.acquirePagerInteractionLock;
@@ -215,6 +217,7 @@ export default function ChatsScreen({ route, navigation }) {
         <ChatsListRow
           item={item}
           nickname={nickname}
+          isUnread={isRowUnread(item)}
           selectionMode={selectionMode}
           isSelected={roomKey != null && selectedRoomIds.has(roomKey)}
           onPress={() => handleChatPress(item)}
@@ -222,7 +225,7 @@ export default function ChatsScreen({ route, navigation }) {
         />
       );
     },
-    [nickname, selectionMode, selectedRoomIds, handleChatPress, handleChatLongPress],
+    [nickname, selectionMode, selectedRoomIds, handleChatPress, handleChatLongPress, isRowUnread],
   );
 
   const onOpenSearch = useCallback(() => {
@@ -282,7 +285,7 @@ export default function ChatsScreen({ route, navigation }) {
               <ChatsScreenFlatList
                 listAnimatedProps={listScrollAnimatedProps}
                 data={listData}
-                extraData={selectedHash}
+                extraData={{ selectedHash, cursors }}
                 renderItem={renderItem}
                 onScroll={scrollHandler}
                 onScrollBeginDrag={onListScrollBeginDrag}

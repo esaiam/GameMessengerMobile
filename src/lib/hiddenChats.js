@@ -47,8 +47,13 @@ async function migrateLegacyHiddenToServer(nickname) {
 }
 
 /** Комнаты, скрытые из списка чатов («удалить переписку» только у меня). */
-export async function getHiddenChatRoomIds(nickname) {
+export async function getHiddenChatRoomIds(nickname, options = {}) {
+  const { forceRefresh = false } = options;
   if (!nickname) return new Set();
+
+  if (forceRefresh) {
+    invalidateHiddenChatsCache(nickname);
+  }
 
   const now = Date.now();
   const cached = cacheByNickname.get(nickname);

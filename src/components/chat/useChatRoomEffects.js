@@ -12,6 +12,10 @@ import { isOwnImageMessage, isOwnVoiceMessage } from './useChatOptimisticMedia';
 import { invalidateDecryptCache } from './messageDecrypt';
 import { invalidatePreviewCache } from '../../screens/chats/chatsPreviewCache';
 import {
+  markRoomReadThrough,
+  clearRoomReadCursor,
+} from '../../lib/chatReadCursor';
+import {
   mergeMessagesById,
   MESSAGES_PAGE_SIZE,
   MESSAGE_LIST_SELECT,
@@ -51,8 +55,12 @@ export default function useChatRoomEffects({
   setMessagesLoading,
   messagesRef,
   onInitialPageLoaded,
+  /** Комната на экране (не просто смонтирована в stack) — иначе read cursor сбрасывается в фоне. */
+  roomFocused = false,
   /** ref для отправки broadcast после «удалить у всех» / очистки (когда postgres UPDATE не доходит из‑за RLS) */
-  chatSyncRef }) {
+  chatSyncRef,
+  /** Комната удалена на сервере — уйти с экрана чата */
+  onRoomDeleted }) {
   const readSentRef = useRef(new Set());
 
   /** Realtime INSERT: накапливаем расшифрованные сообщения и сливаем в один setMessages за microtask (меньше ререндеров при пачке событий). */
@@ -83,6 +91,21 @@ export default function useChatRoomEffects({
     let cancelled = false;
     const loadMessages = async () => {
       listOpacity.value = 0;
+
+      const { data: roomRow } = await supabase
+        .from('rooms')
+        .select('thread_cleared_at, last_message_id')
+        .eq('id', roomId)
+        .maybeSingle();
+
+      if (!cancelled && roomRow?.thread_cleared_at && !roomRow?.last_message_id) {
+        setMessages([]);
+        roomMessagesCache.clear(roomId);
+        setMessagesLoading(false);
+        listOpacity.value = 1;
+        onInitialPageLoaded?.(0);
+        return;
+      }
 
       let cached = roomMessagesCache.get(roomId);
       if (!cached || cached.length === 0) {
@@ -354,10 +377,31 @@ export default function useChatRoomEffects({
       })
       .on('broadcast', { event: 'vault_thread_clear' }, () => {
         setMessages(() => {
-          roomMessagesCache.set(roomId, []);
+          roomMessagesCache.clear(roomId);
           return [];
         });
       })
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
+        (payload) => {
+          const room = payload.new;
+          if (room?.thread_cleared_at && !room?.last_message_id) {
+            setMessages([]);
+            roomMessagesCache.clear(roomId);
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
+        () => {
+          setMessages([]);
+          roomMessagesCache.clear(roomId);
+          void clearRoomReadCursor(nickname, roomId);
+          onRoomDeleted?.();
+        },
+      )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
@@ -365,7 +409,7 @@ export default function useChatRoomEffects({
           if (payload.eventType === 'INSERT') {
             const msg = await decryptMsg(payload.new);
             if (msg.expires_at && new Date(msg.expires_at).getTime() <= Date.now()) return;
-            if ((msg.hidden_for || []).includes(nickname)) return;
+            // INSERT — всегда новое сообщение; hidden_for только для истории (UPDATE/load)
             if (shouldDeferChatUi()) {
               deferredInsertBatchRef.current.push(msg);
               return;
@@ -434,7 +478,7 @@ export default function useChatRoomEffects({
         flushDeferredChat();
       }
     };
-  }, [roomId, isAriaChat, decryptMsg, nickname, filterHiddenForMeKeepingDeleting, filterExpired, chatSyncRef, diceBusyRef, renderPausedRef]);
+  }, [roomId, isAriaChat, decryptMsg, nickname, filterHiddenForMeKeepingDeleting, filterExpired, chatSyncRef, diceBusyRef, renderPausedRef, onRoomDeleted]);
 
   useEffect(() => {
     if (!chatFlushDeferredRef) return undefined;
@@ -487,7 +531,7 @@ export default function useChatRoomEffects({
   }, [messages.length, isAriaChat]);
 
   useEffect(() => {
-    if (!roomId || !nickname || isAriaChat) return;
+    if (!roomFocused || !roomId || !nickname || isAriaChat) return;
     const unread = messages.filter(
       (m) => m.player_name !== nickname && !m.read_at && !readSentRef.current.has(m.id),
     );
@@ -496,5 +540,19 @@ export default function useChatRoomEffects({
     ids.forEach((id) => readSentRef.current.add(id));
     supabase.from('messages').update({ read_at: new Date().toISOString() }).in('id', ids).then();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, nickname, roomId, isAriaChat]);
+  }, [roomFocused, messages.length, nickname, roomId, isAriaChat]);
+
+  /** Локальный cursor — только пока комната на экране. */
+  useEffect(() => {
+    if (!roomFocused || !roomId || !nickname || isAriaChat || messages.length === 0) return;
+    const latest = messages.reduce((best, m) => {
+      if (!best) return m;
+      const t = Date.parse(m.created_at || 0);
+      const bt = Date.parse(best.created_at || 0);
+      return t > bt ? m : best;
+    }, null);
+    if (!latest?.id) return;
+    void markRoomReadThrough(nickname, roomId, latest.id, latest.created_at);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomFocused, messages.length, nickname, roomId, isAriaChat]);
 }

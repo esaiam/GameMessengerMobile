@@ -39,6 +39,14 @@ export function chatMutationErrorMessage(error, fallback) {
   ) {
     return 'На сервере нет колонки edited_at. В Supabase SQL Editor выполни миграцию docs/migrations/20260530_messages_edited_at.sql и NOTIFY pgrst, \'reload schema\';';
   }
+  if (
+    /rooms_set_last_message|last_message_id|thread_cleared_at|hidden_chat_rooms/i.test(msg)
+  ) {
+    return (
+      'Сообщение не сохранилось: ошибка триггера БД. ' +
+      'В Supabase SQL Editor выполни supabase/migrations/20260612_fix_message_insert_trigger.sql'
+    );
+  }
 
   return msg || fallback;
 }

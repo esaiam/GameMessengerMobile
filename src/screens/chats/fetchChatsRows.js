@@ -14,7 +14,7 @@ export async function fetchChatsRows(nickname) {
 
   const { data: rooms, error: roomsError } = await supabase
     .from('rooms')
-    .select('id, code, user1_id, user2_id, last_message_at, last_message_id')
+    .select('id, code, user1_id, user2_id, last_message_at, last_message_id, thread_cleared_at')
     .or(`user1_id.eq.${nickname},user2_id.eq.${nickname}`)
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .limit(50);
@@ -23,7 +23,9 @@ export async function fetchChatsRows(nickname) {
     return { rows: null, error: true };
   }
 
-  const roomList = rooms || [];
+  const roomList = (rooms || []).filter(
+    (r) => r.last_message_id || !r.thread_cleared_at,
+  );
 
   // Собрать IDs последних сообщений и загрузить их одним запросом
   const lastMsgIds = roomList.map((r) => r.last_message_id).filter(Boolean);
@@ -32,7 +34,7 @@ export async function fetchChatsRows(nickname) {
   if (lastMsgIds.length > 0) {
     const { data: lastMsgs, error: msgsError } = await supabase
       .from('messages')
-      .select('id, room_id, text, message_type, created_at, player_name')
+      .select('id, room_id, text, message_type, created_at, player_name, read_at, hidden_for')
       .in('id', lastMsgIds);
 
     if (msgsError) {

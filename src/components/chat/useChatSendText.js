@@ -52,8 +52,8 @@ export default function useChatSendText({
     setReplyTarget(null);
 
     try {
-      const forRecipient = await encryptMessage(trimmed, otherPlayerName);
-      const forSelf = await encryptMessage(trimmed, nickname);
+      const forRecipient = await encryptMessage(trimmed, otherPlayerName, nickname);
+      const forSelf = await encryptMessage(trimmed, nickname, nickname);
       const cipherText = 'VM2:' + JSON.stringify({ r: forRecipient, s: forSelf });
 
       const row = {
@@ -73,7 +73,10 @@ export default function useChatSendText({
       if (data?.id) {
         reconcileOptimisticText(tempId, { ...data, text: trimmed });
       }
-      await refreshChatsListAfterMessage(nickname, roomId);
+      await refreshChatsListAfterMessage(nickname, roomId, {
+        contactName: otherPlayerName,
+        last: data ? { ...data, text: trimmed } : null,
+      });
     } catch (e) {
       removeOptimisticText(tempId);
       setText(trimmed);

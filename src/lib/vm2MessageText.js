@@ -19,7 +19,7 @@ export async function decryptVm2MessageText(raw, msg, nickname) {
     const box = isMyMessage ? s : r;
     const senderName = isMyMessage ? nickname : msg.player_name;
     if (!box || !senderName) return null;
-    return await decryptMessage(box, senderName);
+    return await decryptMessage(box, senderName, nickname);
   } catch {
     return null;
   }

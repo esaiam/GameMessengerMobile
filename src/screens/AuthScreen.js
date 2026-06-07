@@ -101,7 +101,11 @@ export default function AuthScreen() {
         try {
           const { data, error } = await supabase.auth.signUp({
             email: trimmedEmail,
-            password });
+            password,
+            options: {
+              emailRedirectTo: 'vaultmessenger://auth-confirm'
+            }
+          });
           if (error) throw error;
           if (!data.session) {
             Alert.alert(

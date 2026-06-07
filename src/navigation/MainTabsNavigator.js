@@ -15,7 +15,7 @@ import StorageScreen from '../screens/StorageScreen';
 import ContactsScreen from '../screens/ContactsScreen';
 import ContactProfileScreen from '../screens/ContactProfileScreen';
 import { MessageCircle, User, Users } from '../icons/lucideIcons';
-import { V } from '../theme';
+import { V, TAB_BAR_LAYOUT } from '../theme';
 import { splitDetailApi } from '../context/SplitDetailContext';
 import { useSplitDetail } from '../context/SplitDetailContext';
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
@@ -32,10 +32,12 @@ const TopTab = createMaterialTopTabNavigator();
 
 const TAB_ROUTE_NAMES = ['Chats', 'Contacts', 'Profile'];
 
+const TAB_ICON_SIZE = TAB_BAR_LAYOUT.iconSize;
+
 const TABS = [
-  { key: 'Chats',    name: 'Chats',    icon: (color) => <MessageCircle color={color} size={22} strokeWidth={1.5} />, activeTint: V.accentSage },
-  { key: 'Contacts', name: 'Contacts', icon: (color) => <Users  color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentSage },
-  { key: 'Profile',  name: 'Profile',  icon: (color) => <User   color={color} size={22} strokeWidth={1.8} />, activeTint: V.accentSage },
+  { key: 'Chats',    name: 'Chats',    icon: (color) => <MessageCircle color={color} size={TAB_ICON_SIZE} strokeWidth={1.5} />, activeTint: V.accentSage },
+  { key: 'Contacts', name: 'Contacts', icon: (color) => <Users  color={color} size={TAB_ICON_SIZE} strokeWidth={1.8} />, activeTint: V.accentSage },
+  { key: 'Profile',  name: 'Profile',  icon: (color) => <User   color={color} size={TAB_ICON_SIZE} strokeWidth={1.8} />, activeTint: V.accentSage },
 ];
 
 const HIDE_TAB_BAR_ON = new Set([

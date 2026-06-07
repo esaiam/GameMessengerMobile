@@ -10,13 +10,15 @@ import { Camera, Image as ImageIcon, Trash2 } from '../icons/lucideIcons';
 import { V } from '../theme';
 import { UserAvatar } from './UserAvatar';
 import { useLocalAvatar } from '../context/LocalAvatarContext';
+import { profileAvatarSaveErrorMessage } from '../lib/profileAvatarUpload';
 import ProfileGlassModal from './ProfileGlassModal';
 import { profileModalBtnStyles as btn } from './profileModalButtonStyles';
 
 export default function ProfileAvatarModal({ visible, onClose, nickname }) {
-  const { avatarUri, savePickedUri, removeAvatar } = useLocalAvatar();
+  const { avatarUri, savePickedUri, removeAvatar, uploading } = useLocalAvatar();
 
   const pick = async (fromCamera) => {
+    if (uploading) return;
     const options = {
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -32,8 +34,8 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
         await savePickedUri(asset.uri);
         onClose();
       }
-    } catch {
-      Alert.alert('Ошибка', 'Не удалось сохранить фото.');
+    } catch (e) {
+      Alert.alert('Ошибка', profileAvatarSaveErrorMessage(e?.message));
     }
   };
 
@@ -52,8 +54,9 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
 
       <View style={btn.stack}>
         <TouchableOpacity
-          style={[btn.btn, btn.btnRow]}
+          style={[btn.btn, btn.btnRow, uploading && { opacity: 0.5 }]}
           onPress={() => pick(true)}
+          disabled={uploading}
           activeOpacity={0.7}
         >
           <Camera size={16} color={V.accentSage} strokeWidth={1.5} />
@@ -61,8 +64,9 @@ export default function ProfileAvatarModal({ visible, onClose, nickname }) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[btn.btn, btn.btnRow]}
+          style={[btn.btn, btn.btnRow, uploading && { opacity: 0.5 }]}
           onPress={() => pick(false)}
+          disabled={uploading}
           activeOpacity={0.7}
         >
           <ImageIcon size={16} color={V.accentSage} strokeWidth={1.5} />

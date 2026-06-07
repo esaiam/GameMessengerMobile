@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,11 @@ import {
   Platform,
   Linking,
   useWindowDimensions,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import * as ImagePicker from 'expo-image-picker';
 
@@ -27,8 +27,8 @@ import { supabase } from '../lib/supabase';
 
 import { useAuthGate } from '../context/AuthGateContext';
 
-import { clearNicknameFromStorage } from '../lib/nicknameStorage';
-import { clearDecryptCache } from '../components/chat/messageDecrypt';
+import { clearVaultLocalSession } from '../lib/vaultLocalSessionCleanup';
+import { deleteUserAccount } from '../lib/deleteUserAccount';
 
 import { UserAvatar } from '../components/UserAvatar';
 
@@ -60,10 +60,12 @@ import {
 import { CHATS_HEADER_GLOW_STOP_CENTER } from '../components/chats/ChatsHeaderGlow';
 
 import { useNicknameFromRoute } from '../hooks/useNicknameFromRoute';
+import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 
 import { Camera, Pencil } from '../icons/lucideIcons';
 
 import { registerPushToken } from '../lib/notifications';
+import { profileAvatarSaveErrorMessage } from '../lib/profileAvatarUpload';
 
 import {
 
@@ -82,7 +84,7 @@ import { getBlockedPeers } from '../lib/blockedContacts';
 /** Зазор под шапкой до аватара — как ContactProfileScreen */
 const PROFILE_TAB_AVATAR_BELOW_HEADER = 96;
 
-function RowButton({ title, subtitle, onPress, variant = 'default' }) {
+function RowButton({ title, subtitle, onPress, variant = 'default', disabled = false }) {
 
   const color =
 
@@ -97,6 +99,8 @@ function RowButton({ title, subtitle, onPress, variant = 'default' }) {
       onPress={onPress}
 
       activeOpacity={0.7}
+
+      disabled={disabled}
 
     >
 
@@ -208,7 +212,7 @@ export default function ProfileScreen({ route, navigation }) {
 
   const { session } = useAuthGate();
 
-  const { avatarUri, savePickedUri, removeAvatar } = useLocalAvatar();
+  const { avatarUri, savePickedUri, removeAvatar, uploading, refreshAvatar } = useLocalAvatar();
 
   const [avatarModal, setAvatarModal] = useState(false);
 
@@ -228,9 +232,20 @@ export default function ProfileScreen({ route, navigation }) {
 
   const [blockedCount, setBlockedCount] = useState(0);
 
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   const headerLayout = useMessengerHeaderLayout();
   const insets = useSafeAreaInsets();
+  const isTablet = useIsSplitLayout();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const [profilePaneWidth, setProfilePaneWidth] = useState(screenW);
+  const profileLayoutW = isTablet ? profilePaneWidth : screenW;
+
+  useEffect(() => {
+    if (!isTablet) {
+      setProfilePaneWidth(screenW);
+    }
+  }, [isTablet, screenW]);
 
   const {
     scrollRef,
@@ -261,11 +276,19 @@ export default function ProfileScreen({ route, navigation }) {
     nameHeaderChromeStackStyle,
   } = useProfileCollapseHeader({
     headerLayout,
-    screenW,
+    screenW: profileLayoutW,
     withStatusRow: false,
     withAvatarScrollGlow: true,
     avatarTopExtra: PROFILE_TAB_AVATAR_BELOW_HEADER,
   });
+
+  const handleProfilePaneLayout = useCallback((e) => {
+    if (!isTablet) return;
+    const w = e.nativeEvent.layout.width;
+    if (w > 0) {
+      setProfilePaneWidth((prev) => (Math.abs(prev - w) < 0.5 ? prev : w));
+    }
+  }, [isTablet]);
 
   const minScrollContentHeight =
     screenH - headerLayout.minHeight + PROFILE_COLLAPSE_DISTANCE + 32;
@@ -303,13 +326,10 @@ export default function ProfileScreen({ route, navigation }) {
 
 
   useFocusEffect(
-
     useCallback(() => {
-
       refreshSettingsLabels();
-
-    }, [refreshSettingsLabels]),
-
+      void refreshAvatar();
+    }, [refreshSettingsLabels, refreshAvatar]),
   );
 
 
@@ -319,6 +339,7 @@ export default function ProfileScreen({ route, navigation }) {
   };
 
   const pickPhotoFromGallery = async () => {
+    if (uploading) return;
 
     try {
 
@@ -355,21 +376,13 @@ export default function ProfileScreen({ route, navigation }) {
       const asset = result.assets?.[0];
 
       if (asset?.uri) await savePickedUri(asset.uri);
-
-    } catch {
-
+    } catch (e) {
       showActionSheet({
-
         title: 'Ошибка',
-
-        message: 'Не удалось выбрать фото.',
-
+        message: profileAvatarSaveErrorMessage(e?.message),
         options: [{ label: 'OK' }],
-
         showCancel: false });
-
     }
-
   };
 
 
@@ -567,117 +580,45 @@ export default function ProfileScreen({ route, navigation }) {
 
 
   const logout = async () => {
-
-    if (nickname) await clearDecryptCache(nickname);
-
+    try {
+      await clearVaultLocalSession();
+    } catch (e) {
+      if (__DEV__) console.warn('[Profile] logout cleanup', e?.message || e);
+    }
     await supabase.auth.signOut();
-
-    await clearNicknameFromStorage();
-
   };
 
 
 
-  const confirmDeleteAccount = async () => {
+  const performDeleteAccount = async () => {
+    if (deletingAccount) return;
 
     const uid = session?.user?.id;
-
     if (!uid) {
-
-      showActionSheet({
-
-        title: 'Ошибка',
-
-        message: 'Нет сессии.',
-
-        options: [{ label: 'OK' }],
-
-        showCancel: false });
-
+      Alert.alert('Ошибка', 'Нет сессии.');
       return;
-
     }
 
+    setDeletingAccount(true);
     try {
-
-      await supabase.from('profiles').delete().eq('id', uid);
-
-      await removeAvatar();
-
-      if (nickname) await clearDecryptCache(nickname);
-
-      await clearNicknameFromStorage();
-
-      await AsyncStorage.removeItem('@vault_session_cache');
-
-      await supabase.auth.signOut();
-
+      await deleteUserAccount();
     } catch (e) {
-
-      showActionSheet({
-
-        title: 'Ошибка',
-
-        message: e?.message || 'Не удалось удалить аккаунт.',
-
-        options: [{ label: 'OK' }],
-
-        showCancel: false });
-
+      Alert.alert('Ошибка', e?.message || 'Не удалось удалить аккаунт.');
+      setDeletingAccount(false);
     }
-
   };
 
-
-
   const deleteAccount = () => {
+    if (deletingAccount) return;
 
-    showActionSheet({
-
-      title: 'Удалить аккаунт',
-
-      message:
-
-        'Профиль и локальные данные будут удалены. Войти снова можно только с новым @handle.',
-
-      options: [
-
-        {
-
-          label: 'Удалить',
-
-          destructive: true,
-
-          onPress: () => {
-
-            setTimeout(
-
-              () =>
-
-                showActionSheet({
-
-                  title: 'Подтвердите',
-
-                  message: 'Это действие необратимо для вашего профиля в Vault.',
-
-                  options: [
-
-                    {
-
-                      label: 'Удалить навсегда',
-
-                      destructive: true,
-
-                      onPress: confirmDeleteAccount }],
-
-                }),
-
-              0,
-
-            );
-
-          } }] });
-
+    Alert.alert(
+      'Удалить аккаунт?',
+      'Все ваши данные, сообщения и ключи будут удалены безвозвратно.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Удалить', style: 'destructive', onPress: () => void performDeleteAccount() },
+      ],
+    );
   };
 
 
@@ -686,7 +627,10 @@ export default function ProfileScreen({ route, navigation }) {
 
   return (
     <TabBackground>
-      <Animated.View style={[styles.flexRoot, profileChromeStackStyle]}>
+      <Animated.View
+        style={[styles.flexRoot, profileChromeStackStyle]}
+        onLayout={handleProfilePaneLayout}
+      >
         <View style={[headerLayout.containerStyle, styles.headerBar]}>
           <SafeBlurView
             intensity={
@@ -788,8 +732,13 @@ export default function ProfileScreen({ route, navigation }) {
             </Section>
 
             <Section title="АККАУНТ">
-              <RowButton title="Выйти" onPress={logout} variant="danger" />
-              <RowButton title="Удалить аккаунт" onPress={deleteAccount} variant="danger" />
+              <RowButton title="Выйти" onPress={logout} variant="danger" disabled={deletingAccount} />
+              <RowButton
+                title="Удалить аккаунт"
+                onPress={deleteAccount}
+                variant="danger"
+                disabled={deletingAccount}
+              />
             </Section>
           </Animated.View>
         </Animated.ScrollView>
@@ -828,7 +777,7 @@ export default function ProfileScreen({ route, navigation }) {
             styles.avatarFloat,
             {
               top: avatarTop,
-              left: (screenW - PROFILE_AVATAR_SIZE) / 2,
+              left: (profileLayoutW - PROFILE_AVATAR_SIZE) / 2,
               width: PROFILE_AVATAR_SIZE,
               height: PROFILE_AVATAR_SIZE,
               overflow: 'visible',
@@ -869,7 +818,7 @@ export default function ProfileScreen({ route, navigation }) {
             pointerEvents="none"
             style={[
               styles.nameFloat,
-              { top: nameStartY, left: screenW / 2, color: V.textPrimary },
+              { top: nameStartY, left: profileLayoutW / 2, color: V.textPrimary },
               nameStyle,
             ]}
             numberOfLines={1}
@@ -934,6 +883,12 @@ export default function ProfileScreen({ route, navigation }) {
         showCancel={actionSheet?.showCancel ?? true}
 
       />
+
+      {deletingAccount ? (
+        <View style={styles.deletingOverlay} pointerEvents="auto">
+          <ActivityIndicator size="large" color={V.accentSage} />
+        </View>
+      ) : null}
 
     </TabBackground>
 
@@ -1064,6 +1019,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '400',
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
+  },
+  deletingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(13,15,20,0.72)',
   },
 });
 

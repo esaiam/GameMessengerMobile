@@ -18,6 +18,7 @@ import { V } from '../theme';
 import { fetchAriaState } from '../lib/aria';
 import { supabase } from '../lib/supabase';
 import { safeGoBackToMessengerList } from '../lib/safeGoBack';
+import { usePeerAvatar } from '../hooks/usePeerAvatar';
 
 export const CHAT_HEADER_BLUR_INTENSITY_IOS = 100;
 export const CHAT_HEADER_BLUR_INTENSITY_ANDROID = 72;
@@ -84,6 +85,8 @@ export function AriaClearHistoryHeaderButton({ onPress }) {
  */
 export default function ChatRoomHeader({
   title,
+  /** @handle контакта для аватара (не локальный alias); fallback — title */
+  peerHandle,
   contactOnline,
   navigation,
   selectionMode,
@@ -111,6 +114,10 @@ export default function ChatRoomHeader({
   const modeAnim = useRef(new Animated.Value(selectionMode ? 1 : 0)).current;
 
   const isAriaHeader = typeof ariaOnline !== 'undefined';
+  const { avatarUri: peerAvatarUri } = usePeerAvatar(peerHandle ?? title, {
+    enabled: !isAriaHeader,
+    refreshOnFocus: false,
+  });
 
   useEffect(() => {
     if (!isAriaHeader) return;
@@ -292,7 +299,7 @@ export default function ChatRoomHeader({
                   />
                 </AvatarUnderGlassStack>
               ) : (
-                <UserAvatar name={title || 'Чат'} uri={null} size={AVATAR_SIZE} />
+                <UserAvatar name={title || 'Чат'} uri={peerAvatarUri} size={AVATAR_SIZE} />
               )}
             </View>
             {/* Сетка: колонка справа от аватара — строка 1: имя, строка 2: статус (выровнены по левому краю колонки) */}

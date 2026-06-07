@@ -6,6 +6,8 @@ import { V } from '../theme';
 /**
  * BlurView с guard на Android: expo-blur падает с MissingActivity,
  * если BlurView attach'ится во время react-native-screens transition.
+ * Также отключаем blur при смене layout (`stabilityKey`) и когда `blurEnabled={false}` —
+ * иначе dimezisBlurView ловит NPE в PreDrawBlurController при transform/slide.
  */
 export default function SafeBlurView({
   children,
@@ -14,9 +16,15 @@ export default function SafeBlurView({
   tint,
   blurReductionFactor,
   fallbackBackgroundColor = V.tabBarGlassTintBg,
+  /** false — только fallback View (Android). */
+  blurEnabled = true,
+  /** Любое изменение пересоздаёт blur после стабилизации layout (Android). */
+  stabilityKey,
   ...rest
 }) {
-  const [androidBlurReady, setAndroidBlurReady] = useState(Platform.OS !== 'android');
+  const [androidBlurReady, setAndroidBlurReady] = useState(
+    Platform.OS !== 'android' && blurEnabled,
+  );
 
   useEffect(() => {
     if (Platform.OS !== 'android') return undefined;
@@ -42,25 +50,26 @@ export default function SafeBlurView({
         frameId = null;
       }
 
-      if (cancelled || AppState.currentState !== 'active') {
+      if (cancelled || !blurEnabled || AppState.currentState !== 'active') {
         disableBlur();
         return;
       }
 
       interactionHandle = InteractionManager.runAfterInteractions(() => {
-        if (cancelled || AppState.currentState !== 'active') return;
+        if (cancelled || !blurEnabled || AppState.currentState !== 'active') return;
         frameId = requestAnimationFrame(() => {
           frameId = null;
-          if (cancelled || AppState.currentState !== 'active') return;
+          if (cancelled || !blurEnabled || AppState.currentState !== 'active') return;
           setAndroidBlurReady(true);
         });
       });
     };
 
+    disableBlur();
     scheduleBlur();
 
     const appStateSub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') {
+      if (nextState === 'active' && blurEnabled) {
         scheduleBlur();
       } else {
         disableBlur();
@@ -72,7 +81,7 @@ export default function SafeBlurView({
       disableBlur();
       appStateSub.remove();
     };
-  }, []);
+  }, [blurEnabled, stabilityKey]);
 
   const brf =
     blurReductionFactor != null
@@ -81,9 +90,13 @@ export default function SafeBlurView({
         ? 4.5
         : 4;
 
-  if (Platform.OS === 'android' && !androidBlurReady) {
+  const useFallback =
+    Platform.OS === 'android' && (!blurEnabled || !androidBlurReady);
+
+  if (useFallback) {
     return (
       <View
+        collapsable={false}
         style={[style, fallbackBackgroundColor ? { backgroundColor: fallbackBackgroundColor } : null]}
         {...rest}
       >
@@ -99,6 +112,7 @@ export default function SafeBlurView({
       blurReductionFactor={brf}
       {...(Platform.OS === 'android' ? { experimentalBlurMethod: 'dimezisBlurView' } : {})}
       style={style}
+      collapsable={false}
       {...rest}
     >
       {children}

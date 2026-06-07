@@ -48,8 +48,8 @@ export default function useChatEditMessage({
       invalidatePreviewCache(messageId);
 
       try {
-        const forRecipient = await encryptMessage(trimmed, otherPlayerName);
-        const forSelf = await encryptMessage(trimmed, nickname);
+        const forRecipient = await encryptMessage(trimmed, otherPlayerName, nickname);
+        const forSelf = await encryptMessage(trimmed, nickname, nickname);
         const cipherText = 'VM2:' + JSON.stringify({ r: forRecipient, s: forSelf });
 
         const { data, error } = await supabase

@@ -44,6 +44,12 @@ export const V = {
   sageMuted: 'rgba(90,158,154,0.6)',
   sageFocus: 'rgba(90,158,154,0.4)',
   sageSubtle: 'rgba(90,158,154,0.04)',
+  goldBorder: 'rgba(201,168,76,0.2)',
+  goldSubtle: 'rgba(201,168,76,0.04)',
+  /** FAB приглашений на вкладке «Контакты» */
+  goldFabBg: '#231D11',
+  goldGlow: 'rgba(201,168,76,0.16)',
+  goldBorderStrong: 'rgba(201,168,76,0.38)',
   hoverBg: 'rgba(255,255,255,0.02)',
   sectionBorder: 'rgba(255,255,255,0.04)',
 
@@ -92,6 +98,10 @@ export const TAB_BAR_LAYOUT = {
   horizontalPad: 14,
   /** Доп. отступ капсулы таб-бара от краёв экрана с каждой стороны (к `GlassTabBar` formula). */
   screenSideInsetExtra: 56,
+  /** Планшет (split): меньше боковых inset — капсула шире. */
+  screenSideInsetExtraTablet: 24,
+  /** Доля ширины экрана в боковом inset на планшете (телефон — 5%). */
+  screenSideWidthFracTablet: 0.025,
   floatBottom: 4,
   /** Зазор между нижней гранью капсулы таб-бара и низом экрана (`GlassTabBar`). */
   screenBottomGap: 8,
@@ -101,12 +111,23 @@ export const TAB_BAR_LAYOUT = {
   rowPaddingH: 8,
   /** Доп. padding ряда при 3 вкладках — иконки не разъезжаются шире, чем при 4. */
   threeTabRowPaddingHExtra: 16,
-  rowPaddingV: 15,
-  iconSize: 22,
+  rowPaddingV: 13,
+  iconSize: 26,
   topCornerRadius: 32,
   bottomCornerRadius: 32,
   /** Круг подсветки активной вкладки (чуть меньше высоты ряда). */
   activeHighlightSize: 44 };
+
+/** Горизонтальный padding оболочки таб-бара (с каждой стороны). */
+export function getTabBarShellHorizontalPad(windowWidth, isTablet = false) {
+  const sideWidthFrac = isTablet
+    ? (TAB_BAR_LAYOUT.screenSideWidthFracTablet ?? 0.05)
+    : 0.05;
+  const sideInsetExtra = isTablet
+    ? (TAB_BAR_LAYOUT.screenSideInsetExtraTablet ?? TAB_BAR_LAYOUT.screenSideInsetExtra)
+    : (TAB_BAR_LAYOUT.screenSideInsetExtra ?? 0);
+  return sideWidthFrac * windowWidth + 0.9 * TAB_BAR_LAYOUT.horizontalPad + sideInsetExtra;
+}
 
 /** Высота капсулы таб-бара (совпадает с `shellHeight`). */
 export const TAB_BAR_INNER_ROW_H = TAB_BAR_LAYOUT.shellHeight;

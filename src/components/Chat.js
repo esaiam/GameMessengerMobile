@@ -14,8 +14,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getOrCreateKeyPair } from '../utils/VaultKeyStore';
-import { publishMyPublicKey } from '../utils/VaultKeyServer';
+import { ensureUserIdentityKeys } from '../utils/VaultKeyServer';
+import { refreshChatsListAfterMessage } from '../lib/chatsListSync';
 import { useVoicePlayer } from '../hooks/useVoicePlayer';
 import { useChatMediaPlayback } from '../hooks/useChatMediaPlayback';
 import ChatRoomHeader, { ICON_SELECTION_ACTION } from './ChatRoomHeader';
@@ -80,6 +80,7 @@ import useChatInputSettling from './chat/useChatInputSettling';
 import { formatDateKey } from './chat/chatMessageListFormat';
 import { useNavigation } from '@react-navigation/native';
 import { deleteChatsFromList } from '../lib/hideRoomMessagesForDelete';
+import { safeGoBackToMessengerList } from '../lib/safeGoBack';
 
 export default function Chat({
   roomId,
@@ -110,7 +111,9 @@ export default function Chat({
   diceAnimating = false,
   showAnimDice = false,
   /** false в `RoomChatContainer` (нарды) — без вертикального bounce ленты */
-  overscrollEnabled = true }) {
+  overscrollEnabled = true,
+  /** Экран комнаты в фокусе (read receipts / cursor только тогда). */
+  roomFocused = false }) {
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const inputBarRef = useRef(null);
@@ -494,14 +497,22 @@ export default function Chat({
   useEffect(() => {
     const initE2E = async () => {
       try {
-        await getOrCreateKeyPair();
-        await publishMyPublicKey(nickname);
+        await ensureUserIdentityKeys(nickname);
       } catch {
         /* ignore */
       }
     };
     if (nickname) initE2E();
   }, [nickname]);
+
+  useEffect(() => {
+    if (!roomId || !nickname || isAriaChat) return;
+    void refreshChatsListAfterMessage(
+      nickname,
+      roomId,
+      peerName ? { contactName: peerName } : {},
+    );
+  }, [roomId, nickname, peerName, isAriaChat]);
 
   useAriaChatListBootstrap(isAriaChat, setMessagesLoading, listOpacity);
 
@@ -631,6 +642,7 @@ export default function Chat({
     optimisticImageTempIdRef,
     optimisticVoiceTempIdRef,
     appendOptimisticImage,
+    appendOptimisticImages,
     appendOptimisticVoice,
     handleImageSendError,
     handleVoiceSendError,
@@ -745,6 +757,10 @@ export default function Chat({
     [onInitialPageLoaded],
   );
 
+  const onRoomDeleted = useCallback(() => {
+    safeGoBackToMessengerList(navigation);
+  }, [navigation]);
+
   useChatRoomEffects({
     roomId,
     nickname,
@@ -774,7 +790,9 @@ export default function Chat({
     setMessagesLoading,
     messagesRef,
     onInitialPageLoaded: handleInitialPageLoaded,
-    chatSyncRef: vaultChatSyncRef });
+    roomFocused,
+    chatSyncRef: vaultChatSyncRef,
+    onRoomDeleted });
 
   const {
     uploadMedia,
@@ -785,12 +803,14 @@ export default function Chat({
     handleSendVoice } = useChatMediaActions({
     roomId,
     nickname,
+    peerName,
     replyTo,
     ephemeralSec,
     setReplyTarget,
     setUploading,
     setShowAttachMenu,
     appendOptimisticImage,
+    appendOptimisticImages,
     handleImageUploadFinished,
     handleImageSendError,
     appendOptimisticVoice,
@@ -1172,6 +1192,7 @@ export default function Chat({
           >
             <ChatRoomHeader
               title={chatRoomHeader.title}
+              peerHandle={chatRoomHeader.peerHandle}
               contactOnline={chatRoomHeader.contactOnline}
               navigation={chatRoomHeader.navigation}
               ariaOnline={chatRoomHeader.ariaOnline}

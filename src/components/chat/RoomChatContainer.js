@@ -20,7 +20,8 @@ export function RoomChatContainer({
   onTopOverlayHeight,
   onEmojiPickerChange,
   onInputBarTopY,
-  onInputBarHeight }) {
+  onInputBarHeight,
+  roomFocused = false }) {
   return (
     <Chat
       roomId={roomId}
@@ -40,6 +41,7 @@ export function RoomChatContainer({
       onInputBarTopY={onInputBarTopY}
       onInputBarHeight={onInputBarHeight}
       overscrollEnabled={false}
+      roomFocused={roomFocused}
     />
   );
 }

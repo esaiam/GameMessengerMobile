@@ -9,10 +9,16 @@ import { filterVisibleChatRows } from '../lib/filterVisibleChats';
 import { getBlockedPeers, normalizePeerHandle } from '../lib/blockedContacts';
 import { unhideChatRoom } from '../lib/hiddenChats';
 import { registerChatsListReload } from '../lib/chatsListSync';
+import { clearRoomReadCursor } from '../lib/chatReadCursor';
 
 const MESSAGE_PREVIEW_SELECT =
-  'id, room_id, text, message_type, created_at, player_name';
+  'id, room_id, text, message_type, created_at, player_name, read_at, hidden_for';
 const LOAD_DEBOUNCE_MS = 400;
+
+function peerHandleFromRoom(room, nickname) {
+  if (!room?.id || !nickname) return null;
+  return room.user1_id === nickname ? room.user2_id : room.user1_id;
+}
 
 export function useChatsRoomsLoader(nickname) {
   const [rows, setRows] = useState([]);
@@ -40,7 +46,7 @@ export function useChatsRoomsLoader(nickname) {
       }
       return;
     }
-    const visible = await filterVisibleChatRows(nickname, next);
+    const visible = await filterVisibleChatRows(nickname, next, { forceRefreshHidden: true });
     rowsCacheRef.current = { nickname, rows: visible };
     setRows(visible);
     saveDialogsCache(nickname, visible);
@@ -53,7 +59,7 @@ export function useChatsRoomsLoader(nickname) {
     let cancelled = false;
     loadDialogsCache(nickname).then(async (cached) => {
       if (cancelled || !cached?.length) return;
-      const visible = await filterVisibleChatRows(nickname, cached);
+      const visible = await filterVisibleChatRows(nickname, cached, { forceRefreshHidden: true });
       if (cancelled) return;
       rowsCacheRef.current = { nickname, rows: visible };
       setRows(visible);
@@ -138,11 +144,44 @@ export function useChatsRoomsLoader(nickname) {
         return;
       }
 
+      if ((newMsg.hidden_for || []).includes(nickname)) {
+        setRows((prev) => {
+          if (!prev.some((r) => r.roomId === roomId)) return prev;
+          const next = prev.filter((r) => r.roomId !== roomId);
+          rowsCacheRef.current = { nickname, rows: next };
+          saveDialogsCache(nickname, next);
+          return next;
+        });
+        return;
+      }
+
       const blocked = await getBlockedPeers(nickname);
       const idx = rowsRef.current.findIndex((r) => r.roomId === roomId);
+      const contactName = peerHandleFromRoom(room, nickname);
+
       if (idx === -1) {
+        if (!contactName) {
+          scheduleLoad();
+          return;
+        }
+        if (blocked.has(normalizePeerHandle(contactName))) return;
         await unhideChatRoom(nickname, roomId);
-        scheduleLoad();
+        setRows((prev) => {
+          if (prev.some((r) => r.roomId === roomId)) {
+            scheduleLoad();
+            return prev;
+          }
+          const newRow = {
+            roomId,
+            roomCode: room.code ?? null,
+            contactName,
+            last: newMsg,
+          };
+          const next = [newRow, ...prev];
+          rowsCacheRef.current = { nickname, rows: next };
+          saveDialogsCache(nickname, next);
+          return next;
+        });
         return;
       }
       const row = rowsRef.current[idx];
@@ -164,11 +203,49 @@ export function useChatsRoomsLoader(nickname) {
       });
     };
 
+    const onRoomDelete = (payload) => {
+      const deletedRoomId = payload.old?.id;
+      if (!deletedRoomId) return;
+
+      void clearRoomReadCursor(nickname, deletedRoomId);
+      setRows((prev) => {
+        if (!prev.some((r) => r.roomId === deletedRoomId)) return prev;
+        const next = prev.filter((r) => r.roomId !== deletedRoomId);
+        rowsCacheRef.current = { nickname, rows: next };
+        saveDialogsCache(nickname, next);
+        return next;
+      });
+    };
+
     const onRoomUpdate = (payload) => {
       const room = payload.new;
-      if (!room?.id || !room?.last_message_id) return;
-      if (payload.old?.last_message_id === room.last_message_id) return;
-      applyLastMessage(room);
+      if (!room?.id) return;
+
+      const lastId = room.last_message_id;
+      const oldLastId = payload.old?.last_message_id;
+
+      // Новое сообщение (в т.ч. после «удалить у всех») — показать/обновить строку
+      if (lastId && lastId !== oldLastId) {
+        applyLastMessage(room);
+        return;
+      }
+
+      // Комната ожила: thread_cleared сброшен, last_message уже был
+      if (lastId && payload.old?.thread_cleared_at && !room.thread_cleared_at) {
+        applyLastMessage(room);
+        return;
+      }
+
+      // Пустая очищенная комната — убрать из списка
+      if ((room.thread_cleared_at && !lastId) || (!lastId && oldLastId)) {
+        void clearRoomReadCursor(nickname, room.id);
+        setRows((prev) => {
+          const next = prev.filter((r) => r.roomId !== room.id);
+          rowsCacheRef.current = { nickname, rows: next };
+          saveDialogsCache(nickname, next);
+          return next;
+        });
+      }
     };
 
     const channel = supabase
@@ -192,6 +269,26 @@ export function useChatsRoomsLoader(nickname) {
           filter: `user2_id=eq.${nickname}`,
         },
         onRoomUpdate
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'rooms',
+          filter: `user1_id=eq.${nickname}`,
+        },
+        onRoomDelete
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'rooms',
+          filter: `user2_id=eq.${nickname}`,
+        },
+        onRoomDelete
       )
       .subscribe();
 

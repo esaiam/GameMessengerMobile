@@ -12,7 +12,8 @@ import Reanimated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import SafeBlurView from './SafeBlurView';
-import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H } from '../theme';
+import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
+import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H, getTabBarShellHorizontalPad } from '../theme';
 
 const DEFAULT_ACTIVE = V.accentSage;
 const DEFAULT_INACTIVE = V.textMuted;
@@ -45,10 +46,8 @@ export default function GlassTabBar({
   bottomInset,
 }) {
   const { width: windowWidth } = useWindowDimensions();
-  const tabBarHorizontalPad =
-    0.05 * windowWidth
-    + 0.9 * TAB_BAR_LAYOUT.horizontalPad
-    + (TAB_BAR_LAYOUT.screenSideInsetExtra ?? 0);
+  const isTablet = useIsSplitLayout();
+  const tabBarHorizontalPad = getTabBarShellHorizontalPad(windowWidth, isTablet);
   const [tabLayouts, setTabLayouts] = useState([]);
   const translateX = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
@@ -217,6 +216,9 @@ export default function GlassTabBar({
   }, [visible, activeIndex, layoutsReady, tabLayouts, translateX, scale]);
 
   const slideY = ariaTabBarDrive ? null : Animated.multiply(visibility, hideOffsetPx);
+  const tabBarBlurEnabled =
+    Platform.OS !== 'android'
+    || (visible && !visibilityAnimated && !ariaTabBarDrive);
 
   const shellPadding = {
     paddingHorizontal: tabBarHorizontalPad,
@@ -238,6 +240,8 @@ export default function GlassTabBar({
       intensity={20}
       tint="dark"
       blurReductionFactor={Platform.OS === 'android' ? 4.5 : 4}
+      blurEnabled={tabBarBlurEnabled}
+      stabilityKey={tabBarHorizontalPad}
       style={styles.tabBarShell}
     >
       <View style={styles.glassTint} pointerEvents="none" />
@@ -283,6 +287,7 @@ export default function GlassTabBar({
 
   return (
     <View
+      collapsable={false}
       style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
       pointerEvents={visible ? 'box-none' : 'none'}
     >

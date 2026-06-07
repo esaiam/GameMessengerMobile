@@ -12,12 +12,14 @@ import { refreshChatsListAfterMessage } from '../../lib/chatsListSync';
 export default function useChatMediaActions({
   roomId,
   nickname,
+  peerName,
   replyTo,
   ephemeralSec,
   setReplyTarget,
   setUploading,
   setShowAttachMenu,
   appendOptimisticImage,
+  appendOptimisticImages,
   handleImageUploadFinished,
   handleImageSendError,
   appendOptimisticVoice,
@@ -88,6 +90,9 @@ export default function useChatMediaActions({
     if (ephemeralSec) {
       row.expires_at = new Date(Date.now() + ephemeralSec * 1000).toISOString();
     }
+    if (Array.isArray(extra.media_urls) && extra.media_urls.length > 0) {
+      row.media_urls = extra.media_urls;
+    }
     if (messageType === 'voice' || messageType === 'audio') {
       const wf = extra.waveform;
       row.waveform = Array.isArray(wf) && wf.length > 0 ? [...wf] : DEFAULT_VOICE_WAVEFORM();
@@ -99,10 +104,12 @@ export default function useChatMediaActions({
       if (__DEV__) console.warn('Chat media insert error:', error.message);
       throw error;
     }
-    await refreshChatsListAfterMessage(nickname, roomId);
+    await refreshChatsListAfterMessage(nickname, roomId, peerName
+      ? { contactName: peerName, last: data ?? null }
+      : undefined);
     setReplyTarget(null);
     return data ?? null;
-  }, [roomId, nickname, replyTo, ephemeralSec, setReplyTarget]);
+  }, [roomId, nickname, peerName, replyTo, ephemeralSec, setReplyTarget]);
 
   const pickImageFromGallery = useCallback(async () => {
     setShowAttachMenu(false);
@@ -114,14 +121,26 @@ export default function useChatMediaActions({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.7,
-      allowsEditing: true });
+      allowsMultipleSelection: true });
     if (result.canceled || !result.assets?.[0]) return;
-    const localUri = result.assets[0].uri;
-    appendOptimisticImage?.(localUri);
+    const assets = result.assets;
+    const localUri = assets[0].uri;
+    if (assets.length === 1) {
+      appendOptimisticImage?.(localUri);
+    } else {
+      appendOptimisticImages?.(assets.map((a) => a.uri));
+    }
     setUploading(true);
     try {
-      const url = await uploadMedia(localUri, 'images', 'jpg', 'image/jpeg');
-      await sendMediaMessage('image', url);
+      const uploadPromises = assets.map((asset) =>
+        uploadMedia(asset.uri, 'images', 'jpg', 'image/jpeg'),
+      );
+      const urls = await Promise.all(uploadPromises);
+      if (urls.length === 1) {
+        await sendMediaMessage('image', urls[0]);
+      } else {
+        await sendMediaMessage('image', urls[0], { media_urls: urls });
+      }
       handleImageUploadFinished?.();
     } catch (e) {
       handleImageSendError?.();
@@ -136,6 +155,7 @@ export default function useChatMediaActions({
     setUploading,
     setShowAttachMenu,
     appendOptimisticImage,
+    appendOptimisticImages,
     handleImageUploadFinished,
     handleImageSendError,
   ]);

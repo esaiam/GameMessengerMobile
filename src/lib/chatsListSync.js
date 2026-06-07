@@ -36,9 +36,22 @@ export async function syncDialogToChatsList(nickname, row) {
   requestChatsListReload();
 }
 
-/** После отправки сообщения — снять скрытие и перезагрузить список с сервера. */
-export async function refreshChatsListAfterMessage(nickname, roomId) {
+/** После отправки сообщения — снять скрытие и обновить список чатов. */
+export async function refreshChatsListAfterMessage(nickname, roomId, extras = {}) {
   if (!nickname || !roomId) return;
+
+  const { contactName, roomCode, last } = extras;
+
+  if (contactName) {
+    await syncDialogToChatsList(nickname, {
+      roomId,
+      roomCode,
+      contactName,
+      last: last ?? null,
+    });
+    return;
+  }
+
   await unhideChatRoom(nickname, roomId);
   requestChatsListReload();
 }

@@ -3,6 +3,7 @@ import { InteractionManager } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { getBlockedPeers } from '../../lib/blockedContacts';
+import { getHiddenChatRoomIds } from '../../lib/hiddenChats';
 
 /** In-memory cache: PagerView монтирует один stack — без кэша каждый визит = новый fetch. */
 const contactsByNickname = new Map();
@@ -22,14 +23,19 @@ export default function useContactsList(nickname) {
 
     const { data: rooms } = await supabase
       .from('rooms')
-      .select('user1_id, user2_id')
+      .select('id, user1_id, user2_id')
       .or(`user1_id.eq.${nickname},user2_id.eq.${nickname}`);
 
     if (!rooms) return;
 
+    const [blocked, hiddenRooms] = await Promise.all([
+      getBlockedPeers(nickname),
+      getHiddenChatRoomIds(nickname),
+    ]);
+
     const names = new Set();
-    const blocked = await getBlockedPeers(nickname);
     rooms.forEach((r) => {
+      if (r.id && hiddenRooms.has(r.id)) return;
       if (r.user1_id && r.user1_id !== nickname && !blocked.has(r.user1_id)) {
         names.add(r.user1_id);
       }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import tw from 'twrnc';
 import { AriaGradientAvatar } from '../chat/AriaChatUi';
@@ -9,6 +9,7 @@ import { ARIA_CHATS_PREVIEW_TEXT } from '../../screens/chats/chatsConstants';
 import { messagePreview, messagePreviewAsync } from '../../screens/chats/chatsPreviewCache';
 import { formatChatListTime } from '../../screens/chats/chatsFormat';
 import { VaultAvatarShell, VaultEmptyAvatar } from '../VaultAvatarShell';
+import { usePeerAvatar } from '../../hooks/usePeerAvatar';
 import { useChatsListRowRipple } from './useChatsListRowRipple';
 
 const AVATAR_CIRCLE_SIZE = 52;
@@ -18,8 +19,23 @@ const SELECTION_BADGE_SIZE = 20;
 /** Внутренняя область под фото: border 1.5 внутри. */
 const ARIA_LIST_IMAGE_SIZE = AVATAR_CIRCLE_SIZE - 3;
 
-function Avatar({ name }) {
-  return <VaultEmptyAvatar name={name} size={AVATAR_CIRCLE_SIZE} />;
+function PeerListAvatar({ name }) {
+  const { avatarUri } = usePeerAvatar(name);
+
+  if (!avatarUri) {
+    return <VaultEmptyAvatar name={name} size={AVATAR_CIRCLE_SIZE} />;
+  }
+
+  return (
+    <VaultAvatarShell size={AVATAR_CIRCLE_SIZE}>
+      <Image
+        key={avatarUri}
+        source={{ uri: avatarUri }}
+        style={{ width: ARIA_LIST_IMAGE_SIZE, height: ARIA_LIST_IMAGE_SIZE }}
+        resizeMode="cover"
+      />
+    </VaultAvatarShell>
+  );
 }
 
 function AriaListAvatar() {
@@ -91,12 +107,20 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: V.bgChatsScreen,
   },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: V.accentSage,
+    marginLeft: 8,
+  },
 });
 
 const ChatsListRow = React.memo(
   function ChatsListRow({
     item,
     nickname,
+    isUnread = false,
     onPress,
     onLongPress,
     selectionMode = false,
@@ -136,25 +160,45 @@ const ChatsListRow = React.memo(
           {rippleOverlay}
           <View style={tw`flex-row items-center`}>
             <AvatarWithSelectionBadge isSelected={isSelected}>
-              {item.isAria ? <AriaListAvatar /> : <Avatar name={item.contactName} />}
+              {item.isAria ? <AriaListAvatar /> : <PeerListAvatar name={item.contactName} />}
             </AvatarWithSelectionBadge>
             <View style={tw`flex-1 ml-3`}>
               <View style={tw`flex-row items-center justify-between`}>
                 <View style={tw`flex-row items-center flex-1 min-w-0 mr-2`}>
                   <Text
-                    style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]}
+                    style={[
+                      tw`text-[15px]`,
+                      {
+                        color: V.textPrimary,
+                        fontWeight: isUnread ? '600' : '500',
+                      },
+                    ]}
                     numberOfLines={1}
                   >
                     {item.contactName}
                   </Text>
                   {item.isAria ? <AiBadge /> : null}
                 </View>
-                <Text style={[tw`text-[10px]`, { color: V.textMuted }]}>
-                  {formatChatListTime(ts)}
-                </Text>
+                <View style={tw`flex-row items-center`}>
+                  <Text
+                    style={[
+                      tw`text-[10px]`,
+                      { color: isUnread ? V.accentSage : V.textMuted },
+                    ]}
+                  >
+                    {formatChatListTime(ts)}
+                  </Text>
+                  {isUnread ? <View style={styles.unreadDot} /> : null}
+                </View>
               </View>
               <Text
-                style={[tw`text-[12px] mt-0.5`, { color: V.textSecondary }]}
+                style={[
+                  tw`text-[12px] mt-0.5`,
+                  {
+                    color: isUnread ? V.textPrimary : V.textSecondary,
+                    fontWeight: isUnread ? '500' : '400',
+                  },
+                ]}
                 numberOfLines={1}
               >
                 {preview}
@@ -170,6 +214,8 @@ const ChatsListRow = React.memo(
     prev.item.roomId === next.item.roomId &&
     prev.item.last?.id === next.item.last?.id &&
     prev.item.last?.created_at === next.item.last?.created_at &&
+    prev.isUnread === next.isUnread &&
+    prev.nickname === next.nickname &&
     prev.selectionMode === next.selectionMode &&
     prev.isSelected === next.isSelected,
 );

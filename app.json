@@ -31,6 +31,17 @@
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "vaultmessenger",
+              "host": "auth-confirm"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ],
       "adaptiveIcon": {

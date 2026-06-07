@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
@@ -14,6 +14,8 @@ import {
   readNicknameFromStorage,
   writeNicknameToStorage,
 } from '../lib/nicknameStorage';
+import { clearVaultLocalSession } from '../lib/vaultLocalSessionCleanup';
+import { ensureUserIdentityKeys } from '../utils/VaultKeyServer';
 
 export { NICKNAME_STORAGE_KEY };
 const SESSION_CACHE_KEY = '@vault_session_cache';
@@ -90,12 +92,14 @@ async function redeemPendingInviteOrClear(sessionUser) {
       inviteRedeemErrorTitle(),
       'Не удалось связаться с сервером. Войдите снова после проверки сети.'
     );
+    await clearVaultLocalSession();
     await supabase.auth.signOut();
     return { hadPending: true, failed: true };
   }
 
   if (!ok) {
     Alert.alert(inviteRedeemErrorTitle(), inviteRedeemErrorMessage(errorReason));
+    await clearVaultLocalSession();
     await supabase.auth.signOut();
     return { hadPending: true, failed: true };
   }
@@ -110,6 +114,7 @@ export function AuthGateProvider({ children }) {
   const [inviteCheckDone, setInviteCheckDone] = useState(false);
   const [profileStatus, setProfileStatus] = useState('idle');
   const [profileHandle, setProfileHandle] = useState(null);
+  const prevUserIdRef = useRef(null);
 
   const loadProfile = useCallback(async (userId, opts = {}) => {
     const quiet = Boolean(opts.quiet);
@@ -119,6 +124,11 @@ export function AuthGateProvider({ children }) {
     setProfileHandle(handle);
     if (handle) {
       await writeNicknameToStorage(handle);
+      try {
+        await ensureUserIdentityKeys(handle);
+      } catch (e) {
+        if (__DEV__) console.warn('[AuthGate] ensureUserIdentityKeys', e?.message || e);
+      }
     }
     setProfileStatus('ready');
   }, []);
@@ -147,6 +157,13 @@ export function AuthGateProvider({ children }) {
 
     const {
       data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      const nextUserId = nextSession?.user?.id ?? null;
+      const prevUserId = prevUserIdRef.current;
+
+      if (prevUserId && nextUserId && prevUserId !== nextUserId) {
+        void clearVaultLocalSession();
+      }
+
       // Сохраняем актуальную сессию в кэш при каждом изменении
       writeCachedSession(nextSession ?? null);
       setSession(nextSession ?? null);
@@ -154,12 +171,14 @@ export function AuthGateProvider({ children }) {
         setPasswordRecoveryPending(true);
       }
       if (!nextSession) {
+        void clearVaultLocalSession();
         AsyncStorage.removeItem(VAULT_PENDING_INVITE_KEY).catch(() => {});
         setInviteCheckDone(true);
         setProfileStatus('idle');
         setProfileHandle(null);
         setPasswordRecoveryPending(false);
       }
+      prevUserIdRef.current = nextUserId;
     });
 
     const linkSub = Linking.addEventListener('url', (e) => {

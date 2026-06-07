@@ -94,6 +94,39 @@ CREATE POLICY "chat-media authenticated insert"
 
 ---
 
+## 4b. Storage `avatars` (profile photos)
+
+Миграция: `supabase/migrations/20260607_profile_avatars.sql`
+
+```sql
+SELECT id, name, public FROM storage.buckets WHERE id = 'avatars';
+
+SELECT policyname, cmd, roles, qual, with_check
+FROM pg_policies
+WHERE schemaname = 'storage' AND tablename = 'objects'
+  AND policyname ILIKE 'avatars%'
+ORDER BY policyname;
+```
+
+**Ожидаемо:**
+- [ ] Bucket **public** read (для `getPublicUrl`)
+- [ ] INSERT / UPDATE / DELETE только **`authenticated`**, путь `{auth.uid()}/…`
+- [ ] **Нет** anon insert/update/delete на `avatars`
+- [ ] В `profiles`: колонки `avatar_path`, `avatar_updated_at`; trigger `profiles_validate_avatar_path`
+
+Миграция RPC: `supabase/migrations/20260608_peer_profile_avatar_rpc.sql`
+
+```sql
+SELECT routine_name, grantee
+FROM information_schema.role_routine_grants
+WHERE routine_schema = 'public'
+  AND routine_name = 'get_peer_profile_avatar';
+```
+
+**Ожидаемо:** `EXECUTE` только для `authenticated`, не для `anon`.
+
+---
+
 ## 5. Push — без plaintext (B5)
 
 Проверить Edge Function / триггер, который шлёт Expo push (репо: `supabase/functions/` или Vault secret).

@@ -66,6 +66,29 @@ export default function useChatOptimisticMedia({
     [appendRow, roomId, nickname],
   );
 
+  const appendOptimisticImages = useCallback(
+    (localUris) => {
+      if (!Array.isArray(localUris) || localUris.length === 0) return null;
+      const tempId = `${OPT_IMAGE_PREFIX}${Date.now()}`;
+      return appendRow(
+        {
+          id: tempId,
+          clientRowKey: tempId,
+          room_id: roomId,
+          player_name: nickname,
+          message_type: 'image',
+          media_url: localUris[0],
+          media_urls: localUris,
+          text: '',
+          created_at: new Date().toISOString(),
+          _isOptimistic: true,
+        },
+        optimisticImageTempIdRef,
+      );
+    },
+    [appendRow, roomId, nickname],
+  );
+
   const appendOptimisticVoice = useCallback(
     ({ localUri, duration, waveform }) => {
       const tempId = `${OPT_VOICE_PREFIX}${Date.now()}`;
@@ -143,6 +166,7 @@ export default function useChatOptimisticMedia({
     optimisticImageTempIdRef,
     optimisticVoiceTempIdRef,
     appendOptimisticImage,
+    appendOptimisticImages,
     appendOptimisticVoice,
     handleImageSendError,
     handleVoiceSendError,

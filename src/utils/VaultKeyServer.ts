@@ -26,12 +26,25 @@
  */
 
 import { supabase } from '../lib/supabase';
-import { getPublicKeyBase64 } from './VaultKeyStore';
+import { normalizeVaultPlayerName } from '../lib/vaultPlayerName';
+import {
+  encodeKey,
+  generateAndStoreKeyPair,
+  getPublicKeyBase64,
+  loadKeyPair,
+  clearStoredKeyPair,
+} from './VaultKeyStore';
 
 const keyCache = new Map<string, string>();
 
+export function clearPublicKeyCache(): void {
+  keyCache.clear();
+}
+
 export function getKeyFromCache(playerName: string): string | null {
-  return keyCache.get(playerName) ?? null;
+  const name = normalizeVaultPlayerName(playerName);
+  if (!name) return null;
+  return keyCache.get(name) ?? null;
 }
 
 export type PublicKeyRecord = {
@@ -39,24 +52,96 @@ export type PublicKeyRecord = {
   public_key_b64: string;
 };
 
-/**
- * Публикует публичный ключ текущего пользователя в Supabase.
- * Если запись уже существует — обновляет её (upsert по player_name).
- * При ошибке бросает Error с описанием.
- */
-export async function publishMyPublicKey(playerName: string): Promise<void> {
-  const public_key_b64 = await getPublicKeyBase64();
+function cachePublicKey(playerName: string, publicKeyB64: string): void {
+  const name = normalizeVaultPlayerName(playerName);
+  if (name && publicKeyB64) keyCache.set(name, publicKeyB64);
+}
+
+async function upsertPublicKey(playerName: string, public_key_b64: string): Promise<void> {
+  const name = normalizeVaultPlayerName(playerName);
+  if (!name) {
+    throw new Error('VaultKeyServer: playerName обязателен');
+  }
 
   const { error } = await supabase
     .from('vault_public_keys')
     .upsert(
-      { player_name: playerName, public_key_b64, updated_at: new Date().toISOString() },
+      { player_name: name, public_key_b64, updated_at: new Date().toISOString() },
       { onConflict: 'player_name' }
     );
 
   if (error) {
     throw new Error(`VaultKeyServer: не удалось опубликовать публичный ключ — ${error.message}`);
   }
+
+  cachePublicKey(name, public_key_b64);
+}
+
+/**
+ * Ключи текущего @handle при входе.
+ * Сервер — источник правды для других устройств; не перезаписываем чужой pubkey.
+ */
+export async function ensureUserIdentityKeys(playerName: string): Promise<void> {
+  const name = normalizeVaultPlayerName(playerName);
+  if (!name) return;
+
+  const serverPub = await fetchPublicKey(name);
+  const local = await loadKeyPair(name);
+
+  if (local) {
+    const localPub = encodeKey(local.publicKey);
+    if (!serverPub) {
+      await upsertPublicKey(name, localPub);
+      return;
+    }
+    if (serverPub !== localPub) {
+      // Устаревшая локальная пара (pre-provision на этом устройстве) — сервер с другого девайса.
+      await clearStoredKeyPair(name);
+    }
+    return;
+  }
+
+  if (serverPub) {
+    // Private key для serverPub на этом устройстве нет — без backup расшифровка невозможна.
+    return;
+  }
+
+  await generateAndStoreKeyPair(name);
+  await upsertPublicKey(name, await getPublicKeyBase64(name));
+}
+
+/**
+ * Публичный ключ получателя для шифрования.
+ * 1) сервер (мульти-девайс), 2) локальный, 3) bootstrap если нигде нет.
+ */
+export async function resolveRecipientPublicKeyB64(recipientPlayerName: string): Promise<string | null> {
+  const name = normalizeVaultPlayerName(recipientPlayerName);
+  if (!name) return null;
+
+  const serverPub = await fetchPublicKey(name);
+  if (serverPub) return serverPub;
+
+  const local = await loadKeyPair(name);
+  if (local) {
+    const pub = encodeKey(local.publicKey);
+    await upsertPublicKey(name, pub);
+    return pub;
+  }
+
+  const pair = await generateAndStoreKeyPair(name);
+  const pub = encodeKey(pair.publicKey);
+  await upsertPublicKey(name, pub);
+  return pub;
+}
+
+/**
+ * Публикует публичный ключ текущего пользователя в Supabase.
+ * Если запись уже существует — обновляет её (upsert по player_name).
+ * При ошибке бросает Error с описанием.
+ */
+export async function publishMyPublicKey(playerName: string): Promise<void> {
+  const public_key_b64 = await getPublicKeyBase64(playerName);
+  await upsertPublicKey(playerName, public_key_b64);
 }
 
 /**
@@ -64,22 +149,25 @@ export async function publishMyPublicKey(playerName: string): Promise<void> {
  * Возвращает base64-строку ключа или null, если пользователь не найден.
  */
 export async function fetchPublicKey(playerName: string): Promise<string | null> {
-  const cached = keyCache.get(playerName);
+  const name = normalizeVaultPlayerName(playerName);
+  if (!name) return null;
+
+  const cached = keyCache.get(name);
   if (cached) return cached;
 
   const { data, error } = await supabase
     .from('vault_public_keys')
     .select('public_key_b64')
-    .eq('player_name', playerName)
+    .eq('player_name', name)
     .single();
 
   if (error) {
     if (error.code === 'PGRST116') return null; // not found
-    throw new Error(`VaultKeyServer: ошибка при получении ключа для «${playerName}» — ${error.message}`);
+    throw new Error(`VaultKeyServer: ошибка при получении ключа для «${name}» — ${error.message}`);
   }
 
   const key = data?.public_key_b64 ?? null;
-  if (key) keyCache.set(playerName, key);
+  if (key) cachePublicKey(name, key);
   return key;
 }
 
@@ -94,7 +182,9 @@ export async function fetchPublicKeys(playerNames: string[]): Promise<Record<str
   const result: Record<string, string> = {};
   const toFetch: string[] = [];
 
-  for (const name of playerNames) {
+  for (const raw of playerNames) {
+    const name = normalizeVaultPlayerName(raw);
+    if (!name) continue;
     const cached = keyCache.get(name);
     if (cached) {
       result[name] = cached;
@@ -115,11 +205,17 @@ export async function fetchPublicKeys(playerNames: string[]): Promise<Record<str
   }
 
   for (const row of data ?? []) {
-    keyCache.set(row.player_name, row.public_key_b64);
+    cachePublicKey(row.player_name, row.public_key_b64);
     result[row.player_name] = row.public_key_b64;
   }
 
   return result;
 }
 
-export default { publishMyPublicKey, fetchPublicKey, fetchPublicKeys };
+export default {
+  ensureUserIdentityKeys,
+  resolveRecipientPublicKeyB64,
+  publishMyPublicKey,
+  fetchPublicKey,
+  fetchPublicKeys,
+};

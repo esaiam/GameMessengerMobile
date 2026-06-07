@@ -36,7 +36,7 @@ function openUrl(url) {
 /**
  * Plain text + кликабельные ссылки (Aria: без markdown-оформления текста).
  */
-export function LinkifyMessageText({ text, style, linkStyle }) {
+export function LinkifyMessageText({ text, style, linkStyle, selectable = false }) {
   const body = typeof text === 'string' ? text : '';
   const trimmed = body.trim();
   const parts = useMemo(
@@ -52,23 +52,30 @@ export function LinkifyMessageText({ text, style, linkStyle }) {
   };
 
   if (parts.length === 1 && parts[0].type === 'text') {
-    return <Text style={style}>{parts[0].value}</Text>;
+    return (
+      <Text style={style} selectable={selectable}>
+        {parts[0].value}
+      </Text>
+    );
   }
 
   return (
-    <Text style={style}>
+    <Text style={style} selectable={selectable}>
       {parts.map((part, i) =>
         part.type === 'link' ? (
           <Text
             key={`link-${i}`}
             style={linkStyles}
+            selectable={selectable}
             onPress={() => openUrl(part.url)}
             accessibilityRole="link"
           >
             {part.label}
           </Text>
         ) : (
-          <Text key={`text-${i}`}>{part.value}</Text>
+          <Text key={`text-${i}`} selectable={selectable}>
+            {part.value}
+          </Text>
         ),
       )}
     </Text>

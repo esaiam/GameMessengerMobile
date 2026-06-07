@@ -38,6 +38,7 @@ import {
   PROFILE_COLLAPSE_DISTANCE,
   useProfileCollapseHeader,
 } from '../hooks/useProfileCollapseHeader';
+import { usePeerAvatar } from '../hooks/usePeerAvatar';
 import {
   blockPeer,
   unblockPeer,
@@ -64,6 +65,7 @@ import {
   adjustMediaTransitionRectForScroll,
   isValidMediaTransitionRect,
 } from '../components/contactProfile/mediaTransitionSource';
+import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import { CHATS_HEADER_GLOW_STOP_CENTER } from '../components/chats/ChatsHeaderGlow';
 
 /** Зазор под шапкой до аватара (~80–100px; в хуке AVATAR_MARGIN_TOP = −12) */
@@ -73,7 +75,16 @@ export default function ContactProfileScreen({ route, navigation }) {
   const { peerName, contactOnline, roomId, nickname } = route.params || {};
   const insets = useSafeAreaInsets();
   const headerLayout = useMessengerHeaderLayout();
+  const isTablet = useIsSplitLayout();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const [profilePaneWidth, setProfilePaneWidth] = useState(screenW);
+  const profileLayoutW = isTablet ? profilePaneWidth : screenW;
+
+  useEffect(() => {
+    if (!isTablet) {
+      setProfilePaneWidth(screenW);
+    }
+  }, [isTablet, screenW]);
   const { items: mediaItems, loading: mediaLoading, reload: reloadMedia } =
     useContactProfileRoomMedia(roomId, nickname);
   const [busy, setBusy] = useState(false);
@@ -97,6 +108,7 @@ export default function ContactProfileScreen({ route, navigation }) {
   const [overflowMenuVisible, setOverflowMenuVisible] = useState(false);
   const [editContactVisible, setEditContactVisible] = useState(false);
   const [localDisplayName, setLocalDisplayName] = useState('');
+  const { avatarUri: peerAvatarUri } = usePeerAvatar(peerName, { refreshOnFocus: true });
 
   const viewerItems = useMemo(
     () =>
@@ -351,11 +363,19 @@ export default function ContactProfileScreen({ route, navigation }) {
     nameHeaderChromeStackStyle,
   } = useProfileCollapseHeader({
     headerLayout,
-    screenW,
+    screenW: profileLayoutW,
     withStatusRow: true,
     withAvatarScrollGlow: true,
     avatarTopExtra: CONTACT_PROFILE_AVATAR_BELOW_HEADER,
   });
+
+  const handleProfilePaneLayout = useCallback((e) => {
+    if (!isTablet) return;
+    const w = e.nativeEvent.layout.width;
+    if (w > 0) {
+      setProfilePaneWidth((prev) => (Math.abs(prev - w) < 0.5 ? prev : w));
+    }
+  }, [isTablet]);
 
   useEffect(() => {
     if (!nickname || !peerName) return;
@@ -395,8 +415,8 @@ export default function ContactProfileScreen({ route, navigation }) {
     }
     setBusy(true);
     try {
-      await hideAllRoomMessagesForMe({ roomId, nickname });
-      await hideChatRoom(nickname, roomId);
+      const { error } = await supabase.rpc('delete_contact_room', { room_id: roomId });
+      if (error) throw error;
       await pruneDialogsCache();
       clearContactsListCache(nickname);
       leaveContactProfileAfterDestructiveAction(navigation);
@@ -520,7 +540,10 @@ export default function ContactProfileScreen({ route, navigation }) {
 
   const content = (
     <TabBackground>
-      <Animated.View style={[styles.flexRoot, profileChromeStackStyle]}>
+      <Animated.View
+        style={[styles.flexRoot, profileChromeStackStyle]}
+        onLayout={handleProfilePaneLayout}
+      >
         <View style={[headerLayout.containerStyle, styles.headerBar]}>
           <SafeBlurView
             intensity={
@@ -737,7 +760,7 @@ export default function ContactProfileScreen({ route, navigation }) {
             styles.avatarFloat,
             {
               top: avatarTop,
-              left: (screenW - PROFILE_AVATAR_SIZE) / 2,
+              left: (profileLayoutW - PROFILE_AVATAR_SIZE) / 2,
               width: PROFILE_AVATAR_SIZE,
               height: PROFILE_AVATAR_SIZE,
               overflow: 'visible',
@@ -762,7 +785,7 @@ export default function ContactProfileScreen({ route, navigation }) {
               ]}
             />
             <Animated.View style={[styles.avatarGlowRing, avatarGlowStyle]}>
-              <UserAvatar name={peerName || '?'} uri={null} size={PROFILE_AVATAR_SIZE} />
+              <UserAvatar name={displayName} uri={peerAvatarUri} size={PROFILE_AVATAR_SIZE} />
               <Animated.View
                 pointerEvents="none"
                 style={[styles.avatarGlowFill, avatarGlowFillStyle]}
@@ -779,7 +802,7 @@ export default function ContactProfileScreen({ route, navigation }) {
             pointerEvents="none"
             style={[
               styles.nameFloat,
-              { top: nameStartY, left: screenW / 2, color: V.textPrimary },
+              { top: nameStartY, left: profileLayoutW / 2, color: V.textPrimary },
               nameStyle,
             ]}
             numberOfLines={1}
@@ -826,8 +849,8 @@ export default function ContactProfileScreen({ route, navigation }) {
             ]}
           >
             <UserAvatar
-              name={peerName || '?'}
-              uri={null}
+              name={displayName}
+              uri={peerAvatarUri}
               size={HEADER_MINI_AVATAR_SIZE}
             />
           </Animated.View>

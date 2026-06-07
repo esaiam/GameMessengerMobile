@@ -1,6 +1,8 @@
 import { supabase } from './supabase';
-import { buildHiddenForEveryone } from '../components/chat/buildHiddenForEveryone';
 import { hideChatRoom } from './hiddenChats';
+import { vaultHideRoomForEveryone } from './vaultHideRoomForEveryone';
+import { broadcastThreadClear } from './chatThreadBroadcast';
+import { clearRoomReadCursor } from './chatReadCursor';
 import roomMessagesCache from '../utils/roomMessagesCache';
 
 const PAGE_SIZE = 150;
@@ -31,35 +33,27 @@ export async function hideRoomMessagesForDelete({
   peerName,
   deleteForEveryone,
 }) {
+  if (deleteForEveryone) {
+    await vaultHideRoomForEveryone(roomId);
+    await clearRoomReadCursor(nickname, roomId);
+    roomMessagesCache.set(roomId, []);
+    void broadcastThreadClear(roomId);
+    return;
+  }
+
   const messages = await fetchAllRoomMessages(roomId);
   roomMessagesCache.set(roomId, []);
 
   if (messages.length === 0) return;
 
-  let hiddenTarget = null;
-  if (deleteForEveryone) {
-    const { data: room, error: roomErr } = await supabase
-      .from('rooms')
-      .select('id, user1_id, user2_id')
-      .eq('id', roomId)
-      .maybeSingle();
-    if (roomErr) throw roomErr;
-    hiddenTarget = buildHiddenForEveryone(room, nickname, {
-      peerName,
-      messagesSnapshot: messages,
-    });
-  }
-
   for (let i = 0; i < messages.length; i += UPDATE_CHUNK) {
     const chunk = messages.slice(i, i + UPDATE_CHUNK);
     const results = await Promise.all(
       chunk.map((msg) => {
-        if (!deleteForEveryone && (msg.hidden_for || []).includes(nickname)) {
+        if ((msg.hidden_for || []).includes(nickname)) {
           return { error: null };
         }
-        const nextHidden = deleteForEveryone
-          ? hiddenTarget
-          : [...new Set([...(msg.hidden_for || []), nickname])];
+        const nextHidden = [...new Set([...(msg.hidden_for || []), nickname])];
         return supabase.from('messages').update({ hidden_for: nextHidden }).eq('id', msg.id);
       }),
     );

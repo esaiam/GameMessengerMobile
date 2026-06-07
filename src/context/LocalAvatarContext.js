@@ -1,48 +1,60 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
-
-const AVATAR_STORAGE_KEY = '@vault_local_avatar_path';
-const AVATAR_FILENAME = 'profile_avatar.jpg';
-
-/** Путь без ?v= — в AsyncStorage только file URI. */
-function stripCacheQuery(uri) {
-  if (!uri) return null;
-  const q = uri.indexOf('?');
-  return q === -1 ? uri : uri.slice(0, q);
-}
-
-/** RN Image кэширует по uri; при перезаписи того же файла нужен bust. */
-function withCacheBust(path, bust) {
-  const base = stripCacheQuery(path);
-  if (!base) return null;
-  return `${base}?v=${bust}`;
-}
+import { uploadProfileAvatarFromLocalUri } from '../lib/profileAvatarUpload';
+import {
+  AVATAR_SERVER_UPDATED_AT_KEY,
+  AVATAR_STORAGE_KEY,
+  markProfileAvatarSynced,
+  PROFILE_AVATAR_LOCAL_FILENAME,
+  stripAvatarCacheQuery,
+  syncOwnProfileAvatarFromServer,
+  withAvatarCacheBust,
+} from '../lib/profileAvatarSync';
+import { supabase } from '../lib/supabase';
 
 const LocalAvatarContext = createContext(null);
 
 export function LocalAvatarProvider({ children }) {
   const [avatarUri, setAvatarUri] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
-  const refreshAvatar = useCallback(async () => {
+  const applyLocalAvatarOnly = useCallback(async () => {
     try {
-      const stored = stripCacheQuery(await AsyncStorage.getItem(AVATAR_STORAGE_KEY));
+      const stored = stripAvatarCacheQuery(await AsyncStorage.getItem(AVATAR_STORAGE_KEY));
       if (!stored) {
         setAvatarUri(null);
         return;
       }
       const file = new File(stored);
       if (!file.exists) {
-        await AsyncStorage.removeItem(AVATAR_STORAGE_KEY);
+        await AsyncStorage.multiRemove([AVATAR_STORAGE_KEY, AVATAR_SERVER_UPDATED_AT_KEY]);
         setAvatarUri(null);
         return;
       }
-      setAvatarUri(withCacheBust(stored, 0));
+      const syncedAt = await AsyncStorage.getItem(AVATAR_SERVER_UPDATED_AT_KEY);
+      const bust = syncedAt ? Date.parse(syncedAt) || Date.now() : Date.now();
+      setAvatarUri(withAvatarCacheBust(stored, bust));
     } catch {
       setAvatarUri(null);
     }
   }, []);
+
+  const refreshAvatar = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        await applyLocalAvatarOnly();
+        return;
+      }
+
+      const { uri } = await syncOwnProfileAvatarFromServer();
+      setAvatarUri(uri);
+    } catch {
+      await applyLocalAvatarOnly();
+    }
+  }, [applyLocalAvatarOnly]);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,26 +68,50 @@ export function LocalAvatarProvider({ children }) {
     };
   }, [refreshAvatar]);
 
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.id) {
+        void refreshAvatar();
+      } else {
+        void applyLocalAvatarOnly();
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [refreshAvatar, applyLocalAvatarOnly]);
+
   const savePickedUri = useCallback(async (sourceUri) => {
     if (!sourceUri) return;
-    const destFile = new File(Paths.document, AVATAR_FILENAME);
+    const destFile = new File(Paths.document, PROFILE_AVATAR_LOCAL_FILENAME);
+    let localPath;
     try {
       if (destFile.exists) {
         await destFile.delete();
       }
       const srcFile = new File(sourceUri);
       await srcFile.copy(destFile);
-      const path = destFile.uri;
-      await AsyncStorage.setItem(AVATAR_STORAGE_KEY, path);
-      setAvatarUri(withCacheBust(path, Date.now()));
+      localPath = destFile.uri;
+      await AsyncStorage.setItem(AVATAR_STORAGE_KEY, localPath);
+      setAvatarUri(withAvatarCacheBust(localPath, Date.now()));
     } catch {
       throw new Error('SAVE_FAILED');
+    }
+
+    setUploading(true);
+    try {
+      const { updatedAt } = await uploadProfileAvatarFromLocalUri(localPath);
+      await markProfileAvatarSynced(updatedAt);
+      setAvatarUri(withAvatarCacheBust(localPath, Date.parse(updatedAt) || Date.now()));
+    } catch (e) {
+      if (e?.message === 'NOT_AUTHENTICATED') throw e;
+      throw new Error('UPLOAD_FAILED');
+    } finally {
+      setUploading(false);
     }
   }, []);
 
   const removeAvatar = useCallback(async () => {
     try {
-      const stored = stripCacheQuery(await AsyncStorage.getItem(AVATAR_STORAGE_KEY));
+      const stored = stripAvatarCacheQuery(await AsyncStorage.getItem(AVATAR_STORAGE_KEY));
       if (stored) {
         const file = new File(stored);
         if (file.exists) {
@@ -85,7 +121,7 @@ export function LocalAvatarProvider({ children }) {
     } catch {
       /* ignore */
     }
-    await AsyncStorage.removeItem(AVATAR_STORAGE_KEY);
+    await AsyncStorage.multiRemove([AVATAR_STORAGE_KEY, AVATAR_SERVER_UPDATED_AT_KEY]);
     setAvatarUri(null);
   }, []);
 
@@ -93,10 +129,11 @@ export function LocalAvatarProvider({ children }) {
     () => ({
       avatarUri,
       loading,
+      uploading,
       refreshAvatar,
       savePickedUri,
       removeAvatar }),
-    [avatarUri, loading, refreshAvatar, savePickedUri, removeAvatar]
+    [avatarUri, loading, uploading, refreshAvatar, savePickedUri, removeAvatar]
   );
 
   return <LocalAvatarContext.Provider value={value}>{children}</LocalAvatarContext.Provider>;
