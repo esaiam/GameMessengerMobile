@@ -14,8 +14,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ensureUserIdentityKeys } from '../utils/VaultKeyServer';
-import { refreshChatsListAfterMessage } from '../lib/chatsListSync';
 import { useVoicePlayer } from '../hooks/useVoicePlayer';
 import { useChatMediaPlayback } from '../hooks/useChatMediaPlayback';
 import ChatRoomHeader, { ICON_SELECTION_ACTION } from './ChatRoomHeader';
@@ -25,18 +23,13 @@ import useChatMessageListRender from './chat/useChatMessageListRender';
 import ChatMessageList from './chat/ChatMessageList';
 import ChatComposer from './chat/ChatComposer';
 import ChatRoomWallpaper from './chat/ChatRoomWallpaper';
-import { createDecryptMsg, decryptMessagesBatch } from './chat/messageDecrypt';
-import {
-  filterExpiredMessages,
-  filterHiddenForUser,
-  filterHiddenForUserKeepingDeleting } from './chat/messageFilters';
 import useMessageRowAnimations from './chat/useMessageRowAnimations';
 import useChatRoomEffects from './chat/useChatRoomEffects';
 import useChatMediaActions from './chat/useChatMediaActions';
 import useChatSendText from './chat/useChatSendText';
 import useChatSelection from './chat/useChatSelection';
 import useChatMessageMutations from './chat/useChatMessageMutations';
-import useChatReplyHelpers from './chat/useChatReplyHelpers';
+import useChatMessageFilters from './chat/useChatMessageFilters';
 import useChatOptimisticVideo from './chat/useChatOptimisticVideo';
 import useChatOptimisticText from './chat/useChatOptimisticText';
 import useChatOptimisticMedia from './chat/useChatOptimisticMedia';
@@ -162,6 +155,25 @@ export default function Chat({
     setAriaMessages,
     nickname,
     onEmojiPickerChange,
+  });
+
+  const {
+    decryptMsg,
+    decryptBatch,
+    filterExpired,
+    filterHiddenForMe,
+    filterHiddenForMeKeepingDeleting,
+    otherPlayerName,
+    getReplyMessage,
+    replyToMessage,
+  } = useChatMessageFilters({
+    messages,
+    nickname,
+    peerName,
+    roomId,
+    isAriaChat,
+    setReplyTarget,
+    deletingIdsRef,
   });
 
   const [unlockedVideoIds, setUnlockedVideoIds] = useState(() => new Set());
@@ -316,19 +328,6 @@ export default function Chat({
       });
     }, 120);
   }, [messageIdToIndexMap, flatListRef]);
-
-  const messagesMap = useMemo(
-    () => new Map(messages.map((m) => [m.id, m])),
-    [messages]
-  );
-
-  const { getReplyMessage, replyToMessage } = useChatReplyHelpers(messagesMap, setReplyTarget);
-
-  const otherPlayerName = useMemo(() => {
-    const explicitPeer = typeof peerName === 'string' ? peerName.trim() : '';
-    if (explicitPeer) return explicitPeer;
-    return messages.find((m) => m.player_name !== nickname)?.player_name ?? null;
-  }, [messages, nickname, peerName]);
 
   const onUnlockVideo = useCallback((id) => {
     setUnlockedVideoIds((prev) => {
@@ -488,47 +487,7 @@ export default function Chat({
     pauseVoice();
   }, [isRecordingVoice, pauseVoice]);
 
-  useEffect(() => {
-    const initE2E = async () => {
-      try {
-        await ensureUserIdentityKeys(nickname);
-      } catch {
-        /* ignore */
-      }
-    };
-    if (nickname) initE2E();
-  }, [nickname]);
-
-  useEffect(() => {
-    if (!roomId || !nickname || isAriaChat) return;
-    void refreshChatsListAfterMessage(
-      nickname,
-      roomId,
-      peerName ? { contactName: peerName } : {},
-    );
-  }, [roomId, nickname, peerName, isAriaChat]);
-
   useAriaChatListBootstrap(isAriaChat, setMessagesLoading, listOpacity);
-
-  const decryptMsg = useMemo(() => createDecryptMsg({ nickname }), [nickname]);
-
-  const decryptBatch = useCallback(
-    async (msgs) => decryptMessagesBatch(msgs, decryptMsg, nickname),
-    [decryptMsg, nickname],
-  );
-
-  const filterExpired = useCallback((msgs) => filterExpiredMessages(msgs), []);
-
-  const filterHiddenForMe = useCallback(
-    (msgs) => filterHiddenForUser(msgs, nickname),
-    [nickname],
-  );
-
-  const filterHiddenForMeKeepingDeleting = useCallback(
-    (msgs) =>
-      filterHiddenForUserKeepingDeleting(msgs, nickname, (id) => deletingIdsRef.current?.has?.(id)),
-    [nickname],
-  );
 
   const {
     pinnedMessage,
