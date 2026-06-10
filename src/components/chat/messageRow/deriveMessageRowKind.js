@@ -2,9 +2,13 @@ import { ARIA_MESSAGE_TYPING } from '../../../lib/aria';
 
 /**
  * Pure classification flags for a chat list row (no side effects).
+ *
+ * Kind resolution order (see resolveMessageRowKind):
+ * ariaPlainTyping → ariaPlainText → typing → video → image → ariaVoice → text → other
+ *
  * @param {object} item — FlatList message item
  * @param {object} listExtra — stable listExtra from useChatMessageListRender
- * @param {{ nickname: string }} env — rowEnvRef.current subset (isMine)
+ * @param {{ nickname: string }} env — rowEnvRef.current subset; full contract: messageRowEnvContract.js
  */
 export function deriveMessageRowFlags(item, listExtra, env) {
   const isMine = item.player_name === env.nickname;
