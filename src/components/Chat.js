@@ -1,7 +1,6 @@
 import React, {
   useState,
   useEffect,
-  useLayoutEffect,
   useRef,
   useCallback,
   useMemo } from 'react';
@@ -9,8 +8,7 @@ import {
   View,
   useWindowDimensions,
   Alert,
-  TouchableOpacity,
-  Platform } from 'react-native';
+  TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,18 +40,12 @@ import { startAriaVoiceComposerSend } from './chat/ariaVoiceComposerSend';
 import { useAriaChatListBootstrap } from './chat/useAriaChatListBootstrap';
 import { getAriaComposerSurfaceProps } from './chat/ariaComposerSurfaceProps';
 import AriaStateGauges from './chat/AriaStateGauges';
-import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  runOnJS } from 'react-native-reanimated';
-import { useKeyboardHandler, KeyboardController, AndroidSoftInputModes, KeyboardStickyView } from 'react-native-keyboard-controller';
+import Reanimated, { useSharedValue } from 'react-native-reanimated';
+import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { V } from '../theme';
 import {
   MAX_RENDERED_VIDEOS,
-  CHAT_HEADER_TO_LIST_GAP_PX,
-  estimateComposerStackHeight,
-  computeChatListScrollSpacer,
-  computeChatListEmojiPanelInset } from './chat/chatViewConstants';
+  CHAT_HEADER_TO_LIST_GAP_PX } from './chat/chatViewConstants';
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
 import { useChatInvertedListScroll } from '../hooks/useChatInvertedListScroll';
@@ -72,6 +64,7 @@ import useChatInputSettling from './chat/useChatInputSettling';
 import useChatOverlayState from './chat/useChatOverlayState';
 import useChatCoreComposerState from './chat/useChatCoreComposerState';
 import useChatCalendarNavigation from './chat/useChatCalendarNavigation';
+import useChatListKeyboardLayout from './chat/useChatListKeyboardLayout';
 import { useNavigation } from '@react-navigation/native';
 import { deleteChatsFromList } from '../lib/hideRoomMessagesForDelete';
 import { safeGoBackToMessengerList } from '../lib/safeGoBack';
@@ -111,8 +104,6 @@ export default function Chat({
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const inputBarRef = useRef(null);
-  const lastComposerLayoutHRef = useRef(0);
-  const pendingComposerHeightRef = useRef(null);
 
   const {
     ariaControlled,
@@ -313,8 +304,6 @@ export default function Chat({
     return () => cancelAnimationFrame(raf);
   }, [editTarget?.id]);
 
-  const composerStackHeightShared = useSharedValue(estimateComposerStackHeight(insets));
-
   const {
     keyboardHeightLib,
     emojiPanelHeightShared,
@@ -339,6 +328,20 @@ export default function Chat({
     setText,
     emojiPanelGifSearchFocused });
 
+  const {
+    reportComposerBaseHeight,
+    listAnimatedStyle,
+    listViewportStyle,
+    listBottomSpacerStyle,
+  } = useChatListKeyboardLayout({
+    insets,
+    armComposerInsetSettling,
+    keyboardSettlingRef,
+    listOpacity,
+    keyboardHeightLib,
+    emojiPanelHeightShared,
+  });
+
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -349,88 +352,6 @@ export default function Chat({
     });
     return unsub;
   }, [navigation, releaseComposerKeyboard]);
-
-  const applyComposerStackHeight = useCallback((layoutH) => {
-    if (typeof layoutH !== 'number' || layoutH <= 0) return;
-    if (Math.abs(layoutH - lastComposerLayoutHRef.current) < 0.5) return;
-    lastComposerLayoutHRef.current = layoutH;
-    composerStackHeightShared.value = layoutH;
-    armComposerInsetSettling();
-  }, [armComposerInsetSettling, composerStackHeightShared]);
-
-  const flushPendingComposerStackHeight = useCallback(() => {
-    const pending = pendingComposerHeightRef.current;
-    if (pending == null) return;
-    pendingComposerHeightRef.current = null;
-    applyComposerStackHeight(pending);
-  }, [applyComposerStackHeight]);
-
-  /** Layout во время KB часто stale — на close сбрасываем, не применяем (рывок marginBottom). */
-  const discardPendingComposerHeight = useCallback(() => {
-    pendingComposerHeightRef.current = null;
-  }, []);
-
-  const reportComposerBaseHeight = useCallback((layoutH) => {
-    if (typeof layoutH !== 'number' || layoutH <= 0) return;
-    if (Math.abs(layoutH - lastComposerLayoutHRef.current) < 0.5) return;
-    if (keyboardSettlingRef.current) {
-      pendingComposerHeightRef.current = layoutH;
-      return;
-    }
-    applyComposerStackHeight(layoutH);
-  }, [applyComposerStackHeight, keyboardSettlingRef]);
-
-  const listAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: listOpacity.value }));
-
-  /**
-   * Лента на всю высоту под glass-капсулой; marginBottom — только emoji-панель (opaque).
-   * KB — translateY; scroll spacer — ListHeader (inverted bottom).
-   */
-  const listViewportStyle = useAnimatedStyle(() => ({
-    marginBottom: computeChatListEmojiPanelInset(
-      emojiPanelHeightShared.value,
-      keyboardHeightLib.value,
-    ),
-    transform: [{ translateY: keyboardHeightLib.value }],
-  }));
-
-  const listBottomSpacerStyle = useAnimatedStyle(() => ({
-    height: computeChatListScrollSpacer(
-      composerStackHeightShared.value,
-      emojiPanelHeightShared.value,
-      keyboardHeightLib.value,
-    ),
-  }));
-
-  useKeyboardHandler(
-    {
-      onStart: (e) => {
-        'worklet';
-        if (e.height <= 0) {
-          runOnJS(discardPendingComposerHeight)();
-        }
-      },
-      onEnd: (e) => {
-        'worklet';
-        if (e.height <= 0) {
-          runOnJS(discardPendingComposerHeight)();
-        } else {
-          runOnJS(flushPendingComposerStackHeight)();
-        }
-      },
-    },
-    [discardPendingComposerHeight, flushPendingComposerStackHeight],
-  );
-
-  /** Только manual lift; без resize окна (двойной offset). */
-  useLayoutEffect(() => {
-    if (Platform.OS !== 'android') return undefined;
-    KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_NOTHING);
-    return () => {
-      KeyboardController.setDefaultMode();
-    };
-  }, []);
 
   useEffect(() => {
     if (!isRecordingVoice) return;
