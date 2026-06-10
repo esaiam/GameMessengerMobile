@@ -18,117 +18,35 @@ import { V } from '../../theme';
 export default function ChatView({
   ephemeralClockTick,
   chatRoomHeader,
-  uiReady,
-  uploading,
-  fullScreenImage,
-  setFullScreenImage,
-  calendarOverlay,
-  daysWithMessages,
-  handleCalendarDayPress,
-  setCalendarOverlay,
-  menuVisible,
-  menuPosition,
-  selectedMessage,
-  setMenuVisible,
-  setReplyTarget,
-  startEditMessage,
-  canEditSelectedMessage,
-  setDeleteConfirmVisible,
-  togglePinForMessage,
-  contextMenuPinLabel,
-  pinDisabled,
-  deleteConfirmVisible,
-  closeDeleteConfirm,
-  deleteMessageForMe,
-  deleteMessageForAll,
-  overflowMenuVisible,
-  setOverflowMenuVisible,
-  setClearHistoryConfirmVisible,
-  setDeleteChatConfirmVisible,
-  clearHistoryConfirmVisible,
-  executeClearHistory,
-  deleteChatConfirmVisible,
-  closeDeleteChatConfirm,
-  confirmDeleteChatFromList,
-  deleteChatInProgress,
-  showAttachMenu,
-  setShowAttachMenu,
-  takePhoto,
-  pickImageFromGallery,
-  sendCurrentLocation,
-  ephemeralSec,
-  setEphemeralSec,
-  roomId,
-  flatListRef,
-  formattedMessages,
-  renderItem,
-  listExtraDataStable,
-  listAnimatedStyle,
-  listBottomSpacerStyle,
-  onListScroll,
-  onListLayoutReady,
-  messagesLoading,
-  listPaddingTop,
-  listFooterPaddingTop,
-  selectionMode,
-  selectedIds,
-  exitSelectionMode,
-  batchDeleteForMe,
-  batchCopySelected,
-  batchForwardSelected,
-  overscrollEnabled,
-  loadingOlder,
-  loadOlderMessages,
-  listViewportStyle,
-  inputBarRef,
-  reportComposerBaseHeight,
-  insets,
-  visibleReplyTo,
-  visibleEditTarget,
-  replyTargetAnimatedStyle,
-  emojiPanelAnimatedStyle,
-  emojiContentAnimatedStyle,
-  cancelEditMessage,
-  editTarget,
-  showEmojiPicker,
-  toggleEmojiPicker,
-  insertEmoji,
-  emojiWobbleRotate,
-  inputRef,
-  text,
-  setText,
-  sendMessage,
-  isRecordingVoice,
-  handleSendVoiceForComposer,
-  setIsRecordingVoice,
-  uploadMedia,
-  sendMediaMessage,
-  onVoiceRecorderOpen,
-  handleVideoRecorded,
-  handleVideoSendError,
-  handleVideoUploadFinished,
-  collapseEmojiForKeyboard,
-  emojiPanelGifQuery,
-  setEmojiPanelGifQuery,
-  mediaInline,
-  setEmojiPanelGifSearchFocused,
-  prepareEmojiPanelGifSearch,
-  releaseEmojiPanelGifSearch,
-  exitGifTabLayout,
-  ariaComposerSurfaceProps,
-  headerOverlayH,
-  setHeaderOverlayH,
-  headerRightTrailingEl,
   isAriaChat,
-  ariaState,
-  setAriaState,
-  setAriaGaugesH,
-  pinnedMessage,
-  pinnedBarH,
-  setPinnedBarH,
-  scrollToMessageById,
-  unpinMessage,
+  uiReady,
+  insets,
+  listViewportStyle,
+  overlayProps,
+  listProps,
+  composerProps,
+  headerShell,
 }) {
+  const {
+    headerOverlayH,
+    pinnedBarH,
+    headerRightTrailingEl,
+    ariaState,
+    pinnedMessage,
+    selectionMode,
+    selectedIds,
+    setHeaderOverlayH,
+    setPinnedBarH,
+    setAriaState,
+    setAriaGaugesH,
+    exitSelectionMode,
+    batchCopySelected,
+    batchForwardSelected,
+    batchDeleteForMe,
+    scrollToMessageById,
+    unpinMessage,
+  } = headerShell;
+
   return (
     <EphemeralClockContext.Provider value={ephemeralClockTick}>
       <Reanimated.View
@@ -141,78 +59,11 @@ export default function ChatView({
         ]}
       >
         <ChatRoomWallpaper />
-        <ChatOverlays
-          uiReady={uiReady}
-          uploading={uploading}
-          fullScreenImage={fullScreenImage}
-          onCloseFullScreenImage={() => setFullScreenImage(null)}
-          calendarOverlay={calendarOverlay}
-          daysWithMessages={daysWithMessages}
-          onCalendarDayPress={handleCalendarDayPress}
-          onCloseCalendar={() => setCalendarOverlay(null)}
-          menuVisible={menuVisible}
-          menuPosition={menuPosition}
-          selectedMessage={selectedMessage}
-          onCloseMenu={() => setMenuVisible(false)}
-          onReplyToMessage={setReplyTarget}
-          onEditMessage={startEditMessage}
-          canEditSelectedMessage={canEditSelectedMessage}
-          onRequestDeleteConfirm={() => {
-            setMenuVisible(false);
-            setDeleteConfirmVisible(true);
-          }}
-          onOpenImage={(uri) => setFullScreenImage({ uris: [uri], index: 0 })}
-          onPinMessage={togglePinForMessage}
-          pinLabel={contextMenuPinLabel}
-          pinDisabled={pinDisabled}
-          deleteConfirmVisible={deleteConfirmVisible}
-          onCloseDeleteConfirm={closeDeleteConfirm}
-          onDeleteForMe={deleteMessageForMe}
-          onDeleteForAll={deleteMessageForAll}
-          overflowMenuVisible={overflowMenuVisible}
-          onCloseOverflowMenu={() => setOverflowMenuVisible(false)}
-          onClearHistory={() => setClearHistoryConfirmVisible(true)}
-          onDeleteChatFromList={() => setDeleteChatConfirmVisible(true)}
-          clearHistoryConfirmVisible={clearHistoryConfirmVisible}
-          onCloseClearHistoryConfirm={() => setClearHistoryConfirmVisible(false)}
-          onConfirmClearHistory={executeClearHistory}
-          deleteChatConfirmVisible={deleteChatConfirmVisible}
-          onCloseDeleteChatConfirm={closeDeleteChatConfirm}
-          onConfirmDeleteChat={confirmDeleteChatFromList}
-          deleteChatConfirmDisabled={deleteChatInProgress}
-          showAttachMenu={showAttachMenu}
-          onCloseAttachMenu={() => setShowAttachMenu(false)}
-          takePhoto={takePhoto}
-          pickImageFromGallery={pickImageFromGallery}
-          sendCurrentLocation={sendCurrentLocation}
-          ephemeralSec={ephemeralSec}
-          setEphemeralSec={setEphemeralSec}
-        />
+        <ChatOverlays {...overlayProps} />
 
         <View style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           <Reanimated.View style={[{ flex: 1 }, listViewportStyle]}>
-            <ChatMessageList
-              roomId={roomId}
-              flatListRef={flatListRef}
-              formattedMessages={formattedMessages}
-              renderItem={renderItem}
-              listExtraDataStable={listExtraDataStable}
-              listAnimatedStyle={listAnimatedStyle}
-              listBottomSpacerStyle={listBottomSpacerStyle}
-              onListScroll={onListScroll}
-              onListLayoutReady={onListLayoutReady}
-              messagesLoading={messagesLoading}
-              chatRoomHeader={chatRoomHeader}
-              listPaddingTop={listPaddingTop}
-              listFooterPaddingTop={listFooterPaddingTop}
-              selectionMode={selectionMode}
-              selectedIds={selectedIds}
-              exitSelectionMode={exitSelectionMode}
-              batchDeleteForMe={batchDeleteForMe}
-              overscrollEnabled={overscrollEnabled}
-              loadingOlder={loadingOlder}
-              onLoadOlderMessages={loadOlderMessages}
-            />
+            <ChatMessageList {...listProps} />
           </Reanimated.View>
 
           <KeyboardStickyView
@@ -241,56 +92,7 @@ export default function ChatView({
                 height: 80,
               }}
             />
-            <ChatComposer
-              inputBarRef={inputBarRef}
-              reportComposerBaseHeight={reportComposerBaseHeight}
-              insets={insets}
-              visibleReplyTo={visibleReplyTo}
-              visibleEditTarget={visibleEditTarget}
-              replyTargetAnimatedStyle={replyTargetAnimatedStyle}
-              emojiPanelAnimatedStyle={emojiPanelAnimatedStyle}
-              emojiContentAnimatedStyle={emojiContentAnimatedStyle}
-              onDismissReply={() => setReplyTarget(null)}
-              onDismissEdit={cancelEditMessage}
-              isEditingMessage={!!editTarget}
-              uiReady={uiReady}
-              showEmojiPicker={showEmojiPicker}
-              toggleEmojiPicker={toggleEmojiPicker}
-              insertEmoji={insertEmoji}
-              emojiWobbleRotate={emojiWobbleRotate}
-              inputRef={inputRef}
-              ephemeralSec={ephemeralSec}
-              text={text}
-              setText={setText}
-              sendMessage={sendMessage}
-              isRecordingVoice={isRecordingVoice}
-              setShowAttachMenu={setShowAttachMenu}
-              handleSendVoice={handleSendVoiceForComposer}
-              setIsRecordingVoice={setIsRecordingVoice}
-              uploadMedia={uploadMedia}
-              sendMediaMessage={sendMediaMessage}
-              onVoiceRecorderOpen={onVoiceRecorderOpen}
-              handleVideoRecorded={handleVideoRecorded}
-              handleVideoSendError={handleVideoSendError}
-              handleVideoUploadFinished={handleVideoUploadFinished}
-              collapseEmojiForKeyboard={collapseEmojiForKeyboard}
-              emojiPanelGifQuery={emojiPanelGifQuery}
-              onEmojiPanelGifQueryChange={setEmojiPanelGifQuery}
-              {...mediaInline}
-              onEmojiPanelGifSearchFocus={() => {
-                setEmojiPanelGifSearchFocused(true);
-                prepareEmojiPanelGifSearch();
-              }}
-              onEmojiPanelGifSearchBlur={() => {
-                setEmojiPanelGifSearchFocused(false);
-                releaseEmojiPanelGifSearch();
-              }}
-              onEmojiPanelGifTabExit={() => {
-                setEmojiPanelGifSearchFocused(false);
-                exitGifTabLayout();
-              }}
-              {...ariaComposerSurfaceProps}
-            />
+            <ChatComposer {...composerProps} insets={insets} uiReady={uiReady} />
           </KeyboardStickyView>
         </View>
 
