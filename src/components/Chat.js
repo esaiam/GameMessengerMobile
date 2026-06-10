@@ -7,13 +7,10 @@ import React, {
 import {
   View,
   useWindowDimensions,
-  Alert,
   TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useVoicePlayer } from '../hooks/useVoicePlayer';
-import { useChatMediaPlayback } from '../hooks/useChatMediaPlayback';
 import ChatRoomHeader, { ICON_SELECTION_ACTION } from './ChatRoomHeader';
 import ChatOverlays from './chat/ChatOverlays';
 import { EphemeralClockContext } from './chat/ephemeralClockContext';
@@ -21,22 +18,12 @@ import useChatMessageListRender from './chat/useChatMessageListRender';
 import ChatMessageList from './chat/ChatMessageList';
 import ChatComposer from './chat/ChatComposer';
 import ChatRoomWallpaper from './chat/ChatRoomWallpaper';
-import useMessageRowAnimations from './chat/useMessageRowAnimations';
-import useChatRoomEffects from './chat/useChatRoomEffects';
-import useChatMediaActions from './chat/useChatMediaActions';
-import useChatSendText from './chat/useChatSendText';
-import useChatSelection from './chat/useChatSelection';
-import useChatMessageMutations from './chat/useChatMessageMutations';
-import useChatMessageFilters from './chat/useChatMessageFilters';
-import useChatOptimisticVideo from './chat/useChatOptimisticVideo';
-import useChatOptimisticText from './chat/useChatOptimisticText';
-import useChatOptimisticMedia from './chat/useChatOptimisticMedia';
-import useChatMessagePagination from './chat/useChatMessagePagination';
-import useChatEditMessage from './chat/useChatEditMessage';
-import { canEditMessage } from './chat/chatEditMessageUtils';
+import useChatMessagePipeline from './chat/useChatMessagePipeline';
+import useChatMutationsBundle from './chat/useChatMutationsBundle';
+import useChatComposerSend from './chat/useChatComposerSend';
+import useChatMediaInline from './chat/useChatMediaInline';
+import useChatPlayback from './chat/useChatPlayback';
 import useChatComposerChrome from './chat/useChatComposerChrome';
-import { sendAriaChatTextMessage } from './chat/ariaTextComposerSend';
-import { startAriaVoiceComposerSend } from './chat/ariaVoiceComposerSend';
 import { useAriaChatListBootstrap } from './chat/useAriaChatListBootstrap';
 import { getAriaComposerSurfaceProps } from './chat/ariaComposerSurfaceProps';
 import AriaStateGauges from './chat/AriaStateGauges';
@@ -44,30 +31,19 @@ import Reanimated, { useSharedValue } from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { V } from '../theme';
 import {
-  MAX_RENDERED_VIDEOS,
   CHAT_HEADER_TO_LIST_GAP_PX } from './chat/chatViewConstants';
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
 import { useChatInvertedListScroll } from '../hooks/useChatInvertedListScroll';
 import { EllipsisVertical } from '../icons/lucideIcons';
-import usePicInlineSearch from '../hooks/usePicInlineSearch';
-import useGifInlineSearch from '../hooks/useGifInlineSearch';
-import usePanelGifSearch from '../hooks/usePanelGifSearch';
-import { parseActiveInlineMediaQuery } from '../lib/parseInlineTrigger';
-import { parsePicInlineQuery } from '../lib/parsePicInlineQuery';
-import { parseGifInlineQuery } from '../lib/parseGifInlineQuery';
-import useChatInlineMediaSend from './chat/useChatInlineMediaSend';
-import useChatClearHistory from './chat/useChatClearHistory';
-import useChatPinnedMessage from './chat/useChatPinnedMessage';
-import ChatPinnedBar, { CHAT_PINNED_BAR_H } from './chat/ChatPinnedBar';
+import useChatMessageFilters from './chat/useChatMessageFilters';
+import ChatPinnedBar from './chat/ChatPinnedBar';
 import useChatInputSettling from './chat/useChatInputSettling';
 import useChatOverlayState from './chat/useChatOverlayState';
 import useChatCoreComposerState from './chat/useChatCoreComposerState';
 import useChatCalendarNavigation from './chat/useChatCalendarNavigation';
 import useChatListKeyboardLayout from './chat/useChatListKeyboardLayout';
 import { useNavigation } from '@react-navigation/native';
-import { deleteChatsFromList } from '../lib/hideRoomMessagesForDelete';
-import { safeGoBackToMessengerList } from '../lib/safeGoBack';
 
 export default function Chat({
   roomId,
@@ -167,8 +143,6 @@ export default function Chat({
     deletingIdsRef,
   });
 
-  const [unlockedVideoIds, setUnlockedVideoIds] = useState(() => new Set());
-
   const {
     menuVisible,
     setMenuVisible,
@@ -213,33 +187,7 @@ export default function Chat({
   const { armComposerInsetSettling, listScrollSuppressRefs, keyboardSettlingRef } =
     useChatInputSettling(showEmojiPicker);
 
-  const {
-    play: playVoice,
-    activeUri: activeVoiceUri,
-    status: activePlayerStatus,
-    pause: pauseVoice,
-  } = useVoicePlayer();
-
-  const {
-    activeVideoId,
-    activeVoiceMessageId,
-    activatedVideoIds,
-    setActiveVideoId,
-    playVoiceMessage,
-    activateVideo,
-    stopVideo,
-  } = useChatMediaPlayback({
-    playVoice,
-    pauseVoice,
-    activeVoiceUri,
-    roomId,
-  });
-
-  const messagesRef = useRef(messages);
-  messagesRef.current = messages;
-
   const listOpacity = useSharedValue(0);
-  const vaultChatSyncRef = useRef(null);
 
   const {
     flatListRef,
@@ -258,6 +206,24 @@ export default function Chat({
   const formattedMessages = useChatFormattedMessagesState(messages, roomId);
 
   const {
+    activeVoiceUri,
+    activePlayerStatus,
+    activeVideoId,
+    activeVoiceMessageId,
+    activatedVideoIds,
+    setActiveVideoId,
+    playVoiceMessage,
+    activateVideo,
+    stopVideo,
+    onUnlockVideo,
+    renderableVideoIds,
+  } = useChatPlayback({
+    roomId,
+    formattedMessages,
+    isRecordingVoice,
+  });
+
+  const {
     daysWithMessages,
     openCalendarFromSeparator,
     handleCalendarDayPress,
@@ -270,30 +236,7 @@ export default function Chat({
     setCalendarOverlay,
   });
 
-  const onUnlockVideo = useCallback((id) => {
-    setUnlockedVideoIds((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  }, []);
-
-  const renderableVideoIds = useMemo(() => {
-    const ids = new Set(unlockedVideoIds);
-    let count = 0;
-    for (const msg of formattedMessages) {
-      if (msg.message_type === 'video') {
-        if (count < MAX_RENDERED_VIDEOS) {
-          ids.add(msg.id);
-          count++;
-        }
-      }
-    }
-    return ids;
-  }, [formattedMessages, unlockedVideoIds]);
-
   const inputRef = useRef(null);
-  const sendInProgressRef = useRef(false);
   const editInProgressRef = useRef(false);
 
   useEffect(() => {
@@ -353,57 +296,60 @@ export default function Chat({
     return unsub;
   }, [navigation, releaseComposerKeyboard]);
 
-  useEffect(() => {
-    if (!isRecordingVoice) return;
-    pauseVoice();
-  }, [isRecordingVoice, pauseVoice]);
-
   useAriaChatListBootstrap(isAriaChat, setMessagesLoading, listOpacity);
+
+  const {
+    messagesRef,
+    vaultChatSyncRef,
+    ensureMessageAnims,
+    popMessage,
+    handleVideoRecorded,
+    handleVideoSendError,
+    handleVideoUploadFinished,
+    appendOptimisticText,
+    removeOptimisticText,
+    reconcileOptimisticText,
+    appendOptimisticImage,
+    appendOptimisticImages,
+    appendOptimisticVoice,
+    handleImageSendError,
+    handleVoiceSendError,
+    handleImageUploadFinished,
+    handleVoiceUploadFinished,
+    loadingOlder,
+    loadOlderMessages,
+  } = useChatMessagePipeline({
+    roomId,
+    nickname,
+    isAriaChat,
+    messages,
+    setMessages,
+    messagesLoading,
+    setMessagesLoading,
+    setInitialHistoryReady,
+    decryptMsg,
+    decryptBatch,
+    filterExpired,
+    filterHiddenForMeKeepingDeleting,
+    deletingIdsRef,
+    listOpacity,
+    renderPausedRef,
+    diceBusyRef,
+    chatFlushDeferredRef,
+    diceAnimating,
+    showAnimDice,
+    roomFocused,
+    activatedVideoIds,
+    setActiveVideoId,
+    navigation,
+  });
 
   const {
     pinnedMessage,
     togglePinForMessage,
     unpinMessage,
-    isMessagePinned,
-  } = useChatPinnedMessage({
-    roomId,
-    isAriaChat,
-    nickname,
-    messages,
-    setMessages,
-    decryptMsg,
-    filterHiddenForMeKeepingDeleting,
-    filterExpired,
-  });
-
-  const unpinMessageIfMatches = useCallback(
-    async (messageId) => {
-      if (isMessagePinned(messageId)) {
-        await unpinMessage();
-      }
-    },
-    [isMessagePinned, unpinMessage],
-  );
-
-  useEffect(() => {
-    setPinnedBarH(0);
-  }, [roomId]);
-
-  useEffect(() => {
-    if (!pinnedMessage) setPinnedBarH(0);
-  }, [pinnedMessage]);
-
-  const pinDisabled =
-    isAriaChat ||
-    !roomId ||
-    selectedMessage?._isOptimistic === true;
-
-  const contextMenuPinLabel = useMemo(() => {
-    if (!selectedMessage?.id) return 'Закрепить';
-    return isMessagePinned(selectedMessage.id) ? 'Открепить' : 'Закрепить';
-  }, [selectedMessage?.id, isMessagePinned]);
-
-  const {
+    pinDisabled,
+    contextMenuPinLabel,
     selectionMode,
     selectedIds,
     selectedHash,
@@ -412,203 +358,45 @@ export default function Chat({
     handleMessageLongPress,
     batchDeleteForMe,
     batchCopySelected,
-    batchForwardSelected } = useChatSelection({
-    messages,
-    setMessages,
-    nickname,
-    roomId,
-    isAriaChat,
-    filterHiddenForMe,
-    filterExpired,
-    formattedMessages,
-    decryptMsg,
-    onOpenMessageMenu });
-
-  const { fadeAnims, scaleAnims, ensureMessageAnims, popMessage } = useMessageRowAnimations(messages);
-
-  const {
-    optimisticVideoTempIdRef,
-    pendingVideoActiveIdMigrationRef,
-    handleVideoRecorded,
-    handleVideoSendError,
-    handleVideoUploadFinished } = useChatOptimisticVideo({
-    roomId,
-    nickname,
-    setMessages,
-    filterHiddenForMeKeepingDeleting,
-    filterExpired,
-    fadeAnims,
-    scaleAnims });
-
-  const {
-    optimisticTextTempIdsRef,
-    appendOptimisticText,
-    removeOptimisticText,
-    reconcileOptimisticText,
-  } = useChatOptimisticText({
-    roomId,
-    nickname,
-    setMessages,
-    filterHiddenForMeKeepingDeleting,
-    filterExpired,
-    fadeAnims,
-    scaleAnims });
-
-  const {
-    optimisticImageTempIdRef,
-    optimisticVoiceTempIdRef,
-    appendOptimisticImage,
-    appendOptimisticImages,
-    appendOptimisticVoice,
-    handleImageSendError,
-    handleVoiceSendError,
-    handleImageUploadFinished,
-    handleVoiceUploadFinished,
-  } = useChatOptimisticMedia({
-    roomId,
-    nickname,
-    setMessages,
-    filterHiddenForMeKeepingDeleting,
-    filterExpired,
-    fadeAnims,
-    scaleAnims });
-
-  const { saveEditedMessage } = useChatEditMessage({
-    roomId,
-    nickname,
-    otherPlayerName,
-    setMessages,
-    filterHiddenForMeKeepingDeleting,
-    filterExpired,
-    editInProgressRef,
-  });
-
-  const canEditSelectedMessage = useMemo(
-    () => canEditMessage(selectedMessage, nickname, isAriaChat),
-    [selectedMessage, nickname, isAriaChat],
-  );
-
-  const {
+    batchForwardSelected,
+    saveEditedMessage,
+    canEditSelectedMessage,
     toggleReaction,
     deleteMessageForMe,
     deleteMessageForAll,
-    closeDeleteConfirm } = useChatMessageMutations({
-    messages,
-    setMessages,
+    closeDeleteConfirm,
+    executeClearHistory,
+    closeDeleteChatConfirm,
+    confirmDeleteChatFromList,
+  } = useChatMutationsBundle({
+    roomId,
     nickname,
     peerName,
-    roomId,
     isAriaChat,
-    popMessage,
+    messages,
+    setMessages,
+    formattedMessages,
+    otherPlayerName,
+    decryptMsg,
+    filterHiddenForMe,
+    filterExpired,
+    filterHiddenForMeKeepingDeleting,
+    selectedMessage,
+    onOpenMessageMenu,
     setDeletingIds,
     setDeleteConfirmVisible,
     setSelectedMessage,
-    chatSyncRef: vaultChatSyncRef,
-    unpinMessageIfMatches,
-  });
-
-  const { executeClearHistory: executeClearHistoryCore } = useChatClearHistory({
-    roomId,
-    nickname,
-    otherPlayerName,
+    setClearHistoryConfirmVisible,
+    deleteChatInProgress,
+    setDeleteChatInProgress,
+    setDeleteChatConfirmVisible,
     messagesRef,
-    setMessages,
-    chatSyncRef: vaultChatSyncRef,
-    unpinMessage,
+    vaultChatSyncRef,
+    popMessage,
+    editInProgressRef,
+    navigation,
+    setPinnedBarH,
   });
-
-  const executeClearHistory = useCallback(
-    async (deleteForEveryone) => {
-      setClearHistoryConfirmVisible(false);
-      await executeClearHistoryCore(deleteForEveryone);
-    },
-    [executeClearHistoryCore],
-  );
-
-  const closeDeleteChatConfirm = useCallback(() => {
-    if (deleteChatInProgress) return;
-    setDeleteChatConfirmVisible(false);
-  }, [deleteChatInProgress]);
-
-  const confirmDeleteChatFromList = useCallback(
-    async (deleteForEveryone) => {
-      if (!roomId || !nickname || deleteChatInProgress) return;
-      setDeleteChatInProgress(true);
-      try {
-        await deleteChatsFromList({
-          nickname,
-          roomIds: [roomId],
-          peerByRoomId: new Map([[roomId, otherPlayerName ?? null]]),
-          deleteForEveryone: !!deleteForEveryone,
-        });
-        setDeleteChatConfirmVisible(false);
-        navigation?.goBack?.();
-      } catch (e) {
-        Alert.alert('Ошибка', e?.message || 'Не удалось удалить чат');
-      } finally {
-        setDeleteChatInProgress(false);
-      }
-    },
-    [roomId, nickname, deleteChatInProgress, otherPlayerName, navigation],
-  );
-
-  const { loadingOlder, loadOlderMessages, onInitialPageLoaded } = useChatMessagePagination({
-    roomId,
-    nickname,
-    isAriaChat,
-    messagesRef,
-    setMessages,
-    decryptBatch,
-    filterExpired,
-    filterHiddenForMeKeepingDeleting,
-    optimisticTextTempIdsRef,
-    messagesLoading,
-  });
-
-  const handleInitialPageLoaded = useCallback(
-    (fetchedCount) => {
-      onInitialPageLoaded(fetchedCount);
-      setInitialHistoryReady(true);
-    },
-    [onInitialPageLoaded, setInitialHistoryReady],
-  );
-
-  const onRoomDeleted = useCallback(() => {
-    safeGoBackToMessengerList(navigation);
-  }, [navigation]);
-
-  useChatRoomEffects({
-    roomId,
-    nickname,
-    isAriaChat,
-    renderPausedRef,
-    diceBusyRef,
-    chatFlushDeferredRef,
-    diceAnimating,
-    showAnimDice,
-    listOpacity,
-    decryptMsg,
-    decryptBatch,
-    filterExpired,
-    filterHiddenForMeKeepingDeleting,
-    fadeAnims,
-    scaleAnims,
-    optimisticVideoTempIdRef,
-    optimisticImageTempIdRef,
-    optimisticVoiceTempIdRef,
-    optimisticTextTempIdsRef,
-    pendingVideoActiveIdMigrationRef,
-    activatedVideoIds,
-    setActiveVideoId,
-    deletingIdsRef,
-    messages,
-    setMessages,
-    setMessagesLoading,
-    messagesRef,
-    onInitialPageLoaded: handleInitialPageLoaded,
-    roomFocused,
-    chatSyncRef: vaultChatSyncRef,
-    onRoomDeleted });
 
   const {
     uploadMedia,
@@ -616,13 +404,28 @@ export default function Chat({
     pickImageFromGallery,
     takePhoto,
     sendCurrentLocation,
-    handleSendVoice } = useChatMediaActions({
+    sendMessage,
+    handleSendVoiceForComposer,
+    onVoiceRecorderOpen,
+  } = useChatComposerSend({
     roomId,
     nickname,
     peerName,
+    isAriaChat,
+    ariaControlled,
+    text,
+    setText,
     replyTo,
-    ephemeralSec,
     setReplyTarget,
+    ephemeralSec,
+    otherPlayerName,
+    editTarget,
+    setEditTarget,
+    cancelEditMessage,
+    saveEditedMessage,
+    sendToAria,
+    chatRoomHeader,
+    setMessages,
     setUploading,
     setShowAttachMenu,
     appendOptimisticImage,
@@ -632,124 +435,24 @@ export default function Chat({
     appendOptimisticVoice,
     handleVoiceUploadFinished,
     handleVoiceSendError,
-  });
-
-  const inlineMediaEnabled = !isAriaChat && Boolean(roomId);
-  const activeInlineMedia = useMemo(
-    () => (inlineMediaEnabled ? parseActiveInlineMediaQuery(text) : null),
-    [text, inlineMediaEnabled],
-  );
-  const picInline = usePicInlineSearch(text, {
-    enabled: inlineMediaEnabled && activeInlineMedia?.kind === 'pic' });
-  const gifInline = useGifInlineSearch(text, {
-    enabled: inlineMediaEnabled && activeInlineMedia?.kind === 'gif' });
-  const emojiPanelGif = usePanelGifSearch(emojiPanelGifQuery, {
-    enabled: inlineMediaEnabled && showEmojiPicker });
-  useEffect(() => {
-    if ((picInline.active || gifInline.active) && showEmojiPicker) {
-      setShowEmojiPicker(false);
-    }
-  }, [picInline.active, gifInline.active, showEmojiPicker]);
-
-  const {
-    handlePicInlineSelect,
-    handleGifInlineSelect,
-    handleEmojiPanelGifSelect,
-  } = useChatInlineMediaSend({
-    text,
-    setText,
-    setUploading,
-    uploadMedia,
-    sendMediaMessage,
-  });
-
-  const { sendMessage: sendVaultTextMessage } = useChatSendText({
-    text,
-    setText,
-    replyTo,
-    setReplyTarget,
-    roomId,
-    nickname,
-    ephemeralSec,
-    otherPlayerName,
-    sendInProgressRef,
     appendOptimisticText,
     removeOptimisticText,
     reconcileOptimisticText,
+    stopVideo,
   });
 
-  const sendMessage = useCallback(async () => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    if (parsePicInlineQuery(trimmed) || parseGifInlineQuery(trimmed)) return;
-    if (isAriaChat && chatRoomHeader?.ariaOnline === false) return;
-
-    if (editTarget) {
-      const result = await saveEditedMessage({
-        messageId: editTarget.id,
-        previousText: editTarget.text,
-        previousEditedAt: editTarget.edited_at,
-        newText: trimmed,
-      });
-      if (result === true || result === 'unchanged') {
-        cancelEditMessage();
-      } else if (result === false) {
-        setEditTarget((prev) => prev ?? editTarget);
-      }
-      return;
-    }
-
-    if (isAriaChat && sendToAria) {
-      await sendAriaChatTextMessage({
-        trimmed,
-        sendToAria,
-        sendInProgressRef,
-        setText,
-        setReplyTarget });
-      return;
-    }
-    await sendVaultTextMessage();
-  }, [
-    isAriaChat,
-    chatRoomHeader?.ariaOnline,
-    sendToAria,
+  const mediaInline = useChatMediaInline({
     text,
-    editTarget,
-    saveEditedMessage,
-    cancelEditMessage,
-    sendVaultTextMessage,
     setText,
-    setReplyTarget,
-  ]);
-
-  const handleSendVoiceForComposer = useCallback(
-    async (uri, duration, waveform) => {
-      if (isAriaChat && sendToAria) {
-        if (chatRoomHeader?.ariaOnline === false) return;
-        if (!ariaControlled) return;
-        startAriaVoiceComposerSend({
-          uri,
-          nickname,
-          setMessages,
-          sendToAria,
-          sendInProgressRef });
-        return;
-      }
-      await handleSendVoice(uri, duration, waveform);
-    },
-    [
-      isAriaChat,
-      sendToAria,
-      chatRoomHeader?.ariaOnline,
-      handleSendVoice,
-      ariaControlled,
-      nickname,
-      setMessages]
-  );
-
-  const onVoiceRecorderOpen = useCallback(() => {
-    stopVideo();
-  }, [stopVideo]);
+    setUploading,
+    emojiPanelGifQuery,
+    showEmojiPicker,
+    setShowEmojiPicker,
+    isAriaChat,
+    roomId,
+    uploadMedia,
+    sendMediaMessage,
+  });
 
   const { renderItem, listExtraDataStable } = useChatMessageListRender({
     formattedMessages,
@@ -948,31 +651,9 @@ export default function Chat({
             handleVideoSendError={handleVideoSendError}
             handleVideoUploadFinished={handleVideoUploadFinished}
             collapseEmojiForKeyboard={collapseEmojiForKeyboard}
-            picInlineVisible={picInline.active}
-            picInlineNeedsQuery={picInline.needsQuery}
-            picInlineLoading={picInline.loading}
-            picInlineError={picInline.error}
-            picInlineResults={picInline.results}
-            picInlineHasMore={picInline.hasMore}
-            onPicInlineSelect={handlePicInlineSelect}
-            onPicInlineLoadMore={picInline.loadMore}
-            gifInlineVisible={gifInline.active}
-            gifInlineNeedsQuery={gifInline.needsQuery}
-            gifInlineLoading={gifInline.loading}
-            gifInlineError={gifInline.error}
-            gifInlineResults={gifInline.results}
-            gifInlineHasMore={gifInline.hasMore}
-            onGifInlineSelect={handleGifInlineSelect}
-            onGifInlineLoadMore={gifInline.loadMore}
             emojiPanelGifQuery={emojiPanelGifQuery}
             onEmojiPanelGifQueryChange={setEmojiPanelGifQuery}
-            emojiPanelGifLoading={emojiPanelGif.loading}
-            trendingGifs={emojiPanelGif.trendingResults}
-            emojiPanelGifError={emojiPanelGif.error}
-            emojiPanelGifResults={emojiPanelGif.results}
-            emojiPanelGifHasMore={emojiPanelGif.hasMore}
-            onEmojiPanelGifSelect={handleEmojiPanelGifSelect}
-            onEmojiPanelGifLoadMore={emojiPanelGif.loadMore}
+            {...mediaInline}
             onEmojiPanelGifSearchFocus={() => {
               setEmojiPanelGifSearchFocused(true);
               prepareEmojiPanelGifSearch();
