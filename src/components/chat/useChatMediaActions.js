@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { uploadAsync, FileSystemUploadType } from 'expo-file-system/legacy';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase';
-import { storageRoomSegment, readUriAsArrayBuffer } from './chatMediaIo';
+import { storageRoomSegment, readUriAsArrayBuffer, uniqueStorageObjectName } from './chatMediaIo';
 import { DEFAULT_VOICE_WAVEFORM } from './voiceWaveformSamples';
 import { formatDuration } from './chatMessageListFormat';
 import { refreshChatsListAfterMessage } from '../../lib/chatsListSync';
@@ -31,7 +31,7 @@ export default function useChatMediaActions({
       throw new Error('room_id отсутствует');
     }
     const roomSeg = await storageRoomSegment(roomId);
-    const filePath = `${folder}/${roomSeg}/${Date.now()}.${ext}`;
+    const filePath = `${folder}/${roomSeg}/${uniqueStorageObjectName(ext)}`;
     const bucket = 'chat-media';
 
     const useNativeStreamUpload =

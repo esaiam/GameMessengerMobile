@@ -120,7 +120,6 @@ export default function buildChatViewProps({
     exitGifTabLayout,
     setEmojiPanelGifQuery,
     handleSendVoiceForComposer,
-    setShowAttachMenu,
     ...composerRest
   } = composer;
 
@@ -128,7 +127,6 @@ export default function buildChatViewProps({
     ...mediaInline,
     ...ariaComposerSurfaceProps,
     ...composerRest,
-    setShowAttachMenu,
     handleSendVoice: handleSendVoiceForComposer,
     onDismissReply: () => composerSetReplyTarget(null),
     onDismissEdit: cancelEditMessage,

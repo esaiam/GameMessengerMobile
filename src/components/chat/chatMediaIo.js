@@ -10,6 +10,15 @@ export async function storageRoomSegment(roomId) {
   return sha256Hex(roomId);
 }
 
+/** Уникальное имя объекта в bucket (параллельные upload не коллизят по ms). */
+let storageUploadSeq = 0;
+
+export function uniqueStorageObjectName(ext) {
+  storageUploadSeq = (storageUploadSeq + 1) % 0x10000;
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `${Date.now()}-${storageUploadSeq.toString(16)}-${rand}.${ext}`;
+}
+
 /** RN `fetch(content://|file://)` часто не читает файл; Expo `File.bytes()` обычно срабатывает. */
 export async function readUriAsArrayBuffer(uri) {
   try {
