@@ -77,6 +77,7 @@ import useChatClearHistory from './chat/useChatClearHistory';
 import useChatPinnedMessage from './chat/useChatPinnedMessage';
 import ChatPinnedBar, { CHAT_PINNED_BAR_H } from './chat/ChatPinnedBar';
 import useChatInputSettling from './chat/useChatInputSettling';
+import useChatOverlayState from './chat/useChatOverlayState';
 import { formatDateKey } from './chat/chatMessageListFormat';
 import { useNavigation } from '@react-navigation/native';
 import { deleteChatsFromList } from '../lib/hideRoomMessagesForDelete';
@@ -135,16 +136,33 @@ export default function Chat({
   const [ephemeralSec, setEphemeralSec] = useState(null);
   const [deletingIds, setDeletingIds] = useState(() => new Set());
 
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
-  const [selectedMessage, setSelectedMessage] = useState(null);
-  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const [overflowMenuVisible, setOverflowMenuVisible] = useState(false);
-  const [clearHistoryConfirmVisible, setClearHistoryConfirmVisible] = useState(false);
-  const [deleteChatConfirmVisible, setDeleteChatConfirmVisible] = useState(false);
-  const [deleteChatInProgress, setDeleteChatInProgress] = useState(false);
+  const {
+    menuVisible,
+    setMenuVisible,
+    menuPosition,
+    selectedMessage,
+    setSelectedMessage,
+    deleteConfirmVisible,
+    setDeleteConfirmVisible,
+    overflowMenuVisible,
+    setOverflowMenuVisible,
+    clearHistoryConfirmVisible,
+    setClearHistoryConfirmVisible,
+    deleteChatConfirmVisible,
+    setDeleteChatConfirmVisible,
+    deleteChatInProgress,
+    setDeleteChatInProgress,
+    showAttachMenu,
+    setShowAttachMenu,
+    fullScreenImage,
+    setFullScreenImage,
+    openFullScreenImage,
+    calendarOverlay,
+    setCalendarOverlay,
+    uiReady,
+    onOpenMessageMenu,
+  } = useChatOverlayState();
 
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPanelGifQuery, setEmojiPanelGifQuery] = useState('');
   const [emojiPanelGifSearchFocused, setEmojiPanelGifSearchFocused] = useState(false);
@@ -157,31 +175,11 @@ export default function Chat({
   }, [showEmojiPicker]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [fullScreenImage, setFullScreenImage] = useState(null);
-  const openFullScreenImage = useCallback((payload) => {
-    if (payload == null) {
-      setFullScreenImage(null);
-      return;
-    }
-    if (typeof payload === 'string') {
-      setFullScreenImage({ uris: [payload], index: 0 });
-      return;
-    }
-    setFullScreenImage(payload);
-  }, []);
-  const [calendarOverlay, setCalendarOverlay] = useState(null);
-  const [uiReady, setUiReady] = useState(false);
   const [headerOverlayH, setHeaderOverlayH] = useState(0);
   const [pinnedBarH, setPinnedBarH] = useState(0);
   const [ariaGaugesH, setAriaGaugesH] = useState(48);
   /** Зеркалит `ariaState` из `ChatRoomHeader` (тот же fetch, что был у колец) для `AriaStateGauges`. */
   const [ariaState, setAriaState] = useState(null);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      setUiReady(true);
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
 
   useEffect(() => {
     if (chatRoomHeader == null) return;
@@ -589,14 +587,6 @@ export default function Chat({
     if (!selectedMessage?.id) return 'Закрепить';
     return isMessagePinned(selectedMessage.id) ? 'Открепить' : 'Закрепить';
   }, [selectedMessage?.id, isMessagePinned]);
-
-  const onOpenMessageMenu = useCallback((event, item) => {
-    const x = event?.nativeEvent?.pageX ?? 0;
-    const y = event?.nativeEvent?.pageY ?? 0;
-    setMenuPosition({ x, y });
-    setSelectedMessage(item);
-    setMenuVisible(true);
-  }, []);
 
   const {
     selectionMode,
