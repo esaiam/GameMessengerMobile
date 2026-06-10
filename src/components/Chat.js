@@ -1,21 +1,11 @@
 import React, {
-  useState,
   useEffect,
   useRef,
   useCallback } from 'react';
-import {
-  View,
-  useWindowDimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import tw from 'twrnc';
+import { useWindowDimensions } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ChatRoomHeader from './ChatRoomHeader';
-import ChatOverlays from './chat/ChatOverlays';
-import { EphemeralClockContext } from './chat/ephemeralClockContext';
 import useChatMessageListRender from './chat/useChatMessageListRender';
-import ChatMessageList from './chat/ChatMessageList';
-import ChatComposer from './chat/ChatComposer';
-import ChatRoomWallpaper from './chat/ChatRoomWallpaper';
 import useChatMessagePipeline from './chat/useChatMessagePipeline';
 import useChatMutationsBundle from './chat/useChatMutationsBundle';
 import useChatComposerSend from './chat/useChatComposerSend';
@@ -24,15 +14,11 @@ import useChatPlayback from './chat/useChatPlayback';
 import useChatHeaderOverlay from './chat/useChatHeaderOverlay';
 import useChatComposerChrome from './chat/useChatComposerChrome';
 import { useAriaChatListBootstrap } from './chat/useAriaChatListBootstrap';
-import AriaStateGauges from './chat/AriaStateGauges';
-import Reanimated, { useSharedValue } from 'react-native-reanimated';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
-import { V } from '../theme';
+import ChatView from './chat/ChatView';
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
 import { useChatInvertedListScroll } from '../hooks/useChatInvertedListScroll';
 import useChatMessageFilters from './chat/useChatMessageFilters';
-import ChatPinnedBar from './chat/ChatPinnedBar';
 import useChatInputSettling from './chat/useChatInputSettling';
 import useChatOverlayState from './chat/useChatOverlayState';
 import useChatCoreComposerState from './chat/useChatCoreComposerState';
@@ -484,241 +470,119 @@ export default function Chat({
   });
 
   return (
-    <EphemeralClockContext.Provider value={ephemeralClockTick}>
-    <Reanimated.View
-      style={[
-        tw`flex-1`,
-        {
-          backgroundColor: V.bgApp,
-          overflow: chatRoomHeader ? 'visible' : 'hidden'}]}
-    >
-      <ChatRoomWallpaper />
-      <ChatOverlays
-        uiReady={uiReady}
-        uploading={uploading}
-        fullScreenImage={fullScreenImage}
-        onCloseFullScreenImage={() => setFullScreenImage(null)}
-        calendarOverlay={calendarOverlay}
-        daysWithMessages={daysWithMessages}
-        onCalendarDayPress={handleCalendarDayPress}
-        onCloseCalendar={() => setCalendarOverlay(null)}
-        menuVisible={menuVisible}
-        menuPosition={menuPosition}
-        selectedMessage={selectedMessage}
-        onCloseMenu={() => setMenuVisible(false)}
-        onReplyToMessage={setReplyTarget}
-        onEditMessage={startEditMessage}
-        canEditSelectedMessage={canEditSelectedMessage}
-        onRequestDeleteConfirm={() => {
-          setMenuVisible(false);
-          setDeleteConfirmVisible(true);
-        }}
-        onOpenImage={(uri) => setFullScreenImage({ uris: [uri], index: 0 })}
-        onPinMessage={togglePinForMessage}
-        pinLabel={contextMenuPinLabel}
-        pinDisabled={pinDisabled}
-        deleteConfirmVisible={deleteConfirmVisible}
-        onCloseDeleteConfirm={closeDeleteConfirm}
-        onDeleteForMe={deleteMessageForMe}
-        onDeleteForAll={deleteMessageForAll}
-        overflowMenuVisible={overflowMenuVisible}
-        onCloseOverflowMenu={() => setOverflowMenuVisible(false)}
-        onClearHistory={() => setClearHistoryConfirmVisible(true)}
-        onDeleteChatFromList={() => setDeleteChatConfirmVisible(true)}
-        clearHistoryConfirmVisible={clearHistoryConfirmVisible}
-        onCloseClearHistoryConfirm={() => setClearHistoryConfirmVisible(false)}
-        onConfirmClearHistory={executeClearHistory}
-        deleteChatConfirmVisible={deleteChatConfirmVisible}
-        onCloseDeleteChatConfirm={closeDeleteChatConfirm}
-        onConfirmDeleteChat={confirmDeleteChatFromList}
-        deleteChatConfirmDisabled={deleteChatInProgress}
-        showAttachMenu={showAttachMenu}
-        onCloseAttachMenu={() => setShowAttachMenu(false)}
-        takePhoto={takePhoto}
-        pickImageFromGallery={pickImageFromGallery}
-        sendCurrentLocation={sendCurrentLocation}
-        ephemeralSec={ephemeralSec}
-        setEphemeralSec={setEphemeralSec}
-      />
-
-      <View style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <Reanimated.View style={[{ flex: 1 }, listViewportStyle]}>
-        <ChatMessageList
-          roomId={roomId}
-          flatListRef={flatListRef}
-          formattedMessages={formattedMessages}
-          renderItem={renderItem}
-          listExtraDataStable={listExtraDataStable}
-          listAnimatedStyle={listAnimatedStyle}
-          listBottomSpacerStyle={listBottomSpacerStyle}
-          onListScroll={onListScroll}
-          onListLayoutReady={onListLayoutReady}
-          messagesLoading={messagesLoading}
-          chatRoomHeader={chatRoomHeader}
-          listPaddingTop={listPaddingTop}
-          listFooterPaddingTop={listFooterPaddingTop}
-          selectionMode={selectionMode}
-          selectedIds={selectedIds}
-          exitSelectionMode={exitSelectionMode}
-          batchDeleteForMe={batchDeleteForMe}
-          overscrollEnabled={overscrollEnabled}
-          loadingOlder={loadingOlder}
-          onLoadOlderMessages={loadOlderMessages}
-        />
-        </Reanimated.View>
-
-        <KeyboardStickyView
-          pointerEvents="box-none"
-          offset={{ closed: 0, opened: 0 }}
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 2,
-            elevation: 2,
-          }}
-        >
-          <LinearGradient
-            pointerEvents="none"
-            colors={['transparent', 'rgba(13, 15, 20, 0.35)']}
-            locations={[0, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 80 }}
-          />
-          <ChatComposer
-            inputBarRef={inputBarRef}
-            reportComposerBaseHeight={reportComposerBaseHeight}
-            insets={insets}
-            visibleReplyTo={visibleReplyTo}
-            visibleEditTarget={visibleEditTarget}
-            replyTargetAnimatedStyle={replyTargetAnimatedStyle}
-            emojiPanelAnimatedStyle={emojiPanelAnimatedStyle}
-            emojiContentAnimatedStyle={emojiContentAnimatedStyle}
-            onDismissReply={() => setReplyTarget(null)}
-            onDismissEdit={cancelEditMessage}
-            isEditingMessage={!!editTarget}
-            uiReady={uiReady}
-            showEmojiPicker={showEmojiPicker}
-            toggleEmojiPicker={toggleEmojiPicker}
-            insertEmoji={insertEmoji}
-            emojiWobbleRotate={emojiWobbleRotate}
-            inputRef={inputRef}
-            ephemeralSec={ephemeralSec}
-            text={text}
-            setText={setText}
-            sendMessage={sendMessage}
-            isRecordingVoice={isRecordingVoice}
-            setShowAttachMenu={setShowAttachMenu}
-            handleSendVoice={handleSendVoiceForComposer}
-            setIsRecordingVoice={setIsRecordingVoice}
-            uploadMedia={uploadMedia}
-            sendMediaMessage={sendMediaMessage}
-            onVoiceRecorderOpen={onVoiceRecorderOpen}
-            handleVideoRecorded={handleVideoRecorded}
-            handleVideoSendError={handleVideoSendError}
-            handleVideoUploadFinished={handleVideoUploadFinished}
-            collapseEmojiForKeyboard={collapseEmojiForKeyboard}
-            emojiPanelGifQuery={emojiPanelGifQuery}
-            onEmojiPanelGifQueryChange={setEmojiPanelGifQuery}
-            {...mediaInline}
-            onEmojiPanelGifSearchFocus={() => {
-              setEmojiPanelGifSearchFocused(true);
-              prepareEmojiPanelGifSearch();
-            }}
-            onEmojiPanelGifSearchBlur={() => {
-              setEmojiPanelGifSearchFocused(false);
-              releaseEmojiPanelGifSearch();
-            }}
-            onEmojiPanelGifTabExit={() => {
-              setEmojiPanelGifSearchFocused(false);
-              exitGifTabLayout();
-            }}
-            {...ariaComposerSurfaceProps}
-          />
-        </KeyboardStickyView>
-      </View>
-
-      {chatRoomHeader != null ? (
-        <>
-          <View
-            pointerEvents="box-none"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 50,
-              elevation: 50 }}
-            onLayout={(e) => {
-              const h = e.nativeEvent.layout.height;
-              if (h > 0) setHeaderOverlayH(h);
-            }}
-          >
-            <ChatRoomHeader
-              title={chatRoomHeader.title}
-              peerHandle={chatRoomHeader.peerHandle}
-              contactOnline={chatRoomHeader.contactOnline}
-              navigation={chatRoomHeader.navigation}
-              ariaOnline={chatRoomHeader.ariaOnline}
-              headerRight={chatRoomHeader.headerRight}
-              headerRightTrailing={headerRightTrailingEl}
-              topPaddingOverride={chatRoomHeader.topPaddingOverride}
-              onAriaStateChange={isAriaChat ? setAriaState : undefined}
-              onHeaderPress={chatRoomHeader.onHeaderPress}
-              selectionMode={selectionMode}
-              selectedCount={selectedIds.size}
-              onExitSelection={exitSelectionMode}
-              onCopy={batchCopySelected}
-              onForward={batchForwardSelected}
-              onDelete={batchDeleteForMe}
-            />
-          </View>
-
-          {isAriaChat ? (
-            <View
-              pointerEvents="box-none"
-              style={{
-                position: 'absolute',
-                top: headerOverlayH,
-                left: 0,
-                right: 0,
-                zIndex: 49,
-                elevation: 49 }}
-            >
-              <AriaStateGauges state={ariaState} onHeightChange={setAriaGaugesH} />
-            </View>
-          ) : pinnedMessage ? (
-            <View
-              pointerEvents="box-none"
-              style={{
-                position: 'absolute',
-                top: headerOverlayH,
-                left: 0,
-                right: 0,
-                zIndex: 49,
-                elevation: 49 }}
-              onLayout={(e) => {
-                const h = e.nativeEvent.layout.height;
-                if (h > 0 && h !== pinnedBarH) setPinnedBarH(h);
-              }}
-            >
-              <ChatPinnedBar
-                message={pinnedMessage}
-                onPress={() => scrollToMessageById(pinnedMessage.id)}
-                onUnpin={unpinMessage}
-              />
-            </View>
-          ) : null}
-        </>
-      ) : null}
-    </Reanimated.View>
-    </EphemeralClockContext.Provider>
+    <ChatView
+      ephemeralClockTick={ephemeralClockTick}
+      chatRoomHeader={chatRoomHeader}
+      uiReady={uiReady}
+      uploading={uploading}
+      fullScreenImage={fullScreenImage}
+      setFullScreenImage={setFullScreenImage}
+      calendarOverlay={calendarOverlay}
+      daysWithMessages={daysWithMessages}
+      handleCalendarDayPress={handleCalendarDayPress}
+      setCalendarOverlay={setCalendarOverlay}
+      menuVisible={menuVisible}
+      menuPosition={menuPosition}
+      selectedMessage={selectedMessage}
+      setMenuVisible={setMenuVisible}
+      setReplyTarget={setReplyTarget}
+      startEditMessage={startEditMessage}
+      canEditSelectedMessage={canEditSelectedMessage}
+      setDeleteConfirmVisible={setDeleteConfirmVisible}
+      togglePinForMessage={togglePinForMessage}
+      contextMenuPinLabel={contextMenuPinLabel}
+      pinDisabled={pinDisabled}
+      deleteConfirmVisible={deleteConfirmVisible}
+      closeDeleteConfirm={closeDeleteConfirm}
+      deleteMessageForMe={deleteMessageForMe}
+      deleteMessageForAll={deleteMessageForAll}
+      overflowMenuVisible={overflowMenuVisible}
+      setOverflowMenuVisible={setOverflowMenuVisible}
+      setClearHistoryConfirmVisible={setClearHistoryConfirmVisible}
+      setDeleteChatConfirmVisible={setDeleteChatConfirmVisible}
+      clearHistoryConfirmVisible={clearHistoryConfirmVisible}
+      executeClearHistory={executeClearHistory}
+      deleteChatConfirmVisible={deleteChatConfirmVisible}
+      closeDeleteChatConfirm={closeDeleteChatConfirm}
+      confirmDeleteChatFromList={confirmDeleteChatFromList}
+      deleteChatInProgress={deleteChatInProgress}
+      showAttachMenu={showAttachMenu}
+      setShowAttachMenu={setShowAttachMenu}
+      takePhoto={takePhoto}
+      pickImageFromGallery={pickImageFromGallery}
+      sendCurrentLocation={sendCurrentLocation}
+      ephemeralSec={ephemeralSec}
+      setEphemeralSec={setEphemeralSec}
+      roomId={roomId}
+      flatListRef={flatListRef}
+      formattedMessages={formattedMessages}
+      renderItem={renderItem}
+      listExtraDataStable={listExtraDataStable}
+      listAnimatedStyle={listAnimatedStyle}
+      listBottomSpacerStyle={listBottomSpacerStyle}
+      onListScroll={onListScroll}
+      onListLayoutReady={onListLayoutReady}
+      messagesLoading={messagesLoading}
+      listPaddingTop={listPaddingTop}
+      listFooterPaddingTop={listFooterPaddingTop}
+      selectionMode={selectionMode}
+      selectedIds={selectedIds}
+      exitSelectionMode={exitSelectionMode}
+      batchDeleteForMe={batchDeleteForMe}
+      batchCopySelected={batchCopySelected}
+      batchForwardSelected={batchForwardSelected}
+      overscrollEnabled={overscrollEnabled}
+      loadingOlder={loadingOlder}
+      loadOlderMessages={loadOlderMessages}
+      listViewportStyle={listViewportStyle}
+      inputBarRef={inputBarRef}
+      reportComposerBaseHeight={reportComposerBaseHeight}
+      insets={insets}
+      visibleReplyTo={visibleReplyTo}
+      visibleEditTarget={visibleEditTarget}
+      replyTargetAnimatedStyle={replyTargetAnimatedStyle}
+      emojiPanelAnimatedStyle={emojiPanelAnimatedStyle}
+      emojiContentAnimatedStyle={emojiContentAnimatedStyle}
+      cancelEditMessage={cancelEditMessage}
+      editTarget={editTarget}
+      showEmojiPicker={showEmojiPicker}
+      toggleEmojiPicker={toggleEmojiPicker}
+      insertEmoji={insertEmoji}
+      emojiWobbleRotate={emojiWobbleRotate}
+      inputRef={inputRef}
+      text={text}
+      setText={setText}
+      sendMessage={sendMessage}
+      isRecordingVoice={isRecordingVoice}
+      handleSendVoiceForComposer={handleSendVoiceForComposer}
+      setIsRecordingVoice={setIsRecordingVoice}
+      uploadMedia={uploadMedia}
+      sendMediaMessage={sendMediaMessage}
+      onVoiceRecorderOpen={onVoiceRecorderOpen}
+      handleVideoRecorded={handleVideoRecorded}
+      handleVideoSendError={handleVideoSendError}
+      handleVideoUploadFinished={handleVideoUploadFinished}
+      collapseEmojiForKeyboard={collapseEmojiForKeyboard}
+      emojiPanelGifQuery={emojiPanelGifQuery}
+      setEmojiPanelGifQuery={setEmojiPanelGifQuery}
+      mediaInline={mediaInline}
+      setEmojiPanelGifSearchFocused={setEmojiPanelGifSearchFocused}
+      prepareEmojiPanelGifSearch={prepareEmojiPanelGifSearch}
+      releaseEmojiPanelGifSearch={releaseEmojiPanelGifSearch}
+      exitGifTabLayout={exitGifTabLayout}
+      ariaComposerSurfaceProps={ariaComposerSurfaceProps}
+      headerOverlayH={headerOverlayH}
+      setHeaderOverlayH={setHeaderOverlayH}
+      headerRightTrailingEl={headerRightTrailingEl}
+      isAriaChat={isAriaChat}
+      ariaState={ariaState}
+      setAriaState={setAriaState}
+      setAriaGaugesH={setAriaGaugesH}
+      pinnedMessage={pinnedMessage}
+      pinnedBarH={pinnedBarH}
+      setPinnedBarH={setPinnedBarH}
+      scrollToMessageById={scrollToMessageById}
+      unpinMessage={unpinMessage}
+    />
   );
 }
