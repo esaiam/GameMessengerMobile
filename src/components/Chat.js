@@ -71,7 +71,7 @@ import ChatPinnedBar, { CHAT_PINNED_BAR_H } from './chat/ChatPinnedBar';
 import useChatInputSettling from './chat/useChatInputSettling';
 import useChatOverlayState from './chat/useChatOverlayState';
 import useChatCoreComposerState from './chat/useChatCoreComposerState';
-import { formatDateKey } from './chat/chatMessageListFormat';
+import useChatCalendarNavigation from './chat/useChatCalendarNavigation';
 import { useNavigation } from '@react-navigation/native';
 import { deleteChatsFromList } from '../lib/hideRoomMessagesForDelete';
 import { safeGoBackToMessengerList } from '../lib/safeGoBack';
@@ -266,68 +266,18 @@ export default function Chat({
 
   const formattedMessages = useChatFormattedMessagesState(messages, roomId);
 
-  const daysWithMessages = useMemo(() => {
-    const set = new Set();
-    for (const m of messages) {
-      const k = formatDateKey(m.created_at);
-      if (k) set.add(k);
-    }
-    return set;
-  }, [messages]);
-
-  const dateKeyToIndexMap = useMemo(() => {
-    const map = new Map();
-    for (let i = 0; i < formattedMessages.length; i++) {
-      const row = formattedMessages[i];
-      if (row._showDate && row._dateKey) map.set(row._dateKey, i);
-    }
-    return map;
-  }, [formattedMessages]);
-
-  const messageIdToIndexMap = useMemo(() => {
-    const map = new Map();
-    for (let i = 0; i < formattedMessages.length; i++) {
-      const row = formattedMessages[i];
-      if (row?.id != null) map.set(row.id, i);
-    }
-    return map;
-  }, [formattedMessages]);
-
-  const openCalendarFromSeparator = useCallback((anchor, dateKey, _dateLabel) => {
-    setCalendarOverlay({ anchor, dateKey });
-  }, []);
-
-  const handleCalendarDayPress = useCallback((selectedKey) => {
-    if (isAriaChat) {
-      // Заглушка для Арии — просто закрываем
-      setCalendarOverlay(null);
-      return;
-    }
-    const idx = dateKeyToIndexMap.get(selectedKey);
-    setCalendarOverlay(null);
-    if (idx == null) return;
-    setTimeout(() => {
-      flatListRef.current?.scrollToIndex({
-        index: idx,
-        animated: true,
-        viewPosition: 0.5 });
-    }, 180);
-  }, [isAriaChat, dateKeyToIndexMap, flatListRef]);
-
-  const scrollToMessageById = useCallback((messageId) => {
-    const idx = messageIdToIndexMap.get(messageId);
-    if (idx == null) {
-      Alert.alert('Сообщение', 'Не удалось найти сообщение в ленте.');
-      return;
-    }
-    setTimeout(() => {
-      flatListRef.current?.scrollToIndex({
-        index: idx,
-        animated: true,
-        viewPosition: 0.5,
-      });
-    }, 120);
-  }, [messageIdToIndexMap, flatListRef]);
+  const {
+    daysWithMessages,
+    openCalendarFromSeparator,
+    handleCalendarDayPress,
+    scrollToMessageById,
+  } = useChatCalendarNavigation({
+    messages,
+    formattedMessages,
+    flatListRef,
+    isAriaChat,
+    setCalendarOverlay,
+  });
 
   const onUnlockVideo = useCallback((id) => {
     setUnlockedVideoIds((prev) => {
