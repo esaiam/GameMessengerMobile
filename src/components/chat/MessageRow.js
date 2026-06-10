@@ -8,13 +8,13 @@ import { Mic } from '../../icons/lucideIcons';
 import OutgoingBubble from './OutgoingBubble';
 import BubbleMaterial from './BubbleMaterial';
 import ChatReplyPreview from './ChatReplyPreview';
-import ChatVideoPlaceholder from './ChatVideoPlaceholder';
 import ChatReactionsBar from './ChatReactionsBar';
 import ChatDateSeparator from './ChatDateSeparator';
 import ChatImageMessage from './ChatImageMessage';
 import ChatMultiImageGrid from './messageRow/ChatMultiImageGrid';
 import { deriveMessageRowFlags, resolveMessageRowKind } from './messageRow/deriveMessageRowKind';
 import MessageRowTimeMeta, { computeMessageRowMetaReservePx } from './messageRow/MessageRowTimeMeta';
+import MessageRowVideoContent from './messageRow/MessageRowVideoContent';
 import MessageBubbleSwipeWrap from './MessageBubbleSwipeWrap';
 import { isGifMediaUrl } from '../../lib/isGifMediaUrl';
 import { AriaTypingDots } from './AriaChatUi';
@@ -26,7 +26,6 @@ import {
   BUBBLE_TAIL,
   MSG_TEXT_SIZE,
   MSG_LINE_HEIGHT,
-  VIDEO_FEED_CIRCLE_IDLE,
   REACTION_OVERLAY_ROW_RESERVE } from './messageBubbleLayoutConstants';
 
 const HEART_REACTION_EMOJI = '❤️';
@@ -176,12 +175,6 @@ const MessageRow = React.memo(
       ...(hasReactions && !isVideoMessage
         ? { marginBottom: REACTION_OVERLAY_ROW_RESERVE }
         : {}) };
-    const videoCircleAnchorStyle = {
-      position: 'relative',
-      alignSelf: 'flex-start',
-      ...(hasReactions && isVideoMessage
-        ? { marginBottom: REACTION_OVERLAY_ROW_RESERVE }
-        : {}) };
     const reactionsBar = !listExtra.isAriaChat ? (
       <ChatReactionsBar
         reactions={item.reactions}
@@ -192,37 +185,6 @@ const MessageRow = React.memo(
         }
       />
     ) : null;
-
-    const videoEdgeStripStyle = { flex: 1, alignSelf: 'stretch' };
-    /* Клип круга — только внутри VideoMessage (Animated.View + overflow: hidden). Здесь без overflow: hidden — иначе предок expo-video ломает композицию вместе с нативным драйвером на строке. */
-    const videoCircleChrome = {
-      borderRadius: VIDEO_FEED_CIRCLE_IDLE / 2,
-      ...(isEphemeral ? { borderWidth: 0.5, borderColor: V.accentGold } : {}) };
-    const videoCircleNode = (
-      <View style={videoCircleAnchorStyle}>
-        <Animated.View style={{ transform: [{ scale: bounceAnimVideo }] }}>
-          <View style={{ ...videoCircleChrome, alignSelf: 'flex-start' }}>
-            {isVideoRenderable
-              ? env.renderMessageContent(item, isMine)
-              : (
-                <ChatVideoPlaceholder
-                  isUploading={item._isOptimistic === true}
-                  onPress={() => listExtra.onUnlockVideo?.(item.id)}
-                />
-              )}
-          </View>
-        </Animated.View>
-        {reactionsBar}
-      </View>
-    );
-    const videoTimeOverlayStyle = {
-      position: 'absolute',
-      bottom: 6,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      zIndex: 10,
-      ...(isMine ? { right: 8 } : { left: 8 }) };
 
     const bubbleInner = rowKind === 'text' ? (
       <>
@@ -285,38 +247,19 @@ const MessageRow = React.memo(
         </View>
       </>
     ) : rowKind === 'video' ? (
-      <>
-        <ChatReplyPreview replyMsg={replyMsg} />
-        <View style={{ position: 'relative', width: '100%', alignSelf: 'stretch' }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'stretch',
-              width: '100%',
-              alignSelf: 'stretch' }}
-          >
-            {isMine ? (
-              <>
-                <View style={videoEdgeStripStyle} />
-                {videoCircleNode}
-              </>
-            ) : (
-              <>
-                {videoCircleNode}
-                <View style={videoEdgeStripStyle} />
-              </>
-            )}
-          </View>
-          <View style={videoTimeOverlayStyle} pointerEvents="none">
-            <MessageRowTimeMeta
-              item={item}
-              isMine={isMine}
-              ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
-              variant="legacy"
-            />
-          </View>
-        </View>
-      </>
+      <MessageRowVideoContent
+        item={item}
+        isMine={isMine}
+        isVideoRenderable={isVideoRenderable}
+        isEphemeral={isEphemeral}
+        listExtra={listExtra}
+        env={env}
+        replyMsg={replyMsg}
+        reactionsBar={reactionsBar}
+        bounceAnimVideo={bounceAnimVideo}
+        ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
+        hasReactions={hasReactions}
+      />
     ) : rowKind === 'ariaVoice' ? (
       <>
         <ChatReplyPreview replyMsg={replyMsg} />
