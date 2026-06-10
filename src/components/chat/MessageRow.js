@@ -9,13 +9,12 @@ import OutgoingBubble from './OutgoingBubble';
 import BubbleMaterial from './BubbleMaterial';
 import ChatReplyPreview from './ChatReplyPreview';
 import ChatVideoPlaceholder from './ChatVideoPlaceholder';
-import ChatEphemeralCountdown from './ChatEphemeralCountdown';
-import ChatReadCheck from './ChatReadCheck';
 import ChatReactionsBar from './ChatReactionsBar';
 import ChatDateSeparator from './ChatDateSeparator';
 import ChatImageMessage from './ChatImageMessage';
 import ChatMultiImageGrid from './messageRow/ChatMultiImageGrid';
 import { deriveMessageRowFlags, resolveMessageRowKind } from './messageRow/deriveMessageRowKind';
+import MessageRowTimeMeta, { computeMessageRowMetaReservePx } from './messageRow/MessageRowTimeMeta';
 import MessageBubbleSwipeWrap from './MessageBubbleSwipeWrap';
 import { isGifMediaUrl } from '../../lib/isGifMediaUrl';
 import { AriaTypingDots } from './AriaChatUi';
@@ -27,10 +26,6 @@ import {
   BUBBLE_TAIL,
   MSG_TEXT_SIZE,
   MSG_LINE_HEIGHT,
-  TS_TEXT_SIZE,
-  META_RESERVE_PX_INCOMING,
-  META_RESERVE_PX_OUTGOING,
-  META_RESERVE_PX_EPHEMERAL_EXTRA,
   VIDEO_FEED_CIRCLE_IDLE,
   REACTION_OVERLAY_ROW_RESERVE } from './messageBubbleLayoutConstants';
 
@@ -149,14 +144,8 @@ const MessageRow = React.memo(
           delayLongPress: 400,
           style: { width: '100%' },
         };
-    const textTimeColor =
-      isMine && !ariaPanelUserAsIncoming ? V.outBubbleTime : V.inBubbleTime;
     const textBodyColor =
       isMine && !ariaPanelUserAsIncoming ? V.outBubbleText : V.inBubbleText;
-    const legacyTimeColor =
-      isMine && !ariaPanelUserAsIncoming
-        ? 'rgba(186, 222, 218, 0.52)'
-        : 'rgba(168, 162, 152, 0.58)';
     const ariaTextBodyStyle = {
       fontSize: MSG_TEXT_SIZE,
       fontWeight: '400',
@@ -170,27 +159,11 @@ const MessageRow = React.memo(
       ariaGeneratedAttachment?.mime_type || '',
     ).startsWith('image/');
 
-    const renderTimeMeta = (timeColor) => (
-      <>
-        {isEphemeral && <ChatEphemeralCountdown expiresAt={item.expires_at} />}
-        {isEdited ? (
-          <Text style={{ fontSize: TS_TEXT_SIZE - 1, color: timeColor, fontWeight: '400' }}>
-            изм.
-          </Text>
-        ) : null}
-        <Text style={{ fontSize: TS_TEXT_SIZE, color: timeColor, fontWeight: '400' }}>
-          {item._formattedTime}
-        </Text>
-        <ChatReadCheck isRead={!!item.read_at} isMine={isMine} />
-      </>
-    );
-    const textTimeMeta = renderTimeMeta(textTimeColor);
-    const legacyTimeMeta = renderTimeMeta(legacyTimeColor);
-
-    const metaReservePx =
-      (isMine ? META_RESERVE_PX_OUTGOING : META_RESERVE_PX_INCOMING) +
-      (isEphemeral ? META_RESERVE_PX_EPHEMERAL_EXTRA : 0) +
-      (isEdited ? 24 : 0);
+    const metaReservePx = computeMessageRowMetaReservePx({
+      isMine,
+      isEphemeral,
+      isEdited,
+    });
 
     const hasReactions =
       !listExtra.isAriaChat &&
@@ -302,7 +275,12 @@ const MessageRow = React.memo(
               alignItems: 'center',
               gap: 2 }}
           >
-            {textTimeMeta}
+            <MessageRowTimeMeta
+              item={item}
+              isMine={isMine}
+              ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
+              variant="text"
+            />
           </View>
         </View>
       </>
@@ -330,7 +308,12 @@ const MessageRow = React.memo(
             )}
           </View>
           <View style={videoTimeOverlayStyle} pointerEvents="none">
-            {legacyTimeMeta}
+            <MessageRowTimeMeta
+              item={item}
+              isMine={isMine}
+              ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
+              variant="legacy"
+            />
           </View>
         </View>
       </>
@@ -359,7 +342,12 @@ const MessageRow = React.memo(
           </Text>
         ) : null}
         <View style={tw`flex-row items-center justify-end mt-0.5 gap-1`}>
-          {legacyTimeMeta}
+          <MessageRowTimeMeta
+            item={item}
+            isMine={isMine}
+            ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
+            variant="legacy"
+          />
         </View>
       </>
     ) : rowKind === 'image' ? (
@@ -417,7 +405,12 @@ const MessageRow = React.memo(
         <ChatReplyPreview replyMsg={replyMsg} />
         {env.renderMessageContent(item, isMine)}
         <View style={tw`flex-row items-center justify-end mt-0.5 gap-1`}>
-          {legacyTimeMeta}
+          <MessageRowTimeMeta
+            item={item}
+            isMine={isMine}
+            ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
+            variant="legacy"
+          />
         </View>
       </>
     );
