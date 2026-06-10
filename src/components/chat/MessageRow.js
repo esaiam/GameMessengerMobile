@@ -10,13 +10,11 @@ import BubbleMaterial from './BubbleMaterial';
 import ChatReplyPreview from './ChatReplyPreview';
 import ChatReactionsBar from './ChatReactionsBar';
 import ChatDateSeparator from './ChatDateSeparator';
-import ChatImageMessage from './ChatImageMessage';
-import ChatMultiImageGrid from './messageRow/ChatMultiImageGrid';
 import { deriveMessageRowFlags, resolveMessageRowKind } from './messageRow/deriveMessageRowKind';
 import MessageRowTimeMeta, { computeMessageRowMetaReservePx } from './messageRow/MessageRowTimeMeta';
 import MessageRowVideoContent from './messageRow/MessageRowVideoContent';
+import MessageRowImageContent from './messageRow/MessageRowImageContent';
 import MessageBubbleSwipeWrap from './MessageBubbleSwipeWrap';
-import { isGifMediaUrl } from '../../lib/isGifMediaUrl';
 import { AriaTypingDots } from './AriaChatUi';
 import AriaGeneratedAttachment from './AriaGeneratedAttachment';
 import { LinkifyMessageText } from './linkifyMessageText';
@@ -51,7 +49,6 @@ const MessageRow = React.memo(
     const {
       isMine,
       isVideoMessage,
-      isImageMessage,
       isAriaTyping,
     } = rowFlags;
     const emitMessageLongPress = (e) => {
@@ -70,13 +67,6 @@ const MessageRow = React.memo(
     }, [item.id, listExtra.isAriaChat, listExtra.selectionMode]);
     const handleMessagePress = useDoubleTapPress(
       (e) => onMessagePress(e, item),
-      fireHeartReaction,
-    );
-    const handleImagePress = useDoubleTapPress(
-      (e) => {
-        if (listExtra.selectionMode) onMessagePress(e, item);
-        else env.setFullScreenImage?.({ uris: [item.media_url], index: 0 });
-      },
       fireHeartReaction,
     );
     const replyMsg = env.getReplyMessage(item.reply_to);
@@ -294,55 +284,21 @@ const MessageRow = React.memo(
         </View>
       </>
     ) : rowKind === 'image' ? (
-      <>
-        <ChatReplyPreview replyMsg={replyMsg} />
-        <View style={imageRowStyles.row}>
-          {isMine ? <View style={imageRowStyles.chromeHit} /> : null}
-          {Array.isArray(item.media_urls) && item.media_urls.length > 1 ? (
-            <ChatMultiImageGrid
-              urls={item.media_urls}
-              caption={item.text}
-              layoutMaxWidth={bubbleMaxW}
-              formattedTime={item._formattedTime}
-              isRead={!!item.read_at}
-              isMine={isMine}
-              isEphemeral={isEphemeral}
-              expiresAt={item.expires_at}
-              isSelected={isSelected}
-              isUploading={item._isOptimistic === true}
-              selectionMode={listExtra.selectionMode}
-              item={item}
-              onMessagePress={onMessagePress}
-              onOpenImage={(i) => env.setFullScreenImage?.({ uris: item.media_urls, index: i })}
-              onDoubleTapHeart={fireHeartReaction}
-              onCaptionPress={handleMessagePress}
-              onLongPress={emitMessageLongPress}
-            />
-          ) : (
-            <ChatImageMessage
-              uri={item.media_url}
-              caption={item.text}
-              formattedTime={item._formattedTime}
-              isRead={!!item.read_at}
-              isMine={isMine}
-              isGif={isGifMediaUrl(item.media_url)}
-              layoutMaxWidth={
-                isGifMediaUrl(item.media_url)
-                  ? Math.floor(env.windowWidth * 0.86)
-                  : bubbleMaxW
-              }
-              isEphemeral={isEphemeral}
-              expiresAt={item.expires_at}
-              isSelected={isSelected}
-              isUploading={item._isOptimistic === true}
-              onPress={handleImagePress}
-              onCaptionPress={handleMessagePress}
-              onLongPress={emitMessageLongPress}
-            />
-          )}
-          {!isMine ? <View style={imageRowStyles.chromeHit} /> : null}
-        </View>
-      </>
+      <MessageRowImageContent
+        item={item}
+        isMine={isMine}
+        bubbleMaxW={bubbleMaxW}
+        windowWidth={env.windowWidth}
+        isEphemeral={isEphemeral}
+        isSelected={isSelected}
+        listExtra={listExtra}
+        env={env}
+        replyMsg={replyMsg}
+        onMessagePress={onMessagePress}
+        onCaptionPress={handleMessagePress}
+        onDoubleTapHeart={fireHeartReaction}
+        onLongPress={emitMessageLongPress}
+      />
     ) : (
       <>
         <ChatReplyPreview replyMsg={replyMsg} />
@@ -643,16 +599,5 @@ const MessageRow = React.memo(
     );
   }
 );
-
-/** Зона «рядом с фото» — тап открывает меню; flex забирает пустое место в строке */
-const imageRowStyles = {
-  row: {
-    flexDirection: 'row',
-    width: '100%',
-    alignItems: 'flex-end',
-    minHeight: 44 },
-  chromeHit: {
-    flex: 1,
-    alignSelf: 'stretch' } };
 
 export default MessageRow;
