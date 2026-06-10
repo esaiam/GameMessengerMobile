@@ -15,8 +15,8 @@ import ChatReactionsBar from './ChatReactionsBar';
 import ChatDateSeparator from './ChatDateSeparator';
 import ChatImageMessage from './ChatImageMessage';
 import ChatMultiImageGrid from './messageRow/ChatMultiImageGrid';
+import { deriveMessageRowFlags, resolveMessageRowKind } from './messageRow/deriveMessageRowKind';
 import MessageBubbleSwipeWrap from './MessageBubbleSwipeWrap';
-import { ARIA_MESSAGE_TYPING } from '../../lib/aria';
 import { isGifMediaUrl } from '../../lib/isGifMediaUrl';
 import { AriaTypingDots } from './AriaChatUi';
 import AriaGeneratedAttachment from './AriaGeneratedAttachment';
@@ -52,6 +52,14 @@ const MessageRow = React.memo(
     onMessageLongPress }) {
     const env = rowEnvRef.current;
     const listLength = fmtLenRef.current;
+    const rowFlags = deriveMessageRowFlags(item, listExtra, env);
+    const rowKind = resolveMessageRowKind(rowFlags);
+    const {
+      isMine,
+      isVideoMessage,
+      isImageMessage,
+      isAriaTyping,
+    } = rowFlags;
     const emitMessageLongPress = (e) => {
       const x = e?.nativeEvent?.pageX ?? 0;
       const y = e?.nativeEvent?.pageY ?? 0;
@@ -77,12 +85,7 @@ const MessageRow = React.memo(
       },
       fireHeartReaction,
     );
-    const isMine = item.player_name === env.nickname;
     const replyMsg = env.getReplyMessage(item.reply_to);
-    const isVideoMessage = item.message_type === 'video';
-    const isImageMessage = item.message_type === 'image';
-    const isAriaTyping =
-      item.message_type === ARIA_MESSAGE_TYPING || item.isTyping === true;
     const isVideoRenderable = isVideoMessage
       ? listExtra.renderableVideoIds?.has(item.id)
       : false;
@@ -132,15 +135,6 @@ const MessageRow = React.memo(
           borderBottomLeftRadius: BUBBLE_TAIL,
           borderBottomRightRadius: BUBBLE_RADIUS };
 
-    /** Голос Aria с локальным файлом — плеер + опционально транскрипт (иначе старый Mic+текст). */
-    const isAriaVoiceBubble =
-      item.aria_voice_message === true && !!item.audio_uri;
-    const isTextMessage =
-      !isAriaTyping &&
-      !isAriaVoiceBubble &&
-      (item.aria_voice_message === true ||
-        !item.message_type ||
-        item.message_type === 'text');
     /** В панели Aria исходящие — тот же chrome, что входящие в обычном чате. */
     const ariaPanelUserAsIncoming = listExtra.ariaPlainPanel && isMine;
     /** В панели Aria — выделение и копирование текста. */
@@ -257,7 +251,7 @@ const MessageRow = React.memo(
       zIndex: 10,
       ...(isMine ? { right: 8 } : { left: 8 }) };
 
-    const bubbleInner = isTextMessage ? (
+    const bubbleInner = rowKind === 'text' ? (
       <>
         <ChatReplyPreview replyMsg={replyMsg} />
         <View style={{ overflow: 'visible', paddingRight: metaReservePx }}>
@@ -312,7 +306,7 @@ const MessageRow = React.memo(
           </View>
         </View>
       </>
-    ) : isVideoMessage ? (
+    ) : rowKind === 'video' ? (
       <>
         <ChatReplyPreview replyMsg={replyMsg} />
         <View style={{ position: 'relative', width: '100%', alignSelf: 'stretch' }}>
@@ -340,7 +334,7 @@ const MessageRow = React.memo(
           </View>
         </View>
       </>
-    ) : isAriaVoiceBubble ? (
+    ) : rowKind === 'ariaVoice' ? (
       <>
         <ChatReplyPreview replyMsg={replyMsg} />
         {env.renderMessageContent(
@@ -368,7 +362,7 @@ const MessageRow = React.memo(
           {legacyTimeMeta}
         </View>
       </>
-    ) : isImageMessage ? (
+    ) : rowKind === 'image' ? (
       <>
         <ChatReplyPreview replyMsg={replyMsg} />
         <View style={imageRowStyles.row}>
@@ -428,7 +422,6 @@ const MessageRow = React.memo(
       </>
     );
 
-    const ariaPlainIncoming = listExtra.ariaPlainPanel && !isMine;
     const dateSeparatorEl =
       item._showDate ? (
         <ChatDateSeparator
@@ -442,7 +435,7 @@ const MessageRow = React.memo(
         />
       ) : null;
 
-    if (ariaPlainIncoming && isAriaTyping) {
+    if (rowKind === 'ariaPlainTyping') {
       return (
         <View style={{ marginBottom: rowMarginBottom, zIndex: index }}>
           {dateSeparatorEl}
@@ -453,7 +446,7 @@ const MessageRow = React.memo(
       );
     }
 
-    if (ariaPlainIncoming && isTextMessage && !isAriaVoiceBubble) {
+    if (rowKind === 'ariaPlainText') {
       const plainBodyStyle = {
         fontSize: MSG_TEXT_SIZE,
         fontWeight: '400',
@@ -506,7 +499,7 @@ const MessageRow = React.memo(
     return (
       <View style={{ marginBottom: rowMarginBottom, zIndex: index }}>
         {dateSeparatorEl}
-        {isAriaTyping ? (
+        {rowKind === 'typing' ? (
           <Animated.View
             style={{
               opacity: messageRowAnims.opacity,
@@ -543,7 +536,7 @@ const MessageRow = React.memo(
               </View>
             </View>
           </Animated.View>
-        ) : isVideoMessage || isImageMessage ? (
+        ) : rowKind === 'video' || rowKind === 'image' ? (
           <Pressable
             onPress={handleMessagePress}
             onLongPress={emitMessageLongPress}
@@ -582,7 +575,7 @@ const MessageRow = React.memo(
                     {bubbleInner}
                   </View>
                 </MessageBubbleSwipeWrap>
-                {isImageMessage ? reactionsBar : null}
+                {rowKind === 'image' ? reactionsBar : null}
               </View>
             </View>
           </Pressable>
