@@ -23,9 +23,7 @@ export async function fetchChatsRows(nickname) {
     return { rows: null, error: true };
   }
 
-  const roomList = (rooms || []).filter(
-    (r) => r.last_message_id || !r.thread_cleared_at,
-  );
+  const roomList = rooms || [];
 
   // Собрать IDs последних сообщений и загрузить их одним запросом
   const lastMsgIds = roomList.map((r) => r.last_message_id).filter(Boolean);

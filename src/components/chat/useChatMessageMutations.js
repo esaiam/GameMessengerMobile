@@ -197,6 +197,19 @@ export default function useChatMessageMutations({
         return;
       }
 
+      if (!room) {
+        Alert.alert(
+          'Не удалось удалить у всех',
+          'Комната не найдена на сервере. Закрой чат и открой диалог снова из Контактов.',
+        );
+        setDeletingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(messageId);
+          return next;
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('messages')
         .update({ hidden_for: hiddenForAll })

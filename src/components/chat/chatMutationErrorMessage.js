@@ -7,6 +7,15 @@ export function chatMutationErrorMessage(error, fallback) {
   const msg = String(error?.message || '').trim();
   const code = error?.code;
 
+  if (/not_room_participant/i.test(msg)) {
+    return (
+      'Не удалось удалить у всех: комната не найдена или ты не участник. ' +
+      'Закрой чат и открой диалог снова из Контактов.'
+    );
+  }
+  if (/not_authenticated/i.test(msg)) {
+    return 'Сессия истекла. Выйди из приложения и войди снова.';
+  }
   if (code === '42501' || /permission denied|row-level security|violates row-level/i.test(msg)) {
     return 'Нет прав изменить сообщение. Убедись, что ты вошёл в аккаунт и это твой чат.';
   }
