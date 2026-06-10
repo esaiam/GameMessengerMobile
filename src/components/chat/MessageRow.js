@@ -4,16 +4,16 @@ import * as Haptics from 'expo-haptics';
 import { View, Text, Animated, Pressable } from 'react-native';
 import tw from 'twrnc';
 import { V } from '../../theme';
-import { Mic } from '../../icons/lucideIcons';
 import OutgoingBubble from './OutgoingBubble';
 import BubbleMaterial from './BubbleMaterial';
 import ChatReplyPreview from './ChatReplyPreview';
 import ChatReactionsBar from './ChatReactionsBar';
 import ChatDateSeparator from './ChatDateSeparator';
 import { deriveMessageRowFlags, resolveMessageRowKind } from './messageRow/deriveMessageRowKind';
-import MessageRowTimeMeta, { computeMessageRowMetaReservePx } from './messageRow/MessageRowTimeMeta';
+import MessageRowTimeMeta from './messageRow/MessageRowTimeMeta';
 import MessageRowVideoContent from './messageRow/MessageRowVideoContent';
 import MessageRowImageContent from './messageRow/MessageRowImageContent';
+import MessageRowTextBubbleInner from './messageRow/MessageRowTextBubbleInner';
 import MessageBubbleSwipeWrap from './MessageBubbleSwipeWrap';
 import { AriaTypingDots } from './AriaChatUi';
 import AriaGeneratedAttachment from './AriaGeneratedAttachment';
@@ -133,13 +133,6 @@ const MessageRow = React.memo(
           delayLongPress: 400,
           style: { width: '100%' },
         };
-    const textBodyColor =
-      isMine && !ariaPanelUserAsIncoming ? V.outBubbleText : V.inBubbleText;
-    const ariaTextBodyStyle = {
-      fontSize: MSG_TEXT_SIZE,
-      fontWeight: '400',
-      lineHeight: MSG_LINE_HEIGHT,
-      color: textBodyColor };
     /** Aria: plain text + кликабельные URL, без markdown-оформления. */
     const useAriaLinks = listExtra.isAriaChat && !item.aria_voice_message;
     const ariaGeneratedAttachment =
@@ -147,12 +140,6 @@ const MessageRow = React.memo(
     const hasAriaImageAttachment = String(
       ariaGeneratedAttachment?.mime_type || '',
     ).startsWith('image/');
-
-    const metaReservePx = computeMessageRowMetaReservePx({
-      isMine,
-      isEphemeral,
-      isEdited,
-    });
 
     const hasReactions =
       !listExtra.isAriaChat &&
@@ -177,65 +164,16 @@ const MessageRow = React.memo(
     ) : null;
 
     const bubbleInner = rowKind === 'text' ? (
-      <>
-        <ChatReplyPreview replyMsg={replyMsg} />
-        <View style={{ overflow: 'visible', paddingRight: metaReservePx }}>
-          {item.aria_voice_message && !item.audio_uri ? (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'flex-start',
-                gap: 6,
-                alignSelf: 'flex-start',
-                maxWidth: '100%' }}
-            >
-              <Mic
-                size={16}
-                color={V.accentSage}
-                strokeWidth={1.5}
-                style={{ marginTop: 2 }}
-              />
-              <Text
-                style={{
-                  flexShrink: 1,
-                  fontSize: MSG_TEXT_SIZE,
-                  fontWeight: '400',
-                  lineHeight: MSG_LINE_HEIGHT,
-                  color: textBodyColor}}
-                selectable={textSelectable}
-              >
-                {item.text}
-              </Text>
-            </View>
-          ) : useAriaLinks ? (
-            <LinkifyMessageText
-              text={item.text}
-              style={ariaTextBodyStyle}
-              selectable={textSelectable}
-            />
-          ) : (
-            <Text style={ariaTextBodyStyle} selectable={textSelectable}>
-              {item.text}
-            </Text>
-          )}
-          <View
-            style={{
-              position: 'absolute',
-              right: -5,
-              bottom: 2,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 2 }}
-          >
-            <MessageRowTimeMeta
-              item={item}
-              isMine={isMine}
-              ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
-              variant="text"
-            />
-          </View>
-        </View>
-      </>
+      <MessageRowTextBubbleInner
+        item={item}
+        isMine={isMine}
+        isEphemeral={isEphemeral}
+        isEdited={isEdited}
+        ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
+        textSelectable={textSelectable}
+        useAriaLinks={useAriaLinks}
+        replyMsg={replyMsg}
+      />
     ) : rowKind === 'video' ? (
       <MessageRowVideoContent
         item={item}
