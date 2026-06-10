@@ -2,16 +2,14 @@ import React, {
   useState,
   useEffect,
   useRef,
-  useCallback,
-  useMemo } from 'react';
+  useCallback } from 'react';
 import {
   View,
-  useWindowDimensions,
-  TouchableOpacity } from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ChatRoomHeader, { ICON_SELECTION_ACTION } from './ChatRoomHeader';
+import ChatRoomHeader from './ChatRoomHeader';
 import ChatOverlays from './chat/ChatOverlays';
 import { EphemeralClockContext } from './chat/ephemeralClockContext';
 import useChatMessageListRender from './chat/useChatMessageListRender';
@@ -23,19 +21,16 @@ import useChatMutationsBundle from './chat/useChatMutationsBundle';
 import useChatComposerSend from './chat/useChatComposerSend';
 import useChatMediaInline from './chat/useChatMediaInline';
 import useChatPlayback from './chat/useChatPlayback';
+import useChatHeaderOverlay from './chat/useChatHeaderOverlay';
 import useChatComposerChrome from './chat/useChatComposerChrome';
 import { useAriaChatListBootstrap } from './chat/useAriaChatListBootstrap';
-import { getAriaComposerSurfaceProps } from './chat/ariaComposerSurfaceProps';
 import AriaStateGauges from './chat/AriaStateGauges';
 import Reanimated, { useSharedValue } from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { V } from '../theme';
-import {
-  CHAT_HEADER_TO_LIST_GAP_PX } from './chat/chatViewConstants';
 import { useChatEphemeralClockTick } from '../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../hooks/useChatFormattedMessagesState';
 import { useChatInvertedListScroll } from '../hooks/useChatInvertedListScroll';
-import { EllipsisVertical } from '../icons/lucideIcons';
 import useChatMessageFilters from './chat/useChatMessageFilters';
 import ChatPinnedBar from './chat/ChatPinnedBar';
 import useChatInputSettling from './chat/useChatInputSettling';
@@ -170,19 +165,25 @@ export default function Chat({
     onOpenMessageMenu,
   } = useChatOverlayState();
 
-  const [headerOverlayH, setHeaderOverlayH] = useState(0);
-  const [pinnedBarH, setPinnedBarH] = useState(0);
-  const [ariaGaugesH, setAriaGaugesH] = useState(48);
-  /** Зеркалит `ariaState` из `ChatRoomHeader` (тот же fetch, что был у колец) для `AriaStateGauges`. */
-  const [ariaState, setAriaState] = useState(null);
-
-  useEffect(() => {
-    if (chatRoomHeader == null) return;
-    if (headerOverlayH <= 0) return;
-    const gaugesH = isAriaChat ? ariaGaugesH : 0;
-    const pinH = !isAriaChat && pinnedBarH > 0 ? pinnedBarH : 0;
-    onTopOverlayHeight?.(headerOverlayH + gaugesH + pinH);
-  }, [chatRoomHeader, headerOverlayH, isAriaChat, ariaGaugesH, pinnedBarH, onTopOverlayHeight]);
+  const {
+    headerOverlayH,
+    setHeaderOverlayH,
+    pinnedBarH,
+    setPinnedBarH,
+    ariaState,
+    setAriaState,
+    setAriaGaugesH,
+    listFooterPaddingTop,
+    ariaComposerSurfaceProps,
+    headerRightTrailingEl,
+  } = useChatHeaderOverlay({
+    chatRoomHeader,
+    onTopOverlayHeight,
+    isAriaChat,
+    listPaddingTop,
+    roomId,
+    setOverflowMenuVisible,
+  });
 
   const { armComposerInsetSettling, listScrollSuppressRefs, keyboardSettlingRef } =
     useChatInputSettling(showEmojiPicker);
@@ -481,33 +482,6 @@ export default function Chat({
     renderableVideoIds,
     onUnlockVideo,
   });
-
-  const listFooterPaddingTop =
-    chatRoomHeader != null &&
-    typeof listPaddingTop === 'number' &&
-    listPaddingTop > 0
-      ? listPaddingTop + CHAT_HEADER_TO_LIST_GAP_PX + (pinnedBarH > 0 ? pinnedBarH : 0)
-      : listPaddingTop;
-
-  const ariaComposerSurfaceProps = useMemo(
-    () => getAriaComposerSurfaceProps(isAriaChat, chatRoomHeader?.ariaOnline),
-    [isAriaChat, chatRoomHeader?.ariaOnline]
-  );
-
-  const headerRightTrailingEl = useMemo(() => {
-    if (isAriaChat || !roomId || !chatRoomHeader?.headerRight) return undefined;
-    return (
-      <TouchableOpacity
-        onPress={() => setOverflowMenuVisible(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Меню чата"
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
-      >
-        <EllipsisVertical size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
-      </TouchableOpacity>
-    );
-  }, [isAriaChat, roomId, chatRoomHeader?.headerRight]);
 
   return (
     <EphemeralClockContext.Provider value={ephemeralClockTick}>
