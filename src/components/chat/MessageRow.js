@@ -14,6 +14,7 @@ import MessageRowImageContent from './messageRow/MessageRowImageContent';
 import MessageRowTextBubbleInner from './messageRow/MessageRowTextBubbleInner';
 import MessageRowAriaPlain from './messageRow/MessageRowAriaPlain';
 import MessageRowBubbleChrome from './messageRow/MessageRowBubbleChrome';
+import { messageRowPropsAreEqual } from './messageRow/messageRowMemoCompare';
 import {
   BUBBLE_RADIUS,
   BUBBLE_TAIL,
@@ -302,46 +303,7 @@ const MessageRow = React.memo(
       />
     );
   },
-  (prev, next) => {
-    const isVoiceOrAudio = (item) =>
-      item?.message_type === 'voice' ||
-      item?.message_type === 'audio' ||
-      (item?.aria_voice_message === true && !!item?.audio_uri);
-
-    if (isVoiceOrAudio(prev.item)) {
-      const prevIsActive = prev.activeVoiceMessageId === prev.item.id;
-      const nextIsActive = next.activeVoiceMessageId === next.item.id;
-      // Если этот пузырь сейчас активен или становится активным — перерендер
-      if (prevIsActive || nextIsActive) {
-        return (
-          prev.voicePlaybackSig === next.voicePlaybackSig &&
-          prev.activeVoiceUri === next.activeVoiceUri &&
-          prev.isRecordingVoice === next.isRecordingVoice
-        );
-      }
-      // Неактивная голосовая строка: item стабилен, но смена URI/id плеера должна снимать залипший прогресс
-      return (
-        prev.item === next.item &&
-        prev.index === next.index &&
-        prev.listExtra === next.listExtra &&
-        prev.activeVoiceUri === next.activeVoiceUri &&
-        prev.activeVoiceMessageId === next.activeVoiceMessageId
-      );
-    }
-
-    if (prev.item.message_type === 'video') {
-      const prevIsActive = prev.activeVideoId === prev.item.id;
-      const nextIsActive = next.activeVideoId === next.item.id;
-      // Перерендер только если этот конкретный пузырь стал активным или перестал
-      if (prevIsActive !== nextIsActive) return false;
-    }
-
-    return (
-      prev.item === next.item &&
-      prev.index === next.index &&
-      prev.listExtra === next.listExtra
-    );
-  }
+  messageRowPropsAreEqual,
 );
 
 export default MessageRow;
