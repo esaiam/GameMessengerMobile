@@ -121,7 +121,8 @@ export default function useChatMediaActions({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.7,
-      allowsMultipleSelection: true });
+      allowsMultipleSelection: true,
+      selectionLimit: 10 });
     if (result.canceled || !result.assets?.[0]) return;
     const assets = result.assets;
     const localUri = assets[0].uri;
@@ -147,8 +148,9 @@ export default function useChatMediaActions({
       const detail = e?.message || e?.error_description || String(e);
       Alert.alert('Ошибка', `Не удалось отправить фото.\n${detail}`);
       if (__DEV__) console.warn(e);
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   }, [
     uploadMedia,
     sendMediaMessage,

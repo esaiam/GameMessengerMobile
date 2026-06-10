@@ -2,6 +2,7 @@ import { INVITE_APP_SCHEME } from './inviteDeepLink';
 
 /** Совпадает с redirect в resetPasswordForEmail; добавь в Supabase → Auth → Redirect URLs. */
 export const AUTH_RECOVERY_REDIRECT_URL = `${INVITE_APP_SCHEME}://reset-password`;
+export const AUTH_CONFIRM_REDIRECT_URL = 'vaultmessenger://auth-confirm';
 
 /**
  * Токены из письма Supabase приходят в hash или в query.

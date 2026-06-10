@@ -18,7 +18,10 @@ import {
   VAULT_PENDING_INVITE_KEY,
   normalizePendingInviteCode,
   serializePendingInvite } from '../utils/inviteRedeem';
-import { AUTH_RECOVERY_REDIRECT_URL } from '../utils/authRecoveryDeepLink';
+import {
+  AUTH_RECOVERY_REDIRECT_URL,
+  AUTH_CONFIRM_REDIRECT_URL,
+} from '../utils/authRecoveryDeepLink';
 
 export default function AuthScreen() {
   const navigation = useNavigation();
@@ -103,7 +106,7 @@ export default function AuthScreen() {
             email: trimmedEmail,
             password,
             options: {
-              emailRedirectTo: 'vaultmessenger://auth-confirm'
+              emailRedirectTo: AUTH_CONFIRM_REDIRECT_URL
             }
           });
           if (error) throw error;

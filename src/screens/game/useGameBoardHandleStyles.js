@@ -14,9 +14,12 @@ export default function useGameBoardHandleStyles({
   boardMaxW,
 }) {
   const fullStripW = useMemo(() => {
-    if (boardColW > 0) return boardColW;
-    return windowW || Dimensions.get('window').width;
-  }, [boardColW, windowW]);
+    const raw = boardColW > 0 ? boardColW : windowW || Dimensions.get('window').width;
+    if (typeof boardMaxW === 'number' && boardMaxW > 0) {
+      return Math.min(raw, boardMaxW + BOARD_SIDE_GAP * 2);
+    }
+    return raw;
+  }, [boardColW, windowW, boardMaxW]);
 
   const narrowStripW = useMemo(() => Math.max(48, Math.floor(fullStripW / 5)), [fullStripW]);
 

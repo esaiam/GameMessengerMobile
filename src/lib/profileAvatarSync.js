@@ -21,6 +21,13 @@ export function withAvatarCacheBust(path, bust) {
   return `${base}?v=${bust}`;
 }
 
+/** @param {string | null | undefined} iso */
+export function avatarUpdatedAtMs(iso) {
+  if (!iso) return 0;
+  const n = Date.parse(iso);
+  return Number.isFinite(n) ? n : 0;
+}
+
 /** @param {string} avatarPath storage object path */
 export function profileAvatarPublicUrl(avatarPath) {
   const { data } = supabase.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(avatarPath);
@@ -52,12 +59,14 @@ export async function fetchOwnProfileAvatarMeta() {
   };
 }
 
-/** @param {string} avatarPath */
-async function downloadProfileAvatarToDocument(avatarPath) {
-  const url = profileAvatarPublicUrl(avatarPath);
-  if (!url) throw new Error('no_public_url');
+/** @param {string} avatarPath @param {string | null | undefined} avatarUpdatedAt */
+async function downloadProfileAvatarToDocument(avatarPath, avatarUpdatedAt) {
+  const publicUrl = profileAvatarPublicUrl(avatarPath);
+  if (!publicUrl) throw new Error('no_public_url');
 
-  const res = await fetch(url);
+  const bust = avatarUpdatedAtMs(avatarUpdatedAt) || Date.now();
+  const url = withAvatarCacheBust(publicUrl, bust);
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`fetch_${res.status}`);
 
   const bytes = new Uint8Array(await res.arrayBuffer());
@@ -116,11 +125,13 @@ export async function syncOwnProfileAvatarFromServer() {
   const localFile = storedPath ? new File(storedPath) : null;
   const hasLocal = Boolean(localFile?.exists);
 
-  const serverTs = avatarUpdatedAt ? Date.parse(avatarUpdatedAt) : 0;
+  const serverTs = avatarUpdatedAtMs(avatarUpdatedAt);
+  const localTs = avatarUpdatedAtMs(storedUpdatedAt);
   const needsDownload =
     !hasLocal ||
     !storedUpdatedAt ||
-    storedUpdatedAt !== avatarUpdatedAt;
+    !serverTs ||
+    localTs !== serverTs;
 
   if (!needsDownload && storedPath) {
     return {
@@ -131,7 +142,7 @@ export async function syncOwnProfileAvatarFromServer() {
   }
 
   try {
-    const localUri = await downloadProfileAvatarToDocument(avatarPath);
+    const localUri = await downloadProfileAvatarToDocument(avatarPath, avatarUpdatedAt);
     await AsyncStorage.setItem(AVATAR_STORAGE_KEY, localUri);
     await markProfileAvatarSynced(avatarUpdatedAt);
     const bust = serverTs || Date.now();
@@ -144,8 +155,8 @@ export async function syncOwnProfileAvatarFromServer() {
     if (__DEV__) console.warn('[profileAvatar] sync download:', e?.message || e);
     if (hasLocal && storedPath) {
       return {
-        uri: withAvatarCacheBust(storedPath, Date.parse(storedUpdatedAt || '') || 0),
-        cacheBust: Date.parse(storedUpdatedAt || '') || 0,
+        uri: withAvatarCacheBust(storedPath, avatarUpdatedAtMs(storedUpdatedAt) || 0),
+        cacheBust: avatarUpdatedAtMs(storedUpdatedAt) || 0,
         usedLocalFallback: true,
       };
     }

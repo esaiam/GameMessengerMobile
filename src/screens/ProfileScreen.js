@@ -160,7 +160,7 @@ function Section({ title, children }) {
 
           tw`rounded-[12px] px-4 overflow-hidden`,
 
-          { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border }]}
+          { backgroundColor: V.bgElevated, borderWidth: 0.5, borderColor: V.border }]}
 
       >
 
@@ -186,7 +186,7 @@ function ProfileActionButton({ icon, label, onPress }) {
 
       activeOpacity={0.7}
 
-      style={[styles.actionBtn, {backgroundColor: V.bgElevated, borderColor: V.border}]}
+      style={[styles.actionBtn, { backgroundColor: V.bgSurface, borderColor: V.border }]}
 
     >
 

@@ -17,7 +17,9 @@ export async function readUriAsArrayBuffer(uri) {
     const bytes = await f.bytes();
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   } catch (e) {
-    console.warn('readUriAsArrayBuffer: File.bytes failed, trying fetch', e);
+    if (__DEV__) {
+      console.warn('readUriAsArrayBuffer: File.bytes failed, trying fetch', e);
+    }
   }
   const res = await fetch(uri);
   if (!res.ok) {

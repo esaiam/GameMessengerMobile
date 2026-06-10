@@ -38,8 +38,8 @@ export const ISLAND_PICKER_H = 48;
 const PICKER_WIDTH_RATIO = 0.30;
 const HANDLE_H = ISLAND_COLLAPSED_H;
 /** Зазор между нижним краем острова и верхом ввода чата.
- *  68px — намеренно, чтобы аудиосообщения в чате оставались доступны при открытой доске. */
-const BOTTOM_GAP = 68;
+ *  108px — запас под чат и аудиосообщения при открытой доске. */
+const BOTTOM_GAP = 108;
 
 // ─── FSM ──────────────────────────────────────────────────────────────────────
 
@@ -61,6 +61,7 @@ export function useGameIslandAnimation({
   setBoardMounted,
   setBoardContentActive,
   frostedHeaderH,
+  maxBoardH,
 }) {
   // ── FSM ────────────────────────────────────────────────────────────────────
 
@@ -111,15 +112,23 @@ export function useGameIslandAnimation({
 
   // ── computeMaxSlide ────────────────────────────────────────────────────────
 
+  const capBoardH = useCallback((h) => {
+    const raw = Math.max(200, h);
+    if (typeof maxBoardH === 'number' && maxBoardH > 0) {
+      return Math.min(raw, maxBoardH);
+    }
+    return raw;
+  }, [maxBoardH]);
+
   const computeMaxSlide = useCallback(() => {
     const bY = boardColTopYRef.current;
     const iY = chatInputTopYRef.current;
     if (typeof bY === 'number' && typeof iY === 'number') {
-      const avail = Math.max(200, iY - bY - HANDLE_H - BOTTOM_GAP);
+      const avail = capBoardH(iY - bY - HANDLE_H - BOTTOM_GAP);
       maxSlideRef.current = avail;
       if (!suppressAvailableHRef.current) setAvailableH(avail);
     }
-  }, [setAvailableH]);
+  }, [setAvailableH, capBoardH]);
 
   // ── pauseJsForDiceThrow ────────────────────────────────────────────────────
 
@@ -201,7 +210,7 @@ export function useGameIslandAnimation({
     boardColRef.current?.measureInWindow((_x, bY) => {
       const iY = chatInputTopYRef.current;
       if (typeof bY === 'number' && typeof iY === 'number' && iY > bY) {
-        doOpen(Math.max(200, iY - bY - HANDLE_H - BOTTOM_GAP));
+        doOpen(capBoardH(iY - bY - HANDLE_H - BOTTOM_GAP));
       } else {
         doOpen(maxSlideRef.current);
       }
@@ -211,7 +220,7 @@ export function useGameIslandAnimation({
     boardDropAnim, handleStretchAnim, handleWidthAnim,
     boardContentFadeAnim,
     boardColRef, boardMountedRef,
-    computeMaxSlide, setAvailableH, setBoardContentActive, setBoardMounted,
+    computeMaxSlide, setAvailableH, setBoardContentActive, setBoardMounted, capBoardH,
   ]);
 
   // ── runCloseSequence ───────────────────────────────────────────────────────

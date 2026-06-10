@@ -9,6 +9,8 @@ export const LEGACY_SWIPE_HINT_KEY = '@backgammon_swipe_hint_seen';
 
 export const BOARD_TOP_GAP = 4;
 export const BOARD_SIDE_GAP = 8;
+/** Ширина игрового острова на планшете — как типичный телефон (см. PICKER_WIDTH_RATIO в useGameIslandAnimation). */
+export const PHONE_GAME_ISLAND_W = 390;
 export const DEFAULT_PH = 130;
 export const MIN_PH = 50;
 export const BOARD_CHROME = 32;

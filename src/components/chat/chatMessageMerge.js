@@ -2,7 +2,7 @@
 export const MESSAGES_PAGE_SIZE = 30;
 
 export const MESSAGE_LIST_SELECT =
-  'id, room_id, player_name, text, created_at, read_at, edited_at, reply_to, reactions, hidden_for, message_type, media_url, latitude, longitude, expires_at, waveform';
+  'id, room_id, player_name, text, created_at, read_at, edited_at, reply_to, reactions, hidden_for, message_type, media_url, media_urls, latitude, longitude, expires_at, waveform';
 
 /**
  * Объединить списки сообщений по id, сортировка: старые → новые.

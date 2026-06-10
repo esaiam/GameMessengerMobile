@@ -158,6 +158,17 @@ export default function Chat({
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null);
+  const openFullScreenImage = useCallback((payload) => {
+    if (payload == null) {
+      setFullScreenImage(null);
+      return;
+    }
+    if (typeof payload === 'string') {
+      setFullScreenImage({ uris: [payload], index: 0 });
+      return;
+    }
+    setFullScreenImage(payload);
+  }, []);
   const [calendarOverlay, setCalendarOverlay] = useState(null);
   const [uiReady, setUiReady] = useState(false);
   const [headerOverlayH, setHeaderOverlayH] = useState(0);
@@ -942,7 +953,7 @@ export default function Chat({
     selectedIds,
     getReplyMessage,
     ensureMessageAnims,
-    setFullScreenImage,
+    setFullScreenImage: openFullScreenImage,
     handleMessagePress,
     handleMessageLongPress,
     toggleReaction,
@@ -1020,7 +1031,7 @@ export default function Chat({
           setMenuVisible(false);
           setDeleteConfirmVisible(true);
         }}
-        onOpenImage={(uri) => setFullScreenImage(uri)}
+        onOpenImage={(uri) => setFullScreenImage({ uris: [uri], index: 0 })}
         onPinMessage={togglePinForMessage}
         pinLabel={contextMenuPinLabel}
         pinDisabled={pinDisabled}

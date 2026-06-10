@@ -39,7 +39,7 @@
 - [x] Миграции БД: `last_message`, purge hidden, pg_cron, push + Vault
 - [x] RLS на prod — participant-политики, не `supabase_setup_v2` как есть
 - [x] Регрессия чата (ручной чеклист)
-- [x] Профиль контакта: block / delete / контакты (локально + `hidden_for`)
+- [x] Профиль контакта: block (`blocked_peers` + миграция из AsyncStorage), delete, контакты + `hidden_for`
 - [x] Жесты на фото в чате
 - [x] Prod-логи: `console.*` только в `__DEV__` (кроме фатальных `console.error`)
 - [x] Удалён опасный `scripts/fix-messages-rls-update-delete.sql`
@@ -116,11 +116,12 @@
 
 ### Продукт
 - [ ] **Aria** — серверная история / sync; fix «пуш пришёл — в чате пусто»
-- [ ] **DM policy** на сервере (сейчас только AsyncStorage)
-- [ ] **Блокировка** на сервере (сейчас локальный список)
+- [ ] **DM policy** на сервере (сейчас только AsyncStorage, `profileSettings.js`)
+- [x] **Блокировка** на сервере — таблица `blocked_peers`, клиент `blockedContacts.js` (однократная миграция legacy AsyncStorage)
 - [ ] Вкладка **Poker** → переименовать (сейчас Tamagotchi)
-- [ ] Удаление аккаунта: cascade `auth.users` + storage
-- [ ] Контекстное меню: переслать / закрепить (сейчас «в разработке»)
+- [ ] Удаление аккаунта: клиент вызывает RPC `delete_user_account` — сверить cascade `auth.users` + storage на prod
+- [x] Контекстное меню: **закрепить** (`rooms.pinned_message_id`, `useChatPinnedMessage`)
+- [ ] Контекстное меню: **переслать** (заглушка «в разработке»)
 
 ### Инфра
 - [ ] Storage RLS: `chat-media` (публичный read/anon insert в `supabase_setup_v2.sql` — сверить с prod)
@@ -135,9 +136,9 @@
 - [x] `Chat.js` — вынесены inline media, clear history, input settling, message list, overlays (`src/components/chat/*`)
 - [x] `GameScreen.js` — board vs chat chrome → `src/screens/game/*` (~454 строк wiring)
 - [x] `ContactsDrawer.js` → `src/components/contacts/*` (~95 строк wiring)
-- [ ] **`VoiceRecorder.tsx` + `VideoRecorder.tsx`** (~1388 + ~594 строк) — разделение процессов без смены UX:
-  - Сейчас: `VideoRecorder` не мусор — рендерится **внутри** `VoiceRecorder`; общая кнопка микрофона, переключение Mic ↔ Video, hold → голос или inline-видео в круге
-  - Цель: вынести общее (жесты hold/lock/cancel, haptic, layout капсулы) в shared-слой; **аудио** (`expo-audio`, waveform, trim/pause) и **видео** (`expo-camera`, upload, optimistic bubble) — отдельные модули/хуки с похожим API, но разными пайплайнами
+- [ ] **`VoiceRecorder.tsx` + `VideoRecorder.tsx`** (~280 + ~655 строк; пайплайн уже частично вынесен: `useVoiceRecordingPipeline` ~509, `useComposerMicGesture` ~391) — дальнейшее разделение без смены UX:
+  - Сейчас: `VideoRecorder` рендерится **внутри** `VoiceRecorder`; общая кнопка микрофона, переключение Mic ↔ Video, hold → голос или inline-видео в круге
+  - Цель: вынести оставшееся общее (жесты hold/lock/cancel, haptic, layout капсулы) в shared-слой; **аудио** и **видео** — отдельные модули с похожим API, но разными пайплайнами
   - Wiring в `ChatComposer` остаётся одной точкой; поведение для пользователя не менять
 
 ### Дубли и legacy

@@ -20,7 +20,7 @@ import useGameScreenBootstrap from './game/useGameScreenBootstrap';
 import useGameKeyboardTransition from './game/useGameKeyboardTransition';
 import useGameDiceRemoteSync, { createDiceEqual } from './game/useGameDiceRemoteSync';
 import { resolveGameOpponentName } from './game/resolveGameOpponentName';
-import { BOARD_TOP_GAP } from './game/gameScreenConstants';
+import { BOARD_TOP_GAP, BOARD_SIDE_GAP, PHONE_GAME_ISLAND_W } from './game/gameScreenConstants';
 import { gameRegistry } from './game/gameRegistry';
 import useGameDiceAnimComplete from './game/useGameDiceAnimComplete';
 import useGameBoardSwipe from './game/useGameBoardSwipe';
@@ -35,9 +35,6 @@ export default function GameScreen({ route, navigation }) {
   const { width: windowW, height: windowH } = useWindowDimensions();
   const shortestSide = Math.min(windowW, windowH);
   const isTabletLayout = shortestSide >= 540;
-  const isLandscape = windowW > windowH;
-  /** На планшете нарды только в портрете; в альбоме — только чат */
-  const showBackgammonBoard = !isTabletLayout || !isLandscape;
 
   const roomId = route.params?.roomId;
   const selfPlay = route.params?.selfPlay === true;
@@ -197,7 +194,6 @@ export default function GameScreen({ route, navigation }) {
     chatInputTopYRef,
     pauseJsForDiceThrow,
     computeMaxSlide,
-    runCloseSequence,
     islandState,
     activeGameId,
     pickerHeightAnim,
@@ -255,12 +251,6 @@ export default function GameScreen({ route, navigation }) {
     const t = setTimeout(() => computeMaxSlide(), 80);
     return () => clearTimeout(t);
   }, [windowW, windowH, computeMaxSlide]);
-
-  useEffect(() => {
-    if (!showBackgammonBoard && boardContentActive) {
-      runCloseSequence();
-    }
-  }, [showBackgammonBoard, boardContentActive, runCloseSequence]);
 
   useFocusEffect(
     useCallback(() => {
@@ -346,7 +336,6 @@ export default function GameScreen({ route, navigation }) {
     (gameState.remainingMoves.length === 0 || shouldAutoEndTurn(gameState));
 
   const showFingerHint =
-    showBackgammonBoard &&
     swipeHintLoaded &&
     !swipeHintSeen &&
     !gameStarted &&
@@ -354,7 +343,9 @@ export default function GameScreen({ route, navigation }) {
     boardMounted &&
     !showAnimDice;
 
-  const boardMaxW = isTabletLayout ? 720 : undefined;
+  const boardMaxW = isTabletLayout
+    ? PHONE_GAME_ISLAND_W - BOARD_SIDE_GAP * 2
+    : undefined;
   const [boardColW, setBoardColW] = useState(0);
   const { stripWidthAnim, boardRenderW } = useGameBoardHandleStyles({
     handleStretchAnim,
@@ -382,7 +373,7 @@ export default function GameScreen({ route, navigation }) {
           />
         )}
         {/* Board column */}
-        {showBackgammonBoard && !kbVisible && !emojiPickerVisible && (
+        {!kbVisible && !emojiPickerVisible && (
           <GameIslandShell
             boardColRef={boardColRef}
             boardTopOffset={boardTopOffset}

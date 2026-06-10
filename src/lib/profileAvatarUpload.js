@@ -40,20 +40,22 @@ export async function uploadProfileAvatarFromLocalUri(localUri) {
   }
 
   const updatedAt = new Date().toISOString();
-  const { error: profileErr } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from('profiles')
     .update({
       avatar_path: path,
       avatar_updated_at: updatedAt,
     })
-    .eq('id', userId);
+    .eq('id', userId)
+    .select('avatar_updated_at')
+    .single();
 
-  if (profileErr) {
-    if (__DEV__) console.warn('[profileAvatar] profiles update:', profileErr.message);
+  if (profileErr || !profile) {
+    if (__DEV__) console.warn('[profileAvatar] profiles update:', profileErr?.message);
     throw new Error('UPLOAD_FAILED');
   }
 
-  return { path, updatedAt };
+  return { path, updatedAt: profile.avatar_updated_at ?? updatedAt };
 }
 
 /** @param {string | undefined} code */

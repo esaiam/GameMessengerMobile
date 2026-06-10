@@ -120,7 +120,7 @@ const MessageRow = React.memo(
     const handleImagePress = useDoubleTapPress(
       (e) => {
         if (listExtra.selectionMode) onMessagePress(e, item);
-        else env.setFullScreenImage?.(item.media_url);
+        else env.setFullScreenImage?.({ uris: [item.media_url], index: 0 });
       },
       fireHeartReaction,
     );
@@ -435,7 +435,7 @@ const MessageRow = React.memo(
               selectionMode={listExtra.selectionMode}
               item={item}
               onMessagePress={onMessagePress}
-              onOpenImage={(uri) => env.setFullScreenImage?.(uri)}
+              onOpenImage={(i) => env.setFullScreenImage?.({ uris: item.media_urls, index: i })}
               onDoubleTapHeart={fireHeartReaction}
               onCaptionPress={handleMessagePress}
               onLongPress={emitMessageLongPress}
@@ -778,6 +778,7 @@ const GRID_RADIUS = 8;
 
 function ChatMultiImageGridCell({
   uri,
+  imageIndex,
   width,
   height,
   borderRadii,
@@ -793,7 +794,7 @@ function ChatMultiImageGridCell({
   const handlePress = useDoubleTapPress(
     (e) => {
       if (selectionMode) onMessagePress(e, item);
-      else onOpenImage(uri);
+      else onOpenImage(imageIndex);
     },
     onDoubleTapHeart,
   );
@@ -861,6 +862,7 @@ function ChatMultiImageGrid({
       <View style={[multiImageGridStyles.row, { width: gridW }]}>
         <ChatMultiImageGridCell
           uri={urls[0]}
+          imageIndex={0}
           width={half}
           height={half}
           borderRadii={{ borderTopLeftRadius: R, borderBottomLeftRadius: R }}
@@ -868,6 +870,7 @@ function ChatMultiImageGrid({
         />
         <ChatMultiImageGridCell
           uri={urls[1]}
+          imageIndex={1}
           width={half}
           height={half}
           borderRadii={{ borderTopRightRadius: R, borderBottomRightRadius: R }}
@@ -880,6 +883,7 @@ function ChatMultiImageGrid({
       <View style={{ width: gridW, gap: GRID_GAP }}>
         <ChatMultiImageGridCell
           uri={urls[0]}
+          imageIndex={0}
           width={gridW}
           height={half}
           borderRadii={{ borderTopLeftRadius: R, borderTopRightRadius: R }}
@@ -888,6 +892,7 @@ function ChatMultiImageGrid({
         <View style={multiImageGridStyles.row}>
           <ChatMultiImageGridCell
             uri={urls[1]}
+            imageIndex={1}
             width={half}
             height={half}
             borderRadii={{ borderBottomLeftRadius: R }}
@@ -895,6 +900,7 @@ function ChatMultiImageGrid({
           />
           <ChatMultiImageGridCell
             uri={urls[2]}
+            imageIndex={2}
             width={half}
             height={half}
             borderRadii={{ borderBottomRightRadius: R }}
@@ -911,6 +917,7 @@ function ChatMultiImageGrid({
         <View style={multiImageGridStyles.row}>
           <ChatMultiImageGridCell
             uri={visible[0]}
+            imageIndex={0}
             width={half}
             height={half}
             borderRadii={{ borderTopLeftRadius: R }}
@@ -918,6 +925,7 @@ function ChatMultiImageGrid({
           />
           <ChatMultiImageGridCell
             uri={visible[1]}
+            imageIndex={1}
             width={half}
             height={half}
             borderRadii={{ borderTopRightRadius: R }}
@@ -927,6 +935,7 @@ function ChatMultiImageGrid({
         <View style={multiImageGridStyles.row}>
           <ChatMultiImageGridCell
             uri={visible[2]}
+            imageIndex={2}
             width={half}
             height={half}
             borderRadii={{ borderBottomLeftRadius: R }}
@@ -934,6 +943,7 @@ function ChatMultiImageGrid({
           />
           <ChatMultiImageGridCell
             uri={visible[3]}
+            imageIndex={3}
             width={half}
             height={half}
             borderRadii={{ borderBottomRightRadius: R }}

@@ -3,7 +3,7 @@
 > **Для агента:** если пользователь спрашивает про готовность к MVP, бете или «что осталось» — **сначала прочитай этот файл**, затем `RELEASE_PREP.md`, `BETA_BRIEF.md`, `PROD_SECURITY_CHECKLIST.md`.  
 > **Обновляй этот файл** после крупных вех (APK, VPS, P1).
 
-**Последнее обновление:** 2026-05-26
+**Последнее обновление:** 2026-06-10
 
 ---
 
@@ -69,11 +69,12 @@
 ## P1 — после первой волны беты (не блокирует старт)
 
 - Sentry + Error Boundary  
-- Блокировка и DM policy **на сервере** (сейчас AsyncStorage)  
-- Удаление аккаунта: cascade `auth.users` + storage  
+- **DM policy** на сервере (сейчас только AsyncStorage, `profileSettings.js`)  
+- ~~Блокировка на сервере~~ — **сделано:** `blocked_peers` + `blockedContacts.js` (миграция legacy AsyncStorage)  
+- Удаление аккаунта: клиент → RPC `delete_user_account`; сверить cascade `auth.users` + storage на prod  
 - E2E UI (Maestro), CI `smoke` на PR  
 - Переименовать таб Poker (Tamagotchi)  
-- Переслать / закрепить — реализовать или убрать из меню  
+- **Переслать** — заглушка; **закрепить** — уже в чате (`useChatPinnedMessage`)  
 
 ---
 

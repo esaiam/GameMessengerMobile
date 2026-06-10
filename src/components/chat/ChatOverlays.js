@@ -57,7 +57,8 @@ export default function ChatOverlays({
       <ChatUploadOverlay visible={uploading} />
       <ChatFullScreenImageModal
         uiReady={uiReady}
-        uri={fullScreenImage}
+        uris={fullScreenImage?.uris ?? []}
+        initialIndex={fullScreenImage?.index ?? 0}
         onClose={onCloseFullScreenImage}
       />
       <ChatCalendarOverlay
