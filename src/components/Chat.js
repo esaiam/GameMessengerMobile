@@ -21,7 +21,6 @@ import { useChatMediaPlayback } from '../hooks/useChatMediaPlayback';
 import ChatRoomHeader, { ICON_SELECTION_ACTION } from './ChatRoomHeader';
 import ChatOverlays from './chat/ChatOverlays';
 import { EphemeralClockContext } from './chat/ephemeralClockContext';
-import { configureReplyTargetLayoutAnimation } from './chat/replyTargetLayoutAnimation';
 import useChatMessageListRender from './chat/useChatMessageListRender';
 import ChatMessageList from './chat/ChatMessageList';
 import ChatComposer from './chat/ChatComposer';
@@ -78,6 +77,7 @@ import useChatPinnedMessage from './chat/useChatPinnedMessage';
 import ChatPinnedBar, { CHAT_PINNED_BAR_H } from './chat/ChatPinnedBar';
 import useChatInputSettling from './chat/useChatInputSettling';
 import useChatOverlayState from './chat/useChatOverlayState';
+import useChatCoreComposerState from './chat/useChatCoreComposerState';
 import { formatDateKey } from './chat/chatMessageListFormat';
 import { useNavigation } from '@react-navigation/native';
 import { deleteChatsFromList } from '../lib/hideRoomMessagesForDelete';
@@ -120,21 +120,51 @@ export default function Chat({
   const inputBarRef = useRef(null);
   const lastComposerLayoutHRef = useRef(0);
   const pendingComposerHeightRef = useRef(null);
-  const [internalMessages, setInternalMessages] = useState([]);
-  const ariaControlled =
-    isAriaChat === true && typeof setAriaMessages === 'function' && Array.isArray(ariaMessages);
-  const messages = ariaControlled ? ariaMessages : internalMessages;
-  const setMessages = ariaControlled ? setAriaMessages : setInternalMessages;
-  const [messagesLoading, setMessagesLoading] = useState(true);
-  const [initialHistoryReady, setInitialHistoryReady] = useState(isAriaChat);
-  const [text, setText] = useState('');
-  const [replyTo, setReplyTo] = useState(null);
-  const [visibleReplyTo, setVisibleReplyTo] = useState(null);
-  const [editTarget, setEditTarget] = useState(null);
-  const [visibleEditTarget, setVisibleEditTarget] = useState(null);
+
+  const {
+    ariaControlled,
+    messages,
+    setMessages,
+    messagesLoading,
+    setMessagesLoading,
+    initialHistoryReady,
+    setInitialHistoryReady,
+    text,
+    setText,
+    replyTo,
+    visibleReplyTo,
+    setVisibleReplyTo,
+    editTarget,
+    setEditTarget,
+    visibleEditTarget,
+    setVisibleEditTarget,
+    ephemeralSec,
+    setEphemeralSec,
+    setDeletingIds,
+    deletingIdsRef,
+    showEmojiPicker,
+    setShowEmojiPicker,
+    emojiPanelGifQuery,
+    setEmojiPanelGifQuery,
+    emojiPanelGifSearchFocused,
+    setEmojiPanelGifSearchFocused,
+    isRecordingVoice,
+    setIsRecordingVoice,
+    uploading,
+    setUploading,
+    setReplyTarget,
+    cancelEditMessage,
+    startEditMessage,
+  } = useChatCoreComposerState({
+    roomId,
+    isAriaChat,
+    ariaMessages,
+    setAriaMessages,
+    nickname,
+    onEmojiPickerChange,
+  });
+
   const [unlockedVideoIds, setUnlockedVideoIds] = useState(() => new Set());
-  const [ephemeralSec, setEphemeralSec] = useState(null);
-  const [deletingIds, setDeletingIds] = useState(() => new Set());
 
   const {
     menuVisible,
@@ -163,18 +193,6 @@ export default function Chat({
     onOpenMessageMenu,
   } = useChatOverlayState();
 
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [emojiPanelGifQuery, setEmojiPanelGifQuery] = useState('');
-  const [emojiPanelGifSearchFocused, setEmojiPanelGifSearchFocused] = useState(false);
-  useEffect(() => { onEmojiPickerChange?.(showEmojiPicker); }, [showEmojiPicker, onEmojiPickerChange]);
-  useEffect(() => {
-    if (!showEmojiPicker) {
-      setEmojiPanelGifQuery('');
-      setEmojiPanelGifSearchFocused(false);
-    }
-  }, [showEmojiPicker]);
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [headerOverlayH, setHeaderOverlayH] = useState(0);
   const [pinnedBarH, setPinnedBarH] = useState(0);
   const [ariaGaugesH, setAriaGaugesH] = useState(48);
@@ -213,34 +231,6 @@ export default function Chat({
     activeVoiceUri,
     roomId,
   });
-
-  const setReplyTarget = useCallback((nextReply) => {
-    configureReplyTargetLayoutAnimation();
-    if (nextReply) setEditTarget(null);
-    setReplyTo(nextReply);
-  }, []);
-
-  const cancelEditMessage = useCallback(() => {
-    configureReplyTargetLayoutAnimation();
-    setEditTarget(null);
-    setText('');
-  }, []);
-
-  const startEditMessage = useCallback((msg) => {
-    if (!canEditMessage(msg, nickname, isAriaChat)) return;
-    configureReplyTargetLayoutAnimation();
-    setReplyTarget(null);
-    setEditTarget(msg);
-    setText(msg.text || '');
-  }, [nickname, isAriaChat, setReplyTarget, setText]);
-
-  useEffect(() => {
-    setEditTarget(null);
-  }, [roomId]);
-
-  useEffect(() => {
-    setInitialHistoryReady(isAriaChat);
-  }, [roomId, isAriaChat]);
 
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -373,11 +363,6 @@ export default function Chat({
     });
     return () => cancelAnimationFrame(raf);
   }, [editTarget?.id]);
-
-  const deletingIdsRef = useRef(deletingIds);
-  useEffect(() => {
-    deletingIdsRef.current = deletingIds;
-  }, [deletingIds]);
 
   const composerStackHeightShared = useSharedValue(estimateComposerStackHeight(insets));
 
@@ -755,7 +740,7 @@ export default function Chat({
       onInitialPageLoaded(fetchedCount);
       setInitialHistoryReady(true);
     },
-    [onInitialPageLoaded],
+    [onInitialPageLoaded, setInitialHistoryReady],
   );
 
   const onRoomDeleted = useCallback(() => {
