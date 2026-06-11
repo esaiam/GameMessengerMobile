@@ -1,25 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  useWindowDimensions,
-} from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MessageCircle, User } from '../icons/lucideIcons';
-import { UserAvatar } from '../components/UserAvatar';
-import { GAME_NO_OVERSCROLL_PROPS, V } from '../theme';
 import TabBackground from '../components/TabBackground';
 import {
-  MESSENGER_HEADER_PADDING_HORIZONTAL,
   useMessengerHeaderLayout,
 } from '../components/MessengerHeaderLayout';
 import {
-  HEADER_MINI_AVATAR_SIZE,
-  PROFILE_AVATAR_SIZE,
   PROFILE_COLLAPSE_DISTANCE,
   useProfileCollapseHeader,
 } from '../hooks/useProfileCollapseHeader';
@@ -35,9 +24,10 @@ import ContactProfileMediaSection from '../components/contactProfile/ContactProf
 import ContactProfileMediaViewerModal from '../components/contactProfile/ContactProfileMediaViewerModal';
 import ContactProfileOverflowMenuModal from '../components/contactProfile/ContactProfileOverflowMenuModal';
 import ContactProfileEditContactModal from '../components/contactProfile/ContactProfileEditContactModal';
-import ContactProfileActionButton from '../components/contactProfile/ContactProfileActionButton';
 import ContactProfileHeaderBar from '../components/contactProfile/ContactProfileHeaderBar';
+import ContactProfileFloatingChrome from '../components/contactProfile/ContactProfileFloatingChrome';
 import { styles } from './contactProfile/contactProfileScreenStyles';
+import { GAME_NO_OVERSCROLL_PROPS } from '../theme';
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import { CHATS_HEADER_GLOW_STOP_CENTER } from '../components/chats/ChatsHeaderGlow';
 
@@ -273,159 +263,36 @@ export default function ContactProfileScreen({ route, navigation }) {
           </Animated.View>
         </Animated.ScrollView>
 
-        <View style={styles.floatingLayerUnder} pointerEvents="box-none">
-          <Animated.View
-            pointerEvents="box-none"
-            style={[
-              styles.actionsFloat,
-              {
-                top: actionsFloatTop,
-                left: MESSENGER_HEADER_PADDING_HORIZONTAL,
-                right: MESSENGER_HEADER_PADDING_HORIZONTAL,
-              },
-              actionsFloatStyle,
-            ]}
-          >
-            <View style={styles.actionsRow}>
-              <ContactProfileActionButton
-                icon={<MessageCircle size={14} color={V.accentSage} strokeWidth={1.5} />}
-                label="Сообщение"
-                onPress={goBackToChat}
-                disabled={busy || blocked}
-              />
-              <ContactProfileActionButton
-                icon={<User size={14} color={V.textSecondary} strokeWidth={1.5} />}
-                label="Контакты"
-                onPress={goToContactsTab}
-                disabled={busy}
-              />
-            </View>
-          </Animated.View>
-
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.statusFloat, { top: statusStartY }, statusStyle]}
-          >
-            <View style={styles.statusRow}>
-              <View
-                style={[
-                  styles.statusDot,
-                  { backgroundColor: contactOnline ? V.accentSage : V.textMuted },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.statusText,
-                  { color: contactOnline ? V.accentSage : V.textMuted },
-                ]}
-              >
-                {contactOnline ? 'в сети' : 'не в сети'}
-              </Text>
-            </View>
-          </Animated.View>
-        </View>
-
-        <Animated.View
-          pointerEvents="box-none"
-          style={[
-            styles.avatarFloat,
-            {
-              top: avatarTop,
-              left: (profileLayoutW - PROFILE_AVATAR_SIZE) / 2,
-              width: PROFILE_AVATAR_SIZE,
-              height: PROFILE_AVATAR_SIZE,
-              overflow: 'visible',
-            },
-            avatarWrapStyle,
-          ]}
-          collapsable={false}
-        >
-          <View style={styles.avatarCluster}>
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.avatarGlowOutlineInner,
-                avatarGlowRingStyle,
-              ]}
-            />
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.avatarGlowOutlineOuter,
-                avatarGlowRingSoftStyle,
-              ]}
-            />
-            <Animated.View style={[styles.avatarGlowRing, avatarGlowStyle]}>
-              <UserAvatar name={displayName} uri={peerAvatarUri} size={PROFILE_AVATAR_SIZE} />
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.avatarGlowFill, avatarGlowFillStyle]}
-              />
-            </Animated.View>
-          </View>
-        </Animated.View>
-
-        <Animated.View
-          style={[styles.nameHeaderChrome, nameHeaderChromeStackStyle]}
-          pointerEvents="box-none"
-        >
-          <Animated.Text
-            pointerEvents="none"
-            style={[
-              styles.nameFloat,
-              { top: nameStartY, left: profileLayoutW / 2, color: V.textPrimary },
-              nameStyle,
-            ]}
-            numberOfLines={1}
-            onLayout={onNameLayout}
-          >
-            {displayName}
-          </Animated.Text>
-
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.headerStatusFloat,
-              { top: headerStatusTop, left: headerNameLeft },
-              headerStatusStyle,
-            ]}
-          >
-            <View style={styles.headerStatusRow}>
-              <View
-                style={[
-                  styles.statusDot,
-                  { backgroundColor: contactOnline ? V.accentSage : V.textMuted },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.headerStatusText,
-                  { color: contactOnline ? V.accentSage : V.textMuted },
-                ]}
-              >
-                {contactOnline ? 'в сети' : 'не в сети'}
-              </Text>
-            </View>
-          </Animated.View>
-
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.headerMiniAvatar,
-              {
-                left: headerMiniAvatarLeft,
-                top: headerMiniAvatarTop,
-              },
-              headerMiniAvatarStyle,
-            ]}
-          >
-            <UserAvatar
-              name={displayName}
-              uri={peerAvatarUri}
-              size={HEADER_MINI_AVATAR_SIZE}
-            />
-          </Animated.View>
-        </Animated.View>
+        <ContactProfileFloatingChrome
+          profileLayoutW={profileLayoutW}
+          contactOnline={contactOnline}
+          displayName={displayName}
+          peerAvatarUri={peerAvatarUri}
+          busy={busy}
+          blocked={blocked}
+          onMessage={goBackToChat}
+          onContacts={goToContactsTab}
+          actionsFloatTop={actionsFloatTop}
+          actionsFloatStyle={actionsFloatStyle}
+          statusStartY={statusStartY}
+          statusStyle={statusStyle}
+          avatarTop={avatarTop}
+          avatarWrapStyle={avatarWrapStyle}
+          avatarGlowStyle={avatarGlowStyle}
+          avatarGlowFillStyle={avatarGlowFillStyle}
+          avatarGlowRingStyle={avatarGlowRingStyle}
+          avatarGlowRingSoftStyle={avatarGlowRingSoftStyle}
+          nameStartY={nameStartY}
+          nameStyle={nameStyle}
+          headerStatusStyle={headerStatusStyle}
+          onNameLayout={onNameLayout}
+          headerNameLeft={headerNameLeft}
+          headerStatusTop={headerStatusTop}
+          headerMiniAvatarLeft={headerMiniAvatarLeft}
+          headerMiniAvatarTop={headerMiniAvatarTop}
+          headerMiniAvatarStyle={headerMiniAvatarStyle}
+          nameHeaderChromeStackStyle={nameHeaderChromeStackStyle}
+        />
       </Animated.View>
 
       <ContactProfileOverflowMenuModal
