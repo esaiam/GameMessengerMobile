@@ -2,17 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
-  Platform,
-  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, EllipsisVertical, MessageCircle, User, X, Trash2 } from '../icons/lucideIcons';
+import { MessageCircle, User } from '../icons/lucideIcons';
 import { UserAvatar } from '../components/UserAvatar';
 import { GAME_NO_OVERSCROLL_PROPS, V } from '../theme';
 import TabBackground from '../components/TabBackground';
@@ -20,12 +17,6 @@ import {
   MESSENGER_HEADER_PADDING_HORIZONTAL,
   useMessengerHeaderLayout,
 } from '../components/MessengerHeaderLayout';
-import SafeBlurView from '../components/SafeBlurView';
-import {
-  CHAT_HEADER_BLUR_INTENSITY_ANDROID,
-  CHAT_HEADER_BLUR_INTENSITY_IOS,
-  ICON_SELECTION_ACTION,
-} from '../components/ChatRoomHeader';
 import {
   HEADER_MINI_AVATAR_SIZE,
   PROFILE_AVATAR_SIZE,
@@ -45,6 +36,7 @@ import ContactProfileMediaViewerModal from '../components/contactProfile/Contact
 import ContactProfileOverflowMenuModal from '../components/contactProfile/ContactProfileOverflowMenuModal';
 import ContactProfileEditContactModal from '../components/contactProfile/ContactProfileEditContactModal';
 import ContactProfileActionButton from '../components/contactProfile/ContactProfileActionButton';
+import ContactProfileHeaderBar from '../components/contactProfile/ContactProfileHeaderBar';
 import { styles } from './contactProfile/contactProfileScreenStyles';
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import { CHATS_HEADER_GLOW_STOP_CENTER } from '../components/chats/ChatsHeaderGlow';
@@ -215,108 +207,16 @@ export default function ContactProfileScreen({ route, navigation }) {
         style={[styles.flexRoot, profileChromeStackStyle]}
         onLayout={handleProfilePaneLayout}
       >
-        <View style={[headerLayout.containerStyle, styles.headerBar]}>
-          <SafeBlurView
-            intensity={
-              Platform.OS === 'ios' ? CHAT_HEADER_BLUR_INTENSITY_IOS : CHAT_HEADER_BLUR_INTENSITY_ANDROID
-            }
-            tint="dark"
-            blurReductionFactor={Platform.OS === 'android' ? 4.5 : 3.5}
-            style={StyleSheet.absoluteFillObject}
-          />
-          <View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFillObject,
-              styles.headerBarFrostTint,
-            ]}
-          />
-          <View
-            style={[
-              styles.headerNavRow,
-              { minHeight: headerLayout.contentMinHeight },
-            ]}
-          >
-            {mediaSelectionMode ? (
-              <>
-                <TouchableOpacity
-                  onPress={exitMediaSelection}
-                  disabled={busy}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Отменить выделение"
-                  style={styles.headerBackTouch}
-                >
-                  <View style={styles.headerIconWrap}>
-                    <X size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
-                  </View>
-                </TouchableOpacity>
-                <Text style={[styles.headerSelectionCount, { color: V.textPrimary }]}>
-                  {selectedMediaIds.size}
-                </Text>
-                <TouchableOpacity
-                  onPress={handleDeleteSelectedMedia}
-                  disabled={busy || selectedMediaIds.size === 0}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Удалить выбранное"
-                  style={[
-                    styles.headerSelectionDeleteTouch,
-                    (busy || selectedMediaIds.size === 0) && styles.headerActionDisabled,
-                  ]}
-                >
-                  {busy ? (
-                    <ActivityIndicator size="small" color={V.accentSage} />
-                  ) : (
-                    <Trash2 size={ICON_SELECTION_ACTION} color={V.textPrimary} strokeWidth={1.5} />
-                  )}
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity
-                  onPress={goBackToChat}
-                  disabled={busy}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Назад"
-                  style={[styles.headerBackTouch, busy && styles.headerActionDisabled]}
-                >
-                  <View style={styles.headerIconWrap}>
-                    <ArrowLeft
-                      size={ICON_SELECTION_ACTION}
-                      color={V.textPrimary}
-                      strokeWidth={1.5}
-                    />
-                  </View>
-                </TouchableOpacity>
-                <View style={styles.headerMenuSlot}>
-                  <TouchableOpacity
-                    onPress={() => setOverflowMenuVisible(true)}
-                    disabled={busy}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Меню профиля"
-                    style={[
-                      styles.headerMenuTouch,
-                      busy && styles.headerActionDisabled,
-                    ]}
-                  >
-                    {busy ? (
-                      <ActivityIndicator size="small" color={V.accentSage} />
-                    ) : (
-                      <EllipsisVertical
-                        size={ICON_SELECTION_ACTION}
-                        color={V.textPrimary}
-                        strokeWidth={1.5}
-                      />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
+        <ContactProfileHeaderBar
+          headerLayout={headerLayout}
+          mediaSelectionMode={mediaSelectionMode}
+          selectedCount={selectedMediaIds.size}
+          busy={busy}
+          onBack={goBackToChat}
+          onOpenMenu={() => setOverflowMenuVisible(true)}
+          onExitSelection={exitMediaSelection}
+          onDeleteSelected={handleDeleteSelectedMedia}
+        />
 
         <Animated.View
           pointerEvents="none"
