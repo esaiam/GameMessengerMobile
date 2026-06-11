@@ -4,7 +4,6 @@ import {
   cancelAnimation,
   Extrapolation,
   interpolate,
-  interpolateColor,
   runOnUI,
   scrollTo,
   useAnimatedReaction,
@@ -18,16 +17,6 @@ import { MESSENGER_HEADER_PADDING_HORIZONTAL } from '../components/MessengerHead
 import { useMainTabsNavigationOptional } from '../context/MainTabsNavigationContext';
 import {
   ACTIONS_LIFT_SPEED,
-  ACTIONS_PARALLAX_FAST,
-  ACTIONS_PARALLAX_SLOW,
-  AVATAR_BORDER_SAGE,
-  AVATAR_BORDER_SAGE_PEAK,
-  AVATAR_GLOW_FILL_MAX,
-  AVATAR_GLOW_HEADER_PEAK_SCROLL,
-  AVATAR_GLOW_RING_OPACITY_RAMP,
-  AVATAR_GLOW_RING_RAMP,
-  AVATAR_GLOW_RING_SCALE_RAMP,
-  AVATAR_GLOW_SCROLL_PEAK,
   HEADER_MINI_AVATAR_SIZE,
   NAME_ABOVE_HEADER_Z,
   NAME_ARC_RADIUS,
@@ -41,12 +30,9 @@ import {
   PROFILE_CHROME_Z_BELOW_FLOAT,
   PROFILE_COLLAPSE_DISTANCE,
 } from './profileCollapse/profileCollapseConstants';
-import {
-  avatarGlowIntensity,
-  avatarGlowTailFade,
-  glowHeaderNameFade,
-} from './profileCollapse/profileCollapseWorklets';
+import { glowHeaderNameFade } from './profileCollapse/profileCollapseWorklets';
 import { calcSnapTarget, snapHeaderSpring } from './profileCollapse/profileCollapseSnap';
+import { useProfileCollapseAvatarStyles } from './profileCollapse/useProfileCollapseAvatarStyles';
 import { useProfileCollapseScrollMetrics } from './profileCollapse/useProfileCollapseScrollMetrics';
 
 export {
@@ -74,29 +60,6 @@ export function useProfileCollapseHeader({
   const collapseP = useDerivedValue(() =>
     Math.min(Math.max(scrollY.value / PROFILE_COLLAPSE_DISTANCE, 0), 1),
   );
-
-  /** Профиль контакта: 0→80px вполскорости, затем догоняет контент до collapse. */
-  const avatarParallaxY = useDerivedValue(() => {
-    if (!withAvatarScrollGlow) return 0;
-    const y = scrollY.value;
-    if (y <= AVATAR_GLOW_SCROLL_PEAK) {
-      return -y * 0.5;
-    }
-    return -AVATAR_GLOW_SCROLL_PEAK * 0.5 - (y - AVATAR_GLOW_SCROLL_PEAK) * 1.5;
-  });
-
-  /** Кнопки над аватаром: быстрее уходят под шапку (parallax). */
-  const actionsParallaxY = useDerivedValue(() => {
-    if (!withAvatarScrollGlow) return 0;
-    const y = scrollY.value;
-    if (y <= AVATAR_GLOW_SCROLL_PEAK) {
-      return -y * ACTIONS_PARALLAX_SLOW;
-    }
-    return (
-      -AVATAR_GLOW_SCROLL_PEAK * ACTIONS_PARALLAX_SLOW -
-      (y - AVATAR_GLOW_SCROLL_PEAK) * ACTIONS_PARALLAX_FAST
-    );
-  });
 
   const scrollDragRef = useRef(false);
   const dragVyRef = useRef(0);
@@ -132,6 +95,21 @@ export function useProfileCollapseHeader({
     avatarTopExtra,
   });
 
+  const {
+    avatarParallaxY,
+    actionsParallaxY,
+    avatarWrapStyle,
+    avatarGlowStyle,
+    avatarGlowFillStyle,
+    avatarGlowRingStyle,
+    avatarGlowRingSoftStyle,
+  } = useProfileCollapseAvatarStyles({
+    scrollY,
+    collapseP,
+    withAvatarScrollGlow,
+    avatarLiftY,
+  });
+
   const scrollSnapHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       if (!snapDriving.value) {
@@ -148,91 +126,6 @@ export function useProfileCollapseHeader({
       }
     },
   );
-
-  const avatarWrapStyle = useAnimatedStyle(() => {
-    const p = collapseP.value;
-    const lift = Math.sin(p * Math.PI * 0.5);
-    return {
-      opacity: interpolate(p, [0, 0.75, 1], [1, 0.4, 0], Extrapolation.CLAMP),
-      transform: [
-        { translateY: -avatarLiftY * lift + avatarParallaxY.value },
-        { scale: interpolate(p, [0, 1], [1, 0.42]) },
-      ],
-    };
-  });
-
-  const avatarGlowStyle = useAnimatedStyle(() => {
-    if (!withAvatarScrollGlow) return {};
-    const y = scrollY.value;
-    const peak = AVATAR_GLOW_HEADER_PEAK_SCROLL;
-    if (y <= peak) {
-      return {
-        borderColor: interpolateColor(y, [0, peak], [
-          AVATAR_BORDER_SAGE,
-          AVATAR_BORDER_SAGE_PEAK,
-        ]),
-      };
-    }
-    return {
-      borderColor: interpolateColor(y, [peak, PROFILE_COLLAPSE_DISTANCE], [
-        AVATAR_BORDER_SAGE_PEAK,
-        AVATAR_BORDER_SAGE,
-      ]),
-    };
-  });
-
-  const avatarGlowFillStyle = useAnimatedStyle(() => {
-    if (!withAvatarScrollGlow) return { opacity: 0 };
-    const y = scrollY.value;
-    const p = collapseP.value;
-    return {
-      opacity: avatarGlowIntensity(y) * avatarGlowTailFade(p) * AVATAR_GLOW_FILL_MAX,
-    };
-  });
-
-  const avatarGlowRingStyle = useAnimatedStyle(() => {
-    if (!withAvatarScrollGlow) return { opacity: 0 };
-    const y = scrollY.value;
-    const p = collapseP.value;
-    const glowOpacity = interpolate(
-      y,
-      AVATAR_GLOW_RING_RAMP,
-      AVATAR_GLOW_RING_OPACITY_RAMP,
-      Extrapolation.CLAMP,
-    );
-    const glowScale = interpolate(
-      y,
-      AVATAR_GLOW_RING_RAMP,
-      AVATAR_GLOW_RING_SCALE_RAMP,
-      Extrapolation.CLAMP,
-    );
-    return {
-      opacity: glowOpacity * avatarGlowTailFade(p),
-      transform: [{ scale: glowScale }],
-    };
-  });
-
-  const avatarGlowRingSoftStyle = useAnimatedStyle(() => {
-    if (!withAvatarScrollGlow) return { opacity: 0 };
-    const y = scrollY.value;
-    const p = collapseP.value;
-    const glowOpacity = interpolate(
-      y,
-      AVATAR_GLOW_RING_RAMP,
-      AVATAR_GLOW_RING_OPACITY_RAMP,
-      Extrapolation.CLAMP,
-    );
-    const glowScale = interpolate(
-      y,
-      AVATAR_GLOW_RING_RAMP,
-      AVATAR_GLOW_RING_SCALE_RAMP,
-      Extrapolation.CLAMP,
-    );
-    return {
-      opacity: glowOpacity * 0.3 * avatarGlowTailFade(p),
-      transform: [{ scale: glowScale }],
-    };
-  });
 
   const nameStyle = useAnimatedStyle(() => {
     if (withAvatarScrollGlow) {
