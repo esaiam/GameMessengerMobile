@@ -8,7 +8,6 @@ import {
   Platform,
   ActivityIndicator,
   BackHandler,
-  Share,
   useWindowDimensions,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -36,24 +35,12 @@ import {
   PROFILE_COLLAPSE_DISTANCE,
   useProfileCollapseHeader,
 } from '../hooks/useProfileCollapseHeader';
-import {
-  blockPeer,
-  unblockPeer,
-} from '../lib/blockedContacts';
-import { hideChatRoom } from '../lib/hiddenChats';
-import { requestChatsListReload } from '../lib/chatsListSync';
-import { hideAllRoomMessagesForMe, hideMessagesForMe } from '../lib/hideRoomMessagesForMe';
-import { setContactAlias } from '../lib/contactAliases';
-import { supabase } from '../lib/supabase';
-import { clearContactsListCache } from '../components/contacts/useContactsList';
-import { loadDialogsCache, saveDialogsCache } from '../utils/dialogsCache';
-import {
-  leaveContactProfileAfterDestructiveAction,
-  safeGoBackFromContactProfile,
-} from '../lib/safeGoBack';
+import { hideMessagesForMe } from '../lib/hideRoomMessagesForMe';
+import { safeGoBackFromContactProfile } from '../lib/safeGoBack';
 import { useContactProfileSwipeBack } from '../hooks/useContactProfileSwipeBack';
 import { useContactProfileRoomMedia } from '../hooks/useContactProfileRoomMedia';
 import { useContactProfileIdentity } from '../hooks/contactProfile/useContactProfileIdentity';
+import { useContactProfileActions } from '../hooks/contactProfile/useContactProfileActions';
 import ContactProfileMediaSection from '../components/contactProfile/ContactProfileMediaSection';
 import ContactProfileMediaViewerModal from '../components/contactProfile/ContactProfileMediaViewerModal';
 import ContactProfileOverflowMenuModal from '../components/contactProfile/ContactProfileOverflowMenuModal';
@@ -86,7 +73,6 @@ export default function ContactProfileScreen({ route, navigation }) {
   }, [isTablet, screenW]);
   const { items: mediaItems, loading: mediaLoading, reload: reloadMedia } =
     useContactProfileRoomMedia(roomId, nickname);
-  const [busy, setBusy] = useState(false);
   const {
     blocked,
     setBlocked,
@@ -95,6 +81,22 @@ export default function ContactProfileScreen({ route, navigation }) {
     displayName,
     peerAvatarUri,
   } = useContactProfileIdentity({ nickname, peerName });
+  const {
+    busy,
+    setBusy,
+    handleDeleteContact,
+    handleShareContact,
+    handleSaveContactAlias,
+    handleBlock,
+  } = useContactProfileActions({
+    nickname,
+    peerName,
+    roomId,
+    navigation,
+    blocked,
+    setBlocked,
+    setLocalDisplayName,
+  });
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [openedMediaId, setOpenedMediaId] = useState(null);
@@ -391,138 +393,9 @@ export default function ContactProfileScreen({ route, navigation }) {
     navigation.getParent()?.navigate('Contacts', { screen: 'ContactsHome' });
   };
 
-  const pruneDialogsCache = useCallback(async () => {
-    if (!nickname || !roomId) return;
-    const cached = await loadDialogsCache(nickname);
-    if (!cached?.length) return;
-    const next = cached.filter((r) => r.roomId !== roomId);
-    await saveDialogsCache(nickname, next);
-  }, [nickname, roomId]);
-
-  const runDeleteContact = useCallback(async () => {
-    if (!roomId || !nickname) {
-      Alert.alert('Ошибка', 'Нет комнаты для удаления контакта.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const { error } = await supabase.rpc('delete_contact_room', { room_id: roomId });
-      if (error) throw error;
-      await pruneDialogsCache();
-      clearContactsListCache(nickname);
-      leaveContactProfileAfterDestructiveAction(navigation);
-    } catch (e) {
-      Alert.alert('Ошибка', e?.message || 'Не удалось удалить контакт');
-    } finally {
-      setBusy(false);
-    }
-  }, [roomId, nickname, navigation, pruneDialogsCache]);
-
-  const handleDeleteContact = () => {
-    Alert.alert(
-      'Удалить контакт',
-      'Контакт и переписка будут скрыты только у вас.',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        { text: 'Удалить', style: 'destructive', onPress: runDeleteContact },
-      ],
-    );
-  };
-
-  const handleShareContact = useCallback(async () => {
-    if (!peerName) return;
-    let message = `Контакт в Vault Messenger: ${peerName}`;
-    try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('handle')
-        .eq('id', peerName)
-        .maybeSingle();
-      const handle = typeof data?.handle === 'string' ? data.handle.trim() : '';
-      if (handle) message = `Контакт в Vault Messenger: @${handle}`;
-    } catch {
-      /* share fallback */
-    }
-    try {
-      await Share.share({ message });
-    } catch {
-      /* user dismissed */
-    }
-  }, [peerName]);
-
   const handleEditContact = useCallback(() => {
     setEditContactVisible(true);
   }, []);
-
-  const handleSaveContactAlias = useCallback(
-    async (alias) => {
-      if (!nickname || !peerName) return;
-      setBusy(true);
-      try {
-        await setContactAlias(nickname, peerName, alias);
-        setLocalDisplayName(alias);
-      } catch (e) {
-        Alert.alert('Ошибка', e?.message || 'Не удалось сохранить имя');
-      } finally {
-        setBusy(false);
-      }
-    },
-    [nickname, peerName],
-  );
-
-  const runBlock = useCallback(async () => {
-    if (!peerName || !nickname) return;
-    setBusy(true);
-    try {
-      await blockPeer(nickname, peerName);
-      setBlocked(true);
-      if (roomId) {
-        await hideAllRoomMessagesForMe({ roomId, nickname });
-        await hideChatRoom(nickname, roomId);
-        await pruneDialogsCache();
-      }
-      requestChatsListReload();
-      Alert.alert('Готово', `${peerName} заблокирован.`);
-      leaveContactProfileAfterDestructiveAction(navigation, { afterBlock: true });
-    } catch (e) {
-      Alert.alert('Ошибка', e?.message || 'Не удалось заблокировать');
-    } finally {
-      setBusy(false);
-    }
-  }, [peerName, nickname, roomId, navigation, pruneDialogsCache]);
-
-  const runUnblock = useCallback(async () => {
-    if (!peerName || !nickname) return;
-    setBusy(true);
-    try {
-      await unblockPeer(nickname, peerName);
-      setBlocked(false);
-      requestChatsListReload();
-      Alert.alert('Готово', `${peerName} разблокирован.`);
-    } catch (e) {
-      Alert.alert('Ошибка', e?.message || 'Не удалось разблокировать');
-    } finally {
-      setBusy(false);
-    }
-  }, [peerName, nickname]);
-
-  const handleBlock = () => {
-    if (blocked) {
-      Alert.alert('Разблокировать', `Разблокировать ${peerName}?`, [
-        { text: 'Отмена', style: 'cancel' },
-        { text: 'Разблокировать', onPress: runUnblock },
-      ]);
-      return;
-    }
-    Alert.alert(
-      'Заблокировать',
-      `Заблокировать ${peerName}? Переписка скроется у вас.`,
-      [
-        { text: 'Отмена', style: 'cancel' },
-        { text: 'Заблокировать', style: 'destructive', onPress: runBlock },
-      ],
-    );
-  };
 
   const minScrollContentHeight =
     screenH - headerLayout.minHeight + PROFILE_COLLAPSE_DISTANCE + 32;
