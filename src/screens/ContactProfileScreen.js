@@ -6,13 +6,11 @@ import {
   StyleSheet,
   Platform,
   ActivityIndicator,
-  BackHandler,
   useWindowDimensions,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, EllipsisVertical, MessageCircle, User, X, Trash2 } from '../icons/lucideIcons';
 import { UserAvatar } from '../components/UserAvatar';
@@ -41,6 +39,7 @@ import { useContactProfileIdentity } from '../hooks/contactProfile/useContactPro
 import { useContactProfileActions } from '../hooks/contactProfile/useContactProfileActions';
 import { useContactProfileMediaSelection } from '../hooks/contactProfile/useContactProfileMediaSelection';
 import { useContactProfileMediaViewer } from '../hooks/contactProfile/useContactProfileMediaViewer';
+import { useContactProfileHardwareBack } from '../hooks/contactProfile/useContactProfileHardwareBack';
 import ContactProfileMediaSection from '../components/contactProfile/ContactProfileMediaSection';
 import ContactProfileMediaViewerModal from '../components/contactProfile/ContactProfileMediaViewerModal';
 import ContactProfileOverflowMenuModal from '../components/contactProfile/ContactProfileOverflowMenuModal';
@@ -136,24 +135,13 @@ export default function ContactProfileScreen({ route, navigation }) {
   const [overflowMenuVisible, setOverflowMenuVisible] = useState(false);
   const [editContactVisible, setEditContactVisible] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      const onHardwareBack = () => {
-        if (viewerVisible) {
-          mediaViewerRef.current?.close();
-          return true;
-        }
-        if (mediaSelectionMode) {
-          exitMediaSelection();
-          return true;
-        }
-        safeGoBackFromContactProfile(navigation);
-        return true;
-      };
-      const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
-      return () => sub.remove();
-    }, [navigation, viewerVisible, mediaSelectionMode, exitMediaSelection]),
-  );
+  useContactProfileHardwareBack({
+    navigation,
+    viewerVisible,
+    mediaViewerRef,
+    mediaSelectionMode,
+    exitMediaSelection,
+  });
 
   const {
     scrollRef,
