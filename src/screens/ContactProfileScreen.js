@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector } from 'react-native-gesture-handler';
@@ -20,14 +20,13 @@ import { useContactProfileActions } from '../hooks/contactProfile/useContactProf
 import { useContactProfileMediaSelection } from '../hooks/contactProfile/useContactProfileMediaSelection';
 import { useContactProfileMediaViewer } from '../hooks/contactProfile/useContactProfileMediaViewer';
 import { useContactProfileHardwareBack } from '../hooks/contactProfile/useContactProfileHardwareBack';
-import ContactProfileMediaSection from '../components/contactProfile/ContactProfileMediaSection';
+import ContactProfileHeaderBar from '../components/contactProfile/ContactProfileHeaderBar';
+import ContactProfileFloatingChrome from '../components/contactProfile/ContactProfileFloatingChrome';
+import ContactProfileScrollBody from '../components/contactProfile/ContactProfileScrollBody';
 import ContactProfileMediaViewerModal from '../components/contactProfile/ContactProfileMediaViewerModal';
 import ContactProfileOverflowMenuModal from '../components/contactProfile/ContactProfileOverflowMenuModal';
 import ContactProfileEditContactModal from '../components/contactProfile/ContactProfileEditContactModal';
-import ContactProfileHeaderBar from '../components/contactProfile/ContactProfileHeaderBar';
-import ContactProfileFloatingChrome from '../components/contactProfile/ContactProfileFloatingChrome';
 import { styles } from './contactProfile/contactProfileScreenStyles';
-import { GAME_NO_OVERSCROLL_PROPS } from '../theme';
 import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 import { CHATS_HEADER_GLOW_STOP_CENTER } from '../components/chats/ChatsHeaderGlow';
 
@@ -224,44 +223,28 @@ export default function ContactProfileScreen({ route, navigation }) {
           />
         </Animated.View>
 
-        <Animated.ScrollView
-          ref={scrollRef}
-          {...GAME_NO_OVERSCROLL_PROPS}
-          nestedScrollEnabled
-          scrollEventThrottle={16}
-          style={styles.flex}
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingTop: scrollTopPadding,
-              paddingBottom: PROFILE_COLLAPSE_DISTANCE + insets.bottom + 16,
-              minHeight: minScrollContentHeight,
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          onScroll={scrollSnapHandler}
+        <ContactProfileScrollBody
+          scrollRef={scrollRef}
+          scrollTopPadding={scrollTopPadding}
+          scrollContentPullStyle={scrollContentPullStyle}
+          scrollSnapHandler={scrollSnapHandler}
           onScrollBeginDrag={onScrollBeginDrag}
-          onScrollEndDrag={wrapProfileScrollEnd(onScrollEndDrag)}
-          onMomentumScrollEnd={wrapProfileScrollEnd(onMomentumScrollEnd)}
-        >
-          <Animated.View style={scrollContentPullStyle}>
-            <View style={styles.sectionSpacer} />
-
-            <ContactProfileMediaSection
-              items={mediaItems}
-              loading={mediaLoading}
-              roomId={roomId}
-              selectionMode={mediaSelectionMode}
-              selectedIds={selectedMediaIds}
-              hiddenTileId={hiddenTileId}
-              onMediaPress={handleMediaPress}
-              onMediaLongPress={handleMediaLongPress}
-              onTileLayout={handleTileLayout}
-              onRegisterTransitionSource={handleRegisterTransitionSource}
-            />
-          </Animated.View>
-        </Animated.ScrollView>
+          onScrollEndDrag={onScrollEndDrag}
+          onMomentumScrollEnd={onMomentumScrollEnd}
+          wrapProfileScrollEnd={wrapProfileScrollEnd}
+          bottomInset={insets.bottom}
+          minScrollContentHeight={minScrollContentHeight}
+          mediaItems={mediaItems}
+          mediaLoading={mediaLoading}
+          roomId={roomId}
+          selectionMode={mediaSelectionMode}
+          selectedIds={selectedMediaIds}
+          hiddenTileId={hiddenTileId}
+          onMediaPress={handleMediaPress}
+          onMediaLongPress={handleMediaLongPress}
+          onTileLayout={handleTileLayout}
+          onRegisterTransitionSource={handleRegisterTransitionSource}
+        />
 
         <ContactProfileFloatingChrome
           profileLayoutW={profileLayoutW}
