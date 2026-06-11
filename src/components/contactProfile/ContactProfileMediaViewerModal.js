@@ -1,10 +1,8 @@
 import React, {
   forwardRef,
   useEffect,
-  useImperativeHandle,
   useRef,
   useState,
-  useLayoutEffect,
 } from 'react';
 import {
   Modal,
@@ -17,26 +15,15 @@ import { GestureHandlerRootView, GestureDetector } from 'react-native-gesture-ha
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withTiming,
-  runOnJS,
-  cancelAnimation,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from '../../icons/lucideIcons';
 import { V } from '../../theme';
 import ContactProfileViewerSlide from './ContactProfileViewerSlide';
-import {
-  alignOpenSourceRect,
-  isValidMediaTransitionRect,
-} from './mediaTransitionSource';
-import { formatRect, logMediaViewer } from './mediaViewerDebugLog';
-import {
-  OPEN_EASING,
-  OPEN_MS,
-  clampIndex,
-} from './viewer/mediaViewerConstants';
+import { clampIndex } from './viewer/mediaViewerConstants';
 import { useMediaViewerFrameAnim } from './viewer/useMediaViewerFrameAnim';
 import { useMediaViewerPanGesture } from './viewer/useMediaViewerPanGesture';
+import { useMediaViewerPhase } from './viewer/useMediaViewerPhase';
 
 /**
  * Hero viewer: один Animated rect (window space) + один ViewerSlide на open/close.
@@ -188,102 +175,43 @@ const ContactProfileMediaViewerModal = forwardRef(function ContactProfileMediaVi
     setPagerMounted,
   });
 
-  useImperativeHandle(ref, () => ({ close: requestClose }), [requestClose]);
-
-  useEffect(() => {
-    if (visible) return;
-    logMediaViewer('modal', 'reset invisible');
-    clearCloseSafetyTimer();
-    const resetId = requestAnimationFrame(() => {
-      axisLock.value = 0;
-      resetFrameOnInvisible();
-    });
-    setViewerPhase(null);
-    setPagerMounted(false);
-    return () => cancelAnimationFrame(resetId);
-  }, [visible, axisLock, clearCloseSafetyTimer, resetFrameOnInvisible]);
-
-  useEffect(() => () => clearCloseSafetyTimer(), [clearCloseSafetyTimer]);
-
-  useLayoutEffect(() => {
-    if (!visible || count === 0 || !activeItem) return;
-    if (openEpoch === lastAnimatedEpochRef.current) return;
-    lastAnimatedEpochRef.current = openEpoch;
-
-    logMediaViewer('modal', 'openLayoutEffect', {
-      openEpoch,
-      activeId: activeItem.id,
-      safeIndex,
-      initialRect: formatRect(initialTransitionSourceRef.current),
-      measuredRect: formatRect(getTransitionSourceRef.current?.(activeItem.id)),
-    });
-
-    const flyGen = ++openFlyGenRef.current;
-    openSettleGenRef.current = flyGen;
-    closeFinishedRef.current = false;
-    handoffStartedRef.current = false;
-    isClosing.value = false;
-    isOpening.value = true;
-    axisLock.value = 0;
-    setSlideIndex(safeIndex);
-    setPagerMounted(false);
-    viewIndexSv.value = safeIndex;
-    pagerX.value = -safeIndex * screenW;
-
-    const rawLayout = isValidMediaTransitionRect(initialTransitionSourceRef.current)
-      ? initialTransitionSourceRef.current
-      : getTransitionSourceRef.current?.(activeItem.id);
-    const layout = isValidMediaTransitionRect(rawLayout) ? alignOpenSourceRect(rawLayout) : null;
-
-    if (layout) {
-      frameX.value = layout.x;
-      frameY.value = layout.y;
-      frameW.value = layout.width;
-      frameH.value = layout.height;
-      originSv.value = layout;
-    }
-    cancelAnimation(frameX);
-    cancelAnimation(frameY);
-    cancelAnimation(frameW);
-    cancelAnimation(frameH);
-    cancelAnimation(backdropOpacity);
-
-    setViewerPhase('opening');
-    heroContentOpacity.value = 1;
-    backdropOpacity.value = 0;
-
-    if (!layout) {
-      logMediaViewer('modal', 'open NO rect → instant fullscreen');
-      frameX.value = 0;
-      frameY.value = 0;
-      frameW.value = screenW;
-      frameH.value = screenH;
-      backdropOpacity.value = withTiming(1, { duration: OPEN_MS, easing: OPEN_EASING }, (finished) => {
-        'worklet';
-        if (finished) runOnJS(handleOpenSettled)();
-      });
-      return;
-    }
-
-    backdropOpacity.value = withTiming(1, { duration: OPEN_MS, easing: OPEN_EASING });
-    startOpenFrameAnimation(layout);
-  }, [
+  useMediaViewerPhase({
+    ref,
     visible,
     openEpoch,
     count,
     activeItem,
+    safeIndex,
     screenW,
     screenH,
+    lastAnimatedEpochRef,
+    openFlyGenRef,
+    openSettleGenRef,
+    closeFinishedRef,
+    handoffStartedRef,
+    frameX,
+    frameY,
+    frameW,
+    frameH,
+    pagerX,
     backdropOpacity,
+    heroContentOpacity,
     isClosing,
     isOpening,
-    axisLock,
-    pagerX,
     originSv,
-    safeIndex,
+    viewIndexSv,
+    axisLock,
+    initialTransitionSourceRef,
+    getTransitionSourceRef,
+    setViewerPhase,
+    setSlideIndex,
+    setPagerMounted,
+    clearCloseSafetyTimer,
+    resetFrameOnInvisible,
+    requestClose,
     startOpenFrameAnimation,
     handleOpenSettled,
-  ]);
+  });
 
   const pagerStripStyle = useAnimatedStyle(() => ({
     flexDirection: 'row',
