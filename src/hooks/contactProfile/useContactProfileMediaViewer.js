@@ -126,12 +126,15 @@ export function useContactProfileMediaViewer({
       setViewerIndex(idx);
       setViewerOriginLayout(measured);
       setOpenedMediaId(item.id);
-      setHiddenTileId(item.id);
       profileScrollYAtOpenRef.current = profileScrollYRef.current;
 
       setViewerOpenEpoch((e) => e + 1);
       setViewerVisible(true);
       viewerOpeningRef.current = false;
+      // Modal монтируется на следующий кадр — не прятать плитку раньше hero.
+      requestAnimationFrame(() => {
+        setHiddenTileId(item.id);
+      });
     },
     [viewerItems, viewerVisible, mediaSelectionMode, toggleMediaSelection, getTransitionSource],
   );

@@ -384,10 +384,10 @@ const ContactProfileMediaViewerModal = forwardRef(function ContactProfileMediaVi
 
     const revealAndDismiss = () => {
       if (closeFinishedRef.current) return;
-      onHandoffRef.current?.();
       requestAnimationFrame(() => {
         if (closeFinishedRef.current) return;
         if (!itemId) {
+          onHandoffRef.current?.();
           hideHeroAndDismiss();
           return;
         }
@@ -395,10 +395,14 @@ const ContactProfileMediaViewerModal = forwardRef(function ContactProfileMediaVi
           .then((visibleRect) => {
             if (closeFinishedRef.current) return;
             snapHeroToRect(visibleRect, 'handoffAlignVisible');
+            onHandoffRef.current?.();
             hideHeroAndDismiss();
           })
           .catch(() => {
-            if (!closeFinishedRef.current) hideHeroAndDismiss();
+            if (!closeFinishedRef.current) {
+              onHandoffRef.current?.();
+              hideHeroAndDismiss();
+            }
           });
       });
     };
