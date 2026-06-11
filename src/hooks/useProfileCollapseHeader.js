@@ -72,6 +72,11 @@ import {
   STATUS_LINE_HEIGHT,
   STATUS_MARGIN_TOP,
 } from './profileCollapse/profileCollapseConstants';
+import {
+  avatarGlowIntensity,
+  avatarGlowTailFade,
+  glowHeaderNameFade,
+} from './profileCollapse/profileCollapseWorklets';
 
 export {
   HEADER_MINI_AVATAR_SIZE,
@@ -79,34 +84,6 @@ export {
   PROFILE_AVATAR_SIZE,
   PROFILE_COLLAPSE_DISTANCE,
 } from './profileCollapse/profileCollapseConstants';
-
-/** Fade свечения вместе с появлением имени в шапке (профиль контакта). */
-function glowHeaderNameFade(y) {
-  'worklet';
-  return interpolate(
-    y,
-    [NAME_HEADER_SCROLL_START, NAME_HEADER_SCROLL_END],
-    [1, 0],
-    Extrapolation.CLAMP,
-  );
-}
-
-/** Яркость подсветки: ноль в покое, максимум в середине захода под шапку, fade в конце. */
-function avatarGlowIntensity(y) {
-  'worklet';
-  return interpolate(
-    y,
-    [0, 24, AVATAR_GLOW_HEADER_PEAK_SCROLL, PROFILE_COLLAPSE_DISTANCE],
-    [0, 0.34, 1, 0],
-    Extrapolation.CLAMP,
-  );
-}
-
-/** Хвост: гасим только когда аватар почти скрыт за шапкой. */
-function avatarGlowTailFade(p) {
-  'worklet';
-  return interpolate(p, [0.84, 1], [1, 0], Extrapolation.CLAMP);
-}
 
 function snapHeaderSpring(offsetY, scrollRef, scrollY, snapDriving) {
   'worklet';
