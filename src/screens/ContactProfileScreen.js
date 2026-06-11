@@ -36,16 +36,14 @@ import {
   PROFILE_COLLAPSE_DISTANCE,
   useProfileCollapseHeader,
 } from '../hooks/useProfileCollapseHeader';
-import { usePeerAvatar } from '../hooks/usePeerAvatar';
 import {
   blockPeer,
   unblockPeer,
-  isBlocked,
 } from '../lib/blockedContacts';
 import { hideChatRoom } from '../lib/hiddenChats';
 import { requestChatsListReload } from '../lib/chatsListSync';
 import { hideAllRoomMessagesForMe, hideMessagesForMe } from '../lib/hideRoomMessagesForMe';
-import { getContactAlias, setContactAlias } from '../lib/contactAliases';
+import { setContactAlias } from '../lib/contactAliases';
 import { supabase } from '../lib/supabase';
 import { clearContactsListCache } from '../components/contacts/useContactsList';
 import { loadDialogsCache, saveDialogsCache } from '../utils/dialogsCache';
@@ -55,6 +53,7 @@ import {
 } from '../lib/safeGoBack';
 import { useContactProfileSwipeBack } from '../hooks/useContactProfileSwipeBack';
 import { useContactProfileRoomMedia } from '../hooks/useContactProfileRoomMedia';
+import { useContactProfileIdentity } from '../hooks/contactProfile/useContactProfileIdentity';
 import ContactProfileMediaSection from '../components/contactProfile/ContactProfileMediaSection';
 import ContactProfileMediaViewerModal from '../components/contactProfile/ContactProfileMediaViewerModal';
 import ContactProfileOverflowMenuModal from '../components/contactProfile/ContactProfileOverflowMenuModal';
@@ -88,7 +87,14 @@ export default function ContactProfileScreen({ route, navigation }) {
   const { items: mediaItems, loading: mediaLoading, reload: reloadMedia } =
     useContactProfileRoomMedia(roomId, nickname);
   const [busy, setBusy] = useState(false);
-  const [blocked, setBlocked] = useState(false);
+  const {
+    blocked,
+    setBlocked,
+    localDisplayName,
+    setLocalDisplayName,
+    displayName,
+    peerAvatarUri,
+  } = useContactProfileIdentity({ nickname, peerName });
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [openedMediaId, setOpenedMediaId] = useState(null);
@@ -107,8 +113,6 @@ export default function ContactProfileScreen({ route, navigation }) {
   const [selectedMediaIds, setSelectedMediaIds] = useState(() => new Set());
   const [overflowMenuVisible, setOverflowMenuVisible] = useState(false);
   const [editContactVisible, setEditContactVisible] = useState(false);
-  const [localDisplayName, setLocalDisplayName] = useState('');
-  const { avatarUri: peerAvatarUri } = usePeerAvatar(peerName, { refreshOnFocus: true });
 
   const viewerItems = useMemo(
     () =>
@@ -377,19 +381,6 @@ export default function ContactProfileScreen({ route, navigation }) {
     }
   }, [isTablet]);
 
-  useEffect(() => {
-    if (!nickname || !peerName) return;
-    isBlocked(nickname, peerName).then(setBlocked);
-  }, [nickname, peerName]);
-
-  useEffect(() => {
-    if (!nickname || !peerName) {
-      setLocalDisplayName('');
-      return;
-    }
-    getContactAlias(nickname, peerName).then(setLocalDisplayName);
-  }, [nickname, peerName]);
-
   const goBackToChat = useCallback(() => {
     safeGoBackFromContactProfile(navigation);
   }, [navigation]);
@@ -532,8 +523,6 @@ export default function ContactProfileScreen({ route, navigation }) {
       ],
     );
   };
-
-  const displayName = localDisplayName || peerName || '—';
 
   const minScrollContentHeight =
     screenH - headerLayout.minHeight + PROFILE_COLLAPSE_DISTANCE + 32;
