@@ -118,10 +118,9 @@ export function useMediaViewerFrameAnim({
     clearCloseSafetyTimer();
     isClosing.value = false;
     isOpening.value = false;
-    frameY.value = 0;
-    pagerX.value = -viewIndexSv.value * screenDims.value.w;
     lastAnimatedEpochRef.current = -1;
-    // Видео: плитка (thumbnail + play badge) не должна появляться под live VideoView до fade-out.
+    // Не трогаем frameX/Y/W/H здесь — иначе hero (ещё tile-sized) прыгает в (0,0) на кадр.
+    // Сброс shared values: resetFrameOnInvisible при visible=false.
     onHandoffRef.current?.();
     onClose();
   }, [
@@ -129,10 +128,6 @@ export function useMediaViewerFrameAnim({
     onHandoffRef,
     isClosing,
     isOpening,
-    frameY,
-    pagerX,
-    viewIndexSv,
-    screenDims,
     clearCloseSafetyTimer,
     logSnap,
   ]);
@@ -164,8 +159,11 @@ export function useMediaViewerFrameAnim({
 
     const closingItem = items[clampIndex(slideIndexRef.current, count)];
     const itemId = closingItem?.id;
+    const isVideoClose = closingItem?.kind === 'video';
     /** Фото: crossfade на ту же картинку в сетке. Видео: thumbnail ≠ live frame — reveal после fade. */
-    const revealTileBeforeFade = closingItem?.kind !== 'video';
+    const revealTileBeforeFade = !isVideoClose;
+    /** Видео: close-fly уже на месте; повторный remeasure/snap даёт прыжок вверх. */
+    const skipHandoffAlign = isVideoClose;
     const animRect = {
       x: frameX.value,
       y: frameY.value,
@@ -209,7 +207,7 @@ export function useMediaViewerFrameAnim({
       if (closeFinishedRef.current) return;
       requestAnimationFrame(() => {
         if (closeFinishedRef.current) return;
-        if (!itemId) {
+        if (skipHandoffAlign || !itemId) {
           revealTileIfNeeded();
           hideHeroAndDismiss();
           return;

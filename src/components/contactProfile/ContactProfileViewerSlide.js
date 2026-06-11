@@ -50,6 +50,9 @@ const ContactProfileViewerSlide = React.memo(function ContactProfileViewerSlide(
   }, [isVideo, player, item.uri, active]);
 
   if (isVideo) {
+    if (!active) {
+      return <View style={boxStyle} />;
+    }
     return (
       <View style={boxStyle}>
         <VideoView

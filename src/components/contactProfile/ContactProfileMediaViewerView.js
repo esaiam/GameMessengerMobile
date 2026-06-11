@@ -59,7 +59,7 @@ export default function ContactProfileMediaViewerView({
                       key={heroItem.id}
                       item={heroItem}
                       fill
-                      active
+                      active={!pagerLayerActive}
                       showVideoControls={effectivePhase === 'ready' && !pagerLayerActive}
                     />
                   </View>
