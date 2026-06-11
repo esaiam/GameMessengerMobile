@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Platform,
   ActivityIndicator,
   BackHandler,
@@ -35,12 +34,12 @@ import {
   PROFILE_COLLAPSE_DISTANCE,
   useProfileCollapseHeader,
 } from '../hooks/useProfileCollapseHeader';
-import { hideMessagesForMe } from '../lib/hideRoomMessagesForMe';
 import { safeGoBackFromContactProfile } from '../lib/safeGoBack';
 import { useContactProfileSwipeBack } from '../hooks/useContactProfileSwipeBack';
 import { useContactProfileRoomMedia } from '../hooks/useContactProfileRoomMedia';
 import { useContactProfileIdentity } from '../hooks/contactProfile/useContactProfileIdentity';
 import { useContactProfileActions } from '../hooks/contactProfile/useContactProfileActions';
+import { useContactProfileMediaSelection } from '../hooks/contactProfile/useContactProfileMediaSelection';
 import ContactProfileMediaSection from '../components/contactProfile/ContactProfileMediaSection';
 import ContactProfileMediaViewerModal from '../components/contactProfile/ContactProfileMediaViewerModal';
 import ContactProfileOverflowMenuModal from '../components/contactProfile/ContactProfileOverflowMenuModal';
@@ -111,10 +110,30 @@ export default function ContactProfileScreen({ route, navigation }) {
   const profileScrollYAtOpenRef = useRef(0);
   const mediaViewerRef = useRef(null);
   const viewerOpeningRef = useRef(false);
-  const [mediaSelectionMode, setMediaSelectionMode] = useState(false);
-  const [selectedMediaIds, setSelectedMediaIds] = useState(() => new Set());
   const [overflowMenuVisible, setOverflowMenuVisible] = useState(false);
   const [editContactVisible, setEditContactVisible] = useState(false);
+
+  const dismissViewerForSelection = useCallback(() => {
+    setViewerVisible(false);
+    setHiddenTileId(null);
+    setOpenedMediaId(null);
+    setViewerOriginLayout(null);
+  }, []);
+
+  const {
+    mediaSelectionMode,
+    selectedMediaIds,
+    exitMediaSelection,
+    toggleMediaSelection,
+    handleMediaLongPress,
+    handleDeleteSelectedMedia,
+  } = useContactProfileMediaSelection({
+    nickname,
+    roomId,
+    setBusy,
+    reloadMedia,
+    onDismissViewer: dismissViewerForSelection,
+  });
 
   const viewerItems = useMemo(
     () =>
@@ -126,34 +145,6 @@ export default function ContactProfileScreen({ route, navigation }) {
           kind: m.message_type === 'video' ? 'video' : 'image',
         })),
     [mediaItems],
-  );
-
-  const exitMediaSelection = useCallback(() => {
-    setMediaSelectionMode(false);
-    setSelectedMediaIds(new Set());
-  }, []);
-
-  const toggleMediaSelection = useCallback((id) => {
-    setSelectedMediaIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      if (next.size === 0) setMediaSelectionMode(false);
-      return next;
-    });
-  }, []);
-
-  const handleMediaLongPress = useCallback(
-    (item) => {
-      if (!item?.id || !item.media_url) return;
-      setViewerVisible(false);
-      setHiddenTileId(null);
-      setOpenedMediaId(null);
-      setViewerOriginLayout(null);
-      setMediaSelectionMode(true);
-      setSelectedMediaIds(new Set([item.id]));
-    },
-    [],
   );
 
   const handleTileLayout = useCallback((id, layout) => {
@@ -276,44 +267,6 @@ export default function ContactProfileScreen({ route, navigation }) {
     },
     [viewerItems, getTransitionSource],
   );
-
-  const handleDeleteSelectedMedia = useCallback(() => {
-    if (!nickname || selectedMediaIds.size === 0) return;
-    const count = selectedMediaIds.size;
-    Alert.alert(
-      'Удалить у меня',
-      `Скрыть ${count} ${count === 1 ? 'медиа' : 'медиа'} у вас?`,
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Удалить',
-          style: 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            try {
-              await hideMessagesForMe({
-                messageIds: [...selectedMediaIds],
-                nickname,
-                roomId,
-              });
-              exitMediaSelection();
-              await reloadMedia();
-            } catch (e) {
-              Alert.alert('Ошибка', e?.message || 'Не удалось удалить');
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
-    );
-  }, [
-    nickname,
-    roomId,
-    selectedMediaIds,
-    exitMediaSelection,
-    reloadMedia,
-  ]);
 
   useFocusEffect(
     useCallback(() => {
