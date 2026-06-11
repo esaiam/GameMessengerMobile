@@ -31,7 +31,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from '../../icons/lucideIcons';
 import { V } from '../../theme';
-import ViewerSlide from './viewer/ViewerSlide';
+import ContactProfileViewerSlide from './ContactProfileViewerSlide';
 import {
   alignCloseTargetRect,
   alignOpenSourceRect,
@@ -862,7 +862,7 @@ const ContactProfileMediaViewerModal = forwardRef(function ContactProfileMediaVi
                       style={[styles.heroBaseLayer, pagerLayerActive && styles.heroLayerHidden]}
                       pointerEvents="none"
                     >
-                      <ViewerSlide
+                      <ContactProfileViewerSlide
                         key={heroItem.id}
                         item={heroItem}
                         fill
@@ -877,7 +877,7 @@ const ContactProfileMediaViewerModal = forwardRef(function ContactProfileMediaVi
                         collapsable={false}
                       >
                         {items.map((item, index) => (
-                          <ViewerSlide
+                          <ContactProfileViewerSlide
                             key={item.id}
                             item={item}
                             width={screenW}
