@@ -15,89 +15,70 @@ import {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { CHAT_HEADER_AVATAR_SIZE } from '../components/ChatRoomHeader';
 import { MESSENGER_HEADER_PADDING_HORIZONTAL } from '../components/MessengerHeaderLayout';
 import { useMainTabsNavigationOptional } from '../context/MainTabsNavigationContext';
-
-export const PROFILE_AVATAR_SIZE = 96;
-const AVATAR_MARGIN_TOP = -12;
-const NAME_MARGIN_TOP = 14;
-const ACTIONS_MARGIN_TOP = 20;
-/** Зазор от низа шапки до верха ряда кнопок (профиль контакта) */
-const HEADER_TO_ACTIONS_TOP_GAP = 16;
-const SCROLL_CONTENT_LIFT = 36;
-/** Зазор медиа под шапкой в свёрнутом состоянии */
-const SCROLL_CONTENT_GAP_BELOW_HEADER = 16;
-/** Профиль контакта: зазор между статусом сети и началом скролла (до sectionSpacer) */
-const CONTACT_PROFILE_MEDIA_GAP_BELOW_STATUS = 12;
-const ACTION_ROW_HEIGHT = 52;
-export const PROFILE_COLLAPSE_DISTANCE = 132;
-/** Пик золотого свечения аватара (px скролла); затем fade до PROFILE_COLLAPSE_DISTANCE */
-const AVATAR_GLOW_SCROLL_PEAK = 80;
-const AVATAR_BORDER_SAGE = 'rgba(90,158,154,0.6)';
-const AVATAR_BORDER_SAGE_PEAK = 'rgba(90,158,154,0.9)';
-const NAME_LINE_HEIGHT = 22;
-/** Дуга имени (профиль контакта), px скролла */
-const NAME_ARC_SCROLL_END = 70;
-const NAME_FADE_SCROLL_START = 50;
-const NAME_HIDDEN_SCROLL_START = 70;
-const NAME_HEADER_SCROLL_START = 95;
-const NAME_HEADER_SCROLL_END = 120;
-/** Пик подсветки — середина фазы подхода/захода под шапку (после parallax → до полного collapse). */
-const AVATAR_GLOW_HEADER_PEAK_SCROLL =
-  (AVATAR_GLOW_SCROLL_PEAK + PROFILE_COLLAPSE_DISTANCE) / 2;
-const AVATAR_GLOW_RING_RAMP = [
-  0,
-  28,
+import {
+  ACTIONS_LIFT_SPEED,
+  ACTIONS_PARALLAX_FAST,
+  ACTIONS_PARALLAX_SLOW,
+  ACTION_ROW_HEIGHT,
+  ACTIONS_MARGIN_TOP,
+  AVATAR_BORDER_SAGE,
+  AVATAR_BORDER_SAGE_PEAK,
+  AVATAR_GLOW_FILL_MAX,
   AVATAR_GLOW_HEADER_PEAK_SCROLL,
+  AVATAR_GLOW_RING_OPACITY_RAMP,
+  AVATAR_GLOW_RING_RAMP,
+  AVATAR_GLOW_RING_SCALE_RAMP,
+  AVATAR_GLOW_SCROLL_PEAK,
+  AVATAR_MARGIN_TOP,
+  CHAT_HEADER_AVATAR_MARGIN_LEFT,
+  CHAT_HEADER_BACK_MARGIN_LEFT,
+  CHAT_HEADER_BACK_MARGIN_RIGHT,
+  CHAT_HEADER_NAME_LINE_HEIGHT,
+  CHAT_HEADER_STATUS_GAP,
+  COLLAPSE_SNAP_ZONE_EXTRA,
+  CONTACT_PROFILE_MEDIA_GAP_BELOW_STATUS,
+  HEADER_BACK_SLOT_W,
+  HEADER_MINI_AVATAR_GAP,
+  HEADER_MINI_AVATAR_SIZE,
+  HEADER_TO_ACTIONS_TOP_GAP,
+  HEADER_UNDER_GLOW_HEIGHT,
+  HEADER_UNDER_GLOW_LIFT_UP,
+  NAME_ABOVE_HEADER_Z,
+  NAME_ARC_RADIUS,
+  NAME_ARC_SCROLL_END,
+  NAME_FADE_SCROLL_START,
+  NAME_HEADER_OPACITY_SCROLL_LAG,
+  NAME_HEADER_SCROLL_END,
+  NAME_HEADER_SCROLL_START,
+  NAME_HIDDEN_SCROLL_START,
+  NAME_LINE_HEIGHT,
+  NAME_MARGIN_TOP,
+  NAME_ORBIT_BELOW_CENTER,
+  PROFILE_AVATAR_SIZE,
+  PROFILE_CHROME_Z_BELOW_FLOAT,
   PROFILE_COLLAPSE_DISTANCE,
-];
-const AVATAR_GLOW_RING_OPACITY_RAMP = [0, 0.4, 0.88, 0];
-const AVATAR_GLOW_RING_SCALE_RAMP = [1, 1.05, 1.1, 1.02];
-const AVATAR_GLOW_FILL_MAX = 0.78;
-/** Fade-in имени в шапке на 10ms позже (≈ scroll-lag при ~100ms прохода зоны) */
-const NAME_HEADER_OPACITY_DELAY_MS = 10;
-const NAME_HEADER_OPACITY_SCROLL_LAG =
-  (NAME_HEADER_OPACITY_DELAY_MS / 100) *
-  (NAME_HEADER_SCROLL_END - NAME_HEADER_SCROLL_START);
-const NAME_ARC_RADIUS = 60;
-/** Якорь имени под аватаром → смещение от центра орбиты (низ круга = старт) */
-const NAME_ORBIT_BELOW_CENTER = PROFILE_AVATAR_SIZE / 2 + NAME_MARGIN_TOP;
-export const HEADER_MINI_AVATAR_SIZE = CHAT_HEADER_AVATAR_SIZE;
-const HEADER_MINI_AVATAR_GAP = 8;
-const HEADER_BACK_SLOT_W = 40;
-/** Как ChatRoomHeader: back marginLeft −10, marginRight 1; avatar marginLeft 8 */
-const CHAT_HEADER_BACK_MARGIN_LEFT = -10;
-const CHAT_HEADER_BACK_MARGIN_RIGHT = 1;
-const CHAT_HEADER_AVATAR_MARGIN_LEFT = 8;
-/** Позиция статуса в шапке — как ChatRoomHeader (не трогает layout нижнего статуса) */
-const CHAT_HEADER_NAME_LINE_HEIGHT = 20;
-const CHAT_HEADER_STATUS_GAP = (2 * 2) / 3;
-const HEADER_UNDER_GLOW_HEIGHT = 32;
-/** Сдвиг вверх: яркий край градиента под непрозрачной шапкой */
-export const HEADER_UNDER_GLOW_LIFT_UP = 20;
-const PROFILE_CHROME_Z_BELOW_FLOAT = 8;
-/** Имя поверх шапки на всей дуге collapse */
-const NAME_ABOVE_HEADER_Z = 12;
-const STATUS_MARGIN_TOP = 6;
-const STATUS_LINE_HEIGHT = 13;
-/** Пороги snap: верх слабее, низ сильнее (позиция y, не dragStart). */
-const SNAP_EXPAND_THRESHOLD = 0.46;
-const SNAP_COLLAPSE_THRESHOLD = 0.33;
-/** Нейтральное отпускание: ниже этой доли collapse → вниз (bias к collapsed). */
-const SNAP_REST_MIDPOINT = 0.42;
-const COLLAPSE_SNAP_ZONE_EXTRA = 10;
-/** Раскрытие (y→0): мягче, меньше «магнита» сверху */
-const SNAP_SPRING_EXPAND = { damping: 32, stiffness: 148, mass: 1.05 };
-/** Сворачивание (y→collapse): тугая, без отскока снизу */
-const SNAP_SPRING_COLLAPSE = { damping: 34, stiffness: 590, mass: 0.54 };
-const SNAP_VELOCITY_EXPAND = 0.42;
-const SNAP_VELOCITY_COLLAPSE = 0.32;
-const SNAP_DRAG_MIN_PX = 8;
-/** Кнопки над аватаром (профиль контакта): быстрее аватара уходят под шапку. */
-const ACTIONS_PARALLAX_SLOW = 1.15;
-const ACTIONS_PARALLAX_FAST = 3.85;
-const ACTIONS_LIFT_SPEED = 1.85;
+  SCROLL_CONTENT_GAP_BELOW_HEADER,
+  SCROLL_CONTENT_LIFT,
+  SNAP_COLLAPSE_THRESHOLD,
+  SNAP_DRAG_MIN_PX,
+  SNAP_EXPAND_THRESHOLD,
+  SNAP_REST_MIDPOINT,
+  SNAP_SPRING_COLLAPSE,
+  SNAP_SPRING_EXPAND,
+  SNAP_VELOCITY_COLLAPSE,
+  SNAP_VELOCITY_EXPAND,
+  STATUS_LINE_HEIGHT,
+  STATUS_MARGIN_TOP,
+} from './profileCollapse/profileCollapseConstants';
+
+export {
+  HEADER_MINI_AVATAR_SIZE,
+  HEADER_UNDER_GLOW_LIFT_UP,
+  PROFILE_AVATAR_SIZE,
+  PROFILE_COLLAPSE_DISTANCE,
+} from './profileCollapse/profileCollapseConstants';
 
 /** Fade свечения вместе с появлением имени в шапке (профиль контакта). */
 function glowHeaderNameFade(y) {
