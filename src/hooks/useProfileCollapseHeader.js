@@ -1,3 +1,7 @@
+/**
+ * Thin orchestrator: `src/hooks/profileCollapse/*` + re-export public constants.
+ * Public API path остаётся `useProfileCollapseHeader.js` для consumers.
+ */
 import { useProfileCollapseAvatarStyles } from './profileCollapse/useProfileCollapseAvatarStyles';
 import { useProfileCollapseChromeStyles } from './profileCollapse/useProfileCollapseChromeStyles';
 import { useProfileCollapseNameStyles } from './profileCollapse/useProfileCollapseNameStyles';
@@ -12,8 +16,9 @@ export {
 } from './profileCollapse/profileCollapseConstants';
 
 /**
- * Сворачивающаяся шапка профиля: аватар + имя, snap-скролл (как ProfileScreen).
+ * Сворачивающаяся шапка профиля: аватар + имя, snap-скролл.
  * @param {{ headerLayout: object, screenW: number, withStatusRow?: boolean, withAvatarScrollGlow?: boolean, avatarTopExtra?: number }} options
+ * @returns {object} scroll refs/handlers, layout tops, animated styles (Profile + ContactProfile)
  */
 export function useProfileCollapseHeader({
   headerLayout,

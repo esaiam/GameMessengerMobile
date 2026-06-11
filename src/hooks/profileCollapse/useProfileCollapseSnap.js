@@ -14,7 +14,18 @@ import { useMainTabsNavigationOptional } from '../../context/MainTabsNavigationC
 import { PROFILE_COLLAPSE_DISTANCE } from './profileCollapseConstants';
 import { calcSnapTarget, snapHeaderSpring } from './profileCollapseSnap';
 
-/** Snap scroll: shared scroll state, handlers, pager lock, focus reset. */
+/**
+ * Snap scroll: `scrollRef` / `scrollY`, handlers, pager lock, focus reset.
+ * @returns {{
+ *   scrollRef: import('react-native-reanimated').AnimatedRef<import('react-native').ScrollView>,
+ *   scrollY: import('react-native-reanimated').SharedValue<number>,
+ *   collapseP: import('react-native-reanimated').DerivedValue<number>,
+ *   scrollSnapHandler: ReturnType<typeof import('react-native-reanimated').useAnimatedScrollHandler>,
+ *   onScrollBeginDrag: (e: import('react-native').NativeSyntheticEvent<import('react-native').NativeScrollEvent>) => void,
+ *   onScrollEndDrag: (e: import('react-native').NativeSyntheticEvent<import('react-native').NativeScrollEvent>) => void,
+ *   onMomentumScrollEnd: (e: import('react-native').NativeSyntheticEvent<import('react-native').NativeScrollEvent>) => void,
+ * }}
+ */
 export function useProfileCollapseSnap() {
   const scrollRef = useAnimatedRef();
   const scrollY = useSharedValue(0);
@@ -121,7 +132,6 @@ export function useProfileCollapseSnap() {
   return {
     scrollRef,
     scrollY,
-    snapDriving,
     collapseP,
     scrollSnapHandler,
     onScrollBeginDrag,

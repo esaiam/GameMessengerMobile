@@ -1,3 +1,4 @@
+/** Reanimated worklets: glow fade и intensity для avatar scroll glow. */
 import { Extrapolation, interpolate } from 'react-native-reanimated';
 import {
   AVATAR_GLOW_HEADER_PEAK_SCROLL,

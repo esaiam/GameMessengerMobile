@@ -1,3 +1,4 @@
+/** Layout, animation ramps и snap-пороги collapse header профиля. */
 import { CHAT_HEADER_AVATAR_SIZE } from '../../components/ChatRoomHeader';
 
 export const PROFILE_AVATAR_SIZE = 96;

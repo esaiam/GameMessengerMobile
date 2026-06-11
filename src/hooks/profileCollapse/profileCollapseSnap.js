@@ -1,3 +1,4 @@
+/** Snap math: целевая позиция скролла и spring-анимация к ней. */
 import {
   cancelAnimation,
   scrollTo,
