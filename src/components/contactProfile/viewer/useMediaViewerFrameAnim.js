@@ -121,9 +121,12 @@ export function useMediaViewerFrameAnim({
     frameY.value = 0;
     pagerX.value = -viewIndexSv.value * screenDims.value.w;
     lastAnimatedEpochRef.current = -1;
+    // Видео: плитка (thumbnail + play badge) не должна появляться под live VideoView до fade-out.
+    onHandoffRef.current?.();
     onClose();
   }, [
     onClose,
+    onHandoffRef,
     isClosing,
     isOpening,
     frameY,
@@ -159,12 +162,19 @@ export function useMediaViewerFrameAnim({
     if (handoffStartedRef.current) return;
     handoffStartedRef.current = true;
 
-    const itemId = items[clampIndex(slideIndexRef.current, count)]?.id;
+    const closingItem = items[clampIndex(slideIndexRef.current, count)];
+    const itemId = closingItem?.id;
+    /** Фото: crossfade на ту же картинку в сетке. Видео: thumbnail ≠ live frame — reveal после fade. */
+    const revealTileBeforeFade = closingItem?.kind !== 'video';
     const animRect = {
       x: frameX.value,
       y: frameY.value,
       w: frameW.value,
       h: frameH.value,
+    };
+
+    const revealTileIfNeeded = () => {
+      if (revealTileBeforeFade) onHandoffRef.current?.();
     };
 
     const hideHeroAndDismiss = () => {
@@ -200,7 +210,7 @@ export function useMediaViewerFrameAnim({
       requestAnimationFrame(() => {
         if (closeFinishedRef.current) return;
         if (!itemId) {
-          onHandoffRef.current?.();
+          revealTileIfNeeded();
           hideHeroAndDismiss();
           return;
         }
@@ -208,12 +218,12 @@ export function useMediaViewerFrameAnim({
           .then((visibleRect) => {
             if (closeFinishedRef.current) return;
             snapHeroToRect(visibleRect, 'handoffAlignVisible');
-            onHandoffRef.current?.();
+            revealTileIfNeeded();
             hideHeroAndDismiss();
           })
           .catch(() => {
             if (!closeFinishedRef.current) {
-              onHandoffRef.current?.();
+              revealTileIfNeeded();
               hideHeroAndDismiss();
             }
           });
