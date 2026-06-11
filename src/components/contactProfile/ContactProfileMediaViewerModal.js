@@ -38,32 +38,20 @@ import {
   isValidMediaTransitionRect,
 } from './mediaTransitionSource';
 import { formatRect, formatSnap, logMediaViewer } from './mediaViewerDebugLog';
-
-const DISMISS_DRAG = 110;
-const DISMISS_VELOCITY = 720;
-const AXIS_LOCK_PX = 10;
-const HANDOFF_FADE_MS = 100;
-const SPRING_BACK = { damping: 22, stiffness: 300, mass: 0.85 };
-/** Достаточно медленно, чтобы читался скейл из ячейки. */
-const OPEN_MS = 480;
-const CLOSE_MS = 340;
-const REMEASURE_TIMEOUT_MS = 150;
-/** Симметричный in-out — скейл виден и в начале, и в конце. */
-const OPEN_EASING = Easing.inOut(Easing.cubic);
-/** Замедление в конце — «посадка» в ячейку без рывка. */
-const CLOSE_EASING = Easing.out(Easing.cubic);
-const PAGE_SPRING = {
-  damping: 32,
-  stiffness: 220,
-  mass: 1,
-  restDisplacementThreshold: 0.35,
-  restSpeedThreshold: 0.35,
-};
-
-function clampIndex(idx, count) {
-  if (count <= 0) return 0;
-  return Math.min(Math.max(idx, 0), count - 1);
-}
+import {
+  AXIS_LOCK_PX,
+  CLOSE_EASING,
+  CLOSE_MS,
+  DISMISS_DRAG,
+  DISMISS_VELOCITY,
+  HANDOFF_FADE_MS,
+  OPEN_EASING,
+  OPEN_MS,
+  PAGE_SPRING,
+  REMEASURE_TIMEOUT_MS,
+  SPRING_BACK,
+  clampIndex,
+} from './viewer/mediaViewerConstants';
 
 /**
  * Hero viewer: один Animated rect (window space) + один ViewerSlide на open/close.
