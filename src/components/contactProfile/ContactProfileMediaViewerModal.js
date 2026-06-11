@@ -10,7 +10,6 @@ import React, {
 } from 'react';
 import {
   Modal,
-  Image,
   TouchableOpacity,
   View,
   StyleSheet,
@@ -30,9 +29,9 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { VideoView, useVideoPlayer } from 'expo-video';
 import { X } from '../../icons/lucideIcons';
 import { V } from '../../theme';
+import ViewerSlide from './viewer/ViewerSlide';
 import {
   alignCloseTargetRect,
   alignOpenSourceRect,
@@ -65,63 +64,6 @@ function clampIndex(idx, count) {
   if (count <= 0) return 0;
   return Math.min(Math.max(idx, 0), count - 1);
 }
-
-const ViewerSlide = React.memo(function ViewerSlide({
-  item,
-  width,
-  height,
-  fill = false,
-  active,
-  showVideoControls,
-}) {
-  const isVideo = item.kind === 'video';
-  const boxStyle = fill ? styles.slideFill : [styles.slide, { width, height }];
-
-  const player = useVideoPlayer(isVideo && active ? item.uri : null, (p) => {
-    if (!p) return;
-    p.loop = false;
-  });
-
-  useEffect(() => {
-    if (!isVideo || !player || !active) return undefined;
-    try {
-      player.play();
-    } catch {
-      /* ignore */
-    }
-    return () => {
-      try {
-        player.pause();
-      } catch {
-        /* ignore */
-      }
-    };
-  }, [isVideo, player, item.uri, active]);
-
-  if (isVideo) {
-    return (
-      <View style={boxStyle}>
-        <VideoView
-          player={player}
-          style={styles.media}
-          contentFit="cover"
-          nativeControls={showVideoControls}
-        />
-      </View>
-    );
-  }
-
-  return (
-    <View style={boxStyle}>
-      <Image
-        source={{ uri: item.uri, cache: 'force-cache' }}
-        style={styles.media}
-        resizeMode="cover"
-        fadeDuration={0}
-      />
-    </View>
-  );
-});
 
 /**
  * Hero viewer: один Animated rect (window space) + один ViewerSlide на open/close.
@@ -992,18 +934,6 @@ const styles = StyleSheet.create({
   },
   heroLayerHidden: {
     opacity: 0,
-  },
-  slide: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  slideFill: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  media: {
-    width: '100%',
-    height: '100%',
   },
   closeBtn: {
     position: 'absolute',
