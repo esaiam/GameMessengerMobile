@@ -16,7 +16,7 @@
 |----------|--------|
 | `vault-*.json` в `.gitignore` (корень `Table`) | OK |
 | `vault-*.json` не в `git ls-files` | OK |
-| Файл на диске `Table/vault-54acb-*.json` | **Есть** — удалить или перенести вне репо / бэкапов |
+| Файл на диске `Table/vault-54acb-*.json` | **P0.5:** убран с диска — **перепроверить** перед APK; не хранить в репо / бэкапах git |
 | `service_role` не в клиентском коде | OK (только anon / publishable) |
 | `google-services.json` в mobile | В git (норма для FCM); ключи ограничить в Google Cloud |
 
@@ -38,7 +38,7 @@
 
 ### 2. Код
 
-- [x] Фиксы после `beta-0.1.0` (scroll ContactProfile) @ `53578b3`
+- [x] Фиксы после `beta-0.1.0` @ `414b3fd` (chat refactor, beta QA infra)
 - [ ] Опционально: тег `beta-0.1.1` перед APK
 - [ ] Прогон `docs/chat-regression-checklist.md` на dev-сборке
 
@@ -59,7 +59,7 @@ npx eas build -p android --profile production --non-interactive
 
 ### 4. Security prod (P0.4) — до APK, без Studio
 
-Чеклист + SQL: **`docs/PROD_SECURITY_CHECKLIST.md`** (прогон в Supabase SQL Editor).
+Чеклист + SQL: **`docs/PROD_SECURITY_CHECKLIST.md`** → блоки в **`docs/SECURITY_INVENTORY_0_1.sql`** (Supabase SQL Editor).
 
 - [ ] Пройден чеклист §1–7
 - [ ] Storage `chat-media`: INSERT = `authenticated`, не `anon`

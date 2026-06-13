@@ -5,7 +5,7 @@
 | **APK** | _TBD_ (после VPS + release-сборки) |
 | **Канал багов** | **esaiam86@gmail.com** (тема письма: `Vault beta`) |
 | **Privacy Policy** | https://esaiam.github.io/vault-privacy-policy (vaultprivacy06@gmail.com) |
-| **Код** | ветка `tab-pager-experiment`, commit `b141280` |
+| **Код** | ветка `tab-pager-experiment`, commit `414b3fd` |
 
 > Пока APK нет: разработка через dev-клиент + Metro (одна Wi‑Fi сеть с ПК).
 
@@ -32,7 +32,7 @@
 ```
 Vault beta — баг
 
-Сборка: APK TBD / commit b141280
+Сборка: APK TBD / commit 414b3fd
 Устройство: (например Samsung S23)
 Android: (например 14)
 Время (МСК): 
@@ -61,8 +61,9 @@ Android: (например 14)
 | Скрытые чаты (удалить у меня) | На **сервере** (`hidden_chat_rooms`) |
 | Удалить контакт | RPC `delete_contact_room` — room и messages **удаляются из БД** (профиль контакта) |
 | Удалить аккаунт | Профиль → «Удалить аккаунт» → RPC `delete_user_account`, каскад всех данных |
-| «Кто может писать» | Только на **этом** телефоне (пока не enforced) |
-| Переслать / закрепить | «В разработке» |
+| «Кто может писать» | **Не продукт Vault:** invite-only, комната = пара контактов. Блокировка — на сервере (`blocked_peers`). Server-side DM policy **не планируется** |
+| Переслать | «В разработке» |
+| Закрепить | **В чате** (контекстное меню) |
 | Звонки | «Скоро» |
 | Вкладка Poker | Tamagotchi |
 | Aria | В release нужен VPS; без `EXPO_PUBLIC_ARIA_API_URL` бот может молчать |
@@ -82,4 +83,4 @@ Android: (например 14)
 ## Разработчик
 
 - Перед APK: `docs/RELEASE_PREP.md`
-- Security prod: `docs/PROD_SECURITY_CHECKLIST.md`
+- Security prod: `docs/PROD_SECURITY_CHECKLIST.md` (SQL: `docs/SECURITY_INVENTORY_0_1.sql`)

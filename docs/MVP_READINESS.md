@@ -1,9 +1,9 @@
 # Vault Messenger — готовность к MVP / закрытой бете
 
-> **Для агента:** если пользователь спрашивает про готовность к MVP, бете или «что осталось» — **сначала прочитай этот файл**, затем `RELEASE_PREP.md`, `BETA_BRIEF.md`, `PROD_SECURITY_CHECKLIST.md`.  
+> **Для агента:** если пользователь спрашивает про готовность к MVP, бете или «что осталось» — **сначала прочитай этот файл**, затем `RELEASE_PREP.md`, `BETA_BRIEF.md`, `PROD_SECURITY_CHECKLIST.md` (оглавление; SQL — `SECURITY_INVENTORY_0_1.sql`).  
 > **Обновляй этот файл** после крупных вех (APK, VPS, P1).
 
-**Последнее обновление:** 2026-06-13
+**Последнее обновление:** 2026-06-14
 
 ---
 
@@ -20,7 +20,7 @@
 
 ### Код и freeze
 - Ветка: `tab-pager-experiment`
-- Тег: `beta-0.1.0` @ `4503dac`; дальше фиксы до `c079c4c`+ (scroll ContactProfile, `__DEV__` логи media, docs)
+- Тег: `beta-0.1.0` @ `4503dac`; дальше фиксы до `414b3fd` (chat refactor, VaultErrorBoundary, Maestro/CI, migrations)
 - `Table` submodule bump делался (проверь актуальный SHA: `git ls-tree HEAD GameMessengerMobile` в корне `Table`)
 
 ### QA автomatika
@@ -33,7 +33,8 @@
 ### Документация
 - `docs/BETA_BRIEF.md` — brief для тестеров; баги → **esaiam86@gmail.com**, тема `Vault beta`; **APK = TBD**
 - `docs/RELEASE_PREP.md` — чеклист до первой APK
-- `docs/PROD_SECURITY_CHECKLIST.md` — SQL-сверка prod
+- `docs/PROD_SECURITY_CHECKLIST.md` — оглавление prod security; SQL-блоки в `docs/SECURITY_INVENTORY_0_1.sql`
+- `docs/chat-regression-checklist.md` — ручной regression чата (~10 мин)
 
 ### Security prod (ручная сверка 2026-05-26)
 - §1 RLS `rooms`/`messages`/`game_sessions` — participant OK; ~~дубли legacy~~ → миграция `20260615_drop_legacy_rls_policies.sql`
@@ -121,6 +122,8 @@
 | `ROADMAP.md` | Исторический roadmap + P1/P2 |
 | `docs/BETA_BRIEF.md` | Текст для тестеров |
 | `docs/RELEASE_PREP.md` | До первой APK |
-| `docs/PROD_SECURITY_CHECKLIST.md` | Supabase SQL |
+| `docs/PROD_SECURITY_CHECKLIST.md` | Оглавление §1–§7 + sign-off |
+| `docs/SECURITY_INVENTORY_0_1.sql` | SQL-блоки A–H для Supabase Editor |
+| `docs/chat-regression-checklist.md` | Ручной regression чата |
 | `docs/TESTING.md` | smoke / crypto |
 | `Table/docs/vault_session_summary.md` | Аудит security (может расходиться с prod — сверять чеклистом) |
