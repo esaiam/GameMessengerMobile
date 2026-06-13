@@ -205,7 +205,7 @@ export default function MessageRowBubbleChrome({
                   </Animated.View>
                   {reactionsBar}
                 </View>
-                {ariaGeneratedAttachment ? (
+                {ariaGeneratedAttachment && item?.aria_reveal_done !== false ? (
                   <View style={{ marginTop: 6, alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
                     <AriaGeneratedAttachment
                       attachment={ariaGeneratedAttachment}

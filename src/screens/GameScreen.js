@@ -20,21 +20,28 @@ import useGameScreenBootstrap from './game/useGameScreenBootstrap';
 import useGameKeyboardTransition from './game/useGameKeyboardTransition';
 import useGameDiceRemoteSync, { createDiceEqual } from './game/useGameDiceRemoteSync';
 import { resolveGameOpponentName } from './game/resolveGameOpponentName';
-import { BOARD_TOP_GAP, BOARD_SIDE_GAP, PHONE_GAME_ISLAND_W } from './game/gameScreenConstants';
+import {
+  BOARD_TOP_GAP,
+  BOARD_SIDE_GAP,
+  PHONE_GAME_ISLAND_W,
+  ISLAND_BOTTOM_GAP,
+  TABLET_BOARD_MAX_H,
+  tabletPointHFromBoardArea,
+} from './game/gameScreenConstants';
 import { gameRegistry } from './game/gameRegistry';
 import useGameDiceAnimComplete from './game/useGameDiceAnimComplete';
 import useGameBoardSwipe from './game/useGameBoardSwipe';
 import useGameBoardHandleStyles from './game/useGameBoardHandleStyles';
 import GameIslandShell from './game/GameIslandShell';
 import { useMessengerScreenBackHandler } from '../lib/safeGoBack';
+import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 
 export default function GameScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const roomFocused = useIsFocused();
   useMessengerScreenBackHandler(navigation);
   const { width: windowW, height: windowH } = useWindowDimensions();
-  const shortestSide = Math.min(windowW, windowH);
-  const isTabletLayout = shortestSide >= 540;
+  const isTabletLayout = useIsSplitLayout();
 
   const roomId = route.params?.roomId;
   const selfPlay = route.params?.selfPlay === true;
@@ -140,7 +147,6 @@ export default function GameScreen({ route, navigation }) {
     sandboxState,
     sandboxUiDice,
     handlePointPress,
-    handleBarPress,
     handleBearOffPress,
     handleEndTurn } = backgammonGame;
 
@@ -173,8 +179,6 @@ export default function GameScreen({ route, navigation }) {
   const [availableH, setAvailableH] = useState(0);
 
   const renderPausedRef = useRef(false);
-  /** Не совмещать с renderPausedRef: pauseRendering() ставит ref в true и иначе остановит RAF в DiceThrow3D */
-  const diceGlPausedRef = useRef(false);
   const boardRef = useRef(null);
   const boardMountedRef = useRef(false);
   const [boardMounted, setBoardMounted] = useState(false);
@@ -201,6 +205,8 @@ export default function GameScreen({ route, navigation }) {
     boardContentFadeAnim,
     tapGameIcon,
     dismissPicker,
+    notifyBoardLayoutReady,
+    boardInteractReady,
   } = useGameIslandAnimation({
     kbVisible,
     emojiPickerVisible,
@@ -215,14 +221,20 @@ export default function GameScreen({ route, navigation }) {
     setBoardMounted,
     setBoardContentActive,
     frostedHeaderH,
+    bottomGap: ISLAND_BOTTOM_GAP,
+    maxBoardH: isTabletLayout ? TABLET_BOARD_MAX_H : undefined,
+    tabletBoardTarget: isTabletLayout,
   });
   pauseJsForDiceThrowRef.current = pauseJsForDiceThrow;
 
   const pointH = useMemo(() => {
     const gameId = activeGameId ?? 'backgammon';
     const entry = gameRegistry.find((g) => g.id === gameId) ?? gameRegistry[0];
+    if (isTabletLayout) {
+      return tabletPointHFromBoardArea(availableH > 0 ? availableH : TABLET_BOARD_MAX_H);
+    }
     return entry.computeLayout({ availableH, windowW }).pointH;
-  }, [activeGameId, availableH, windowW]);
+  }, [activeGameId, availableH, windowW, isTabletLayout]);
 
   useGameDiceRemoteSync({
     boardMode,
@@ -358,6 +370,14 @@ export default function GameScreen({ route, navigation }) {
   const listPaddingTop = frostedHeaderH > 0 ? frostedHeaderH : insets.top + 75;
   const boardTopOffset = listPaddingTop + BOARD_TOP_GAP;
 
+  /** Планшет + раскрытая доска: placeholder вместо image/video в ленте (GPU для DiceThrow3D). */
+  const suppressHeavyMedia =
+    isTabletLayout &&
+    islandState === 'gameExpanded' &&
+    boardContentActive &&
+    !kbVisible &&
+    !emojiPickerVisible;
+
   return (
     <View
       style={[tw`flex-1`, { backgroundColor: V.bgApp }]}
@@ -396,7 +416,6 @@ export default function GameScreen({ route, navigation }) {
             selectedPoint={selectedPoint}
             highlightedMoves={highlightedMoves}
             onPointPress={handlePointPress}
-            onBarPress={handleBarPress}
             onBearOffPress={handleBearOffPress}
             onSwipe={handleBoardSwipe}
             onNewGame={newGame}
@@ -410,7 +429,6 @@ export default function GameScreen({ route, navigation }) {
             boardRenderW={boardRenderW}
             pointH={pointH}
             onDiceAnimComplete={handleDiceAnimComplete}
-            diceGlPausedRef={diceGlPausedRef}
             boardMode={boardMode}
             gameStarted={gameStarted}
             sandboxUiDice={sandboxUiDice}
@@ -427,6 +445,8 @@ export default function GameScreen({ route, navigation }) {
             pickerIconAnims={pickerIconAnims}
             boardContentFadeAnim={boardContentFadeAnim}
             tapGameIcon={tapGameIcon}
+            onBoardLayoutReady={notifyBoardLayoutReady}
+            boardInteractReady={boardInteractReady}
           />
         )}
 
@@ -442,6 +462,7 @@ export default function GameScreen({ route, navigation }) {
             nickname={nickname}
             peerName={opponentName}
             roomFocused={roomFocused}
+            suppressHeavyMedia={suppressHeavyMedia}
             renderPausedRef={renderPausedRef}
             diceBusyRef={diceBusyRef}
             chatFlushDeferredRef={chatFlushDeferredRef}

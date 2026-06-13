@@ -24,11 +24,10 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { Animated, Easing, PanResponder } from 'react-native';
 import { gameRegistry } from './gameRegistry';
+import { ISLAND_BOTTOM_GAP, ISLAND_COLLAPSED_H, computeTabletBoardAreaH } from './gameScreenConstants';
 
 // ─── Константы ───────────────────────────────────────────────────────────────
 
-/** Высота pill в collapsed */
-export const ISLAND_COLLAPSED_H = 36;
 /** Высота pill в picker (без подписей — только иконки) */
 export const ISLAND_PICKER_H = 48;
 /**
@@ -37,9 +36,6 @@ export const ISLAND_PICKER_H = 48;
  */
 const PICKER_WIDTH_RATIO = 0.30;
 const HANDLE_H = ISLAND_COLLAPSED_H;
-/** Зазор между нижним краем острова и верхом ввода чата.
- *  108px — запас под чат и аудиосообщения при открытой доске. */
-const BOTTOM_GAP = 108;
 
 // ─── FSM ──────────────────────────────────────────────────────────────────────
 
@@ -62,6 +58,8 @@ export function useGameIslandAnimation({
   setBoardContentActive,
   frostedHeaderH,
   maxBoardH,
+  bottomGap = ISLAND_BOTTOM_GAP,
+  tabletBoardTarget = false,
 }) {
   // ── FSM ────────────────────────────────────────────────────────────────────
 
@@ -109,6 +107,12 @@ export function useGameIslandAnimation({
   const boardDropStartRef  = useRef(0);
   /** Была открыта доска до скрытия shell (KB / emoji panel) */
   const layoutObscuredRef  = useRef(false);
+  const pendingBoardRevealRef = useRef(/** @type {{ finalH: number } | null} */ (null));
+  const boardFadeStartedRef = useRef(false);
+  const boardFadeFallbackRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
+  /** После раскрытия не пересчитываем высоту — composer/iY дрейфует и дёргает низ острова. */
+  const openHeightLockedRef = useRef(false);
+  const [boardInteractReady, setBoardInteractReady] = useState(false);
 
   // ── computeMaxSlide ────────────────────────────────────────────────────────
 
@@ -120,15 +124,31 @@ export function useGameIslandAnimation({
     return raw;
   }, [maxBoardH]);
 
+  const resolveBoardAreaH = useCallback((bY, iY) => {
+    if (tabletBoardTarget && typeof maxBoardH === 'number' && maxBoardH > 0) {
+      return computeTabletBoardAreaH(bY, iY, maxBoardH);
+    }
+    if (typeof bY !== 'number' || typeof iY !== 'number' || iY <= bY) {
+      return typeof maxBoardH === 'number' && maxBoardH > 0 ? maxBoardH : maxSlideRef.current;
+    }
+    return capBoardH(iY - bY - HANDLE_H - bottomGap);
+  }, [tabletBoardTarget, maxBoardH, capBoardH, bottomGap]);
+
   const computeMaxSlide = useCallback(() => {
+    if (suppressAvailableHRef.current || openHeightLockedRef.current) return;
     const bY = boardColTopYRef.current;
     const iY = chatInputTopYRef.current;
     if (typeof bY === 'number' && typeof iY === 'number') {
-      const avail = capBoardH(iY - bY - HANDLE_H - BOTTOM_GAP);
+      const avail = resolveBoardAreaH(bY, iY);
       maxSlideRef.current = avail;
       if (!suppressAvailableHRef.current) setAvailableH(avail);
+      return;
     }
-  }, [setAvailableH, capBoardH]);
+    if (tabletBoardTarget && typeof maxBoardH === 'number' && maxBoardH > 0) {
+      maxSlideRef.current = maxBoardH;
+      if (!suppressAvailableHRef.current) setAvailableH(maxBoardH);
+    }
+  }, [setAvailableH, resolveBoardAreaH, tabletBoardTarget, maxBoardH]);
 
   // ── pauseJsForDiceThrow ────────────────────────────────────────────────────
 
@@ -150,31 +170,68 @@ export function useGameIslandAnimation({
     pickerHeightAnim.setValue(ISLAND_COLLAPSED_H);
   }, [pickerIconAnims, pickerHeightAnim]);
 
+  const startBoardContentFade = useCallback(() => {
+    if (boardFadeStartedRef.current) return;
+    boardFadeStartedRef.current = true;
+    pendingBoardRevealRef.current = null;
+    if (boardFadeFallbackRef.current) {
+      clearTimeout(boardFadeFallbackRef.current);
+      boardFadeFallbackRef.current = null;
+    }
+    requestAnimationFrame(() => {
+      Animated.timing(boardContentFadeAnim, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) return;
+        suppressAvailableHRef.current = false;
+        setBoardInteractReady(true);
+      });
+    });
+  }, [boardContentFadeAnim]);
+
+  const notifyBoardLayoutReady = useCallback(() => {
+    if (!pendingBoardRevealRef.current) return;
+    startBoardContentFade();
+  }, [startBoardContentFade]);
+
   // ── runOpenSequence ────────────────────────────────────────────────────────
 
   const runOpenSequence = useCallback((/** @type {string} */ gameId) => {
     suppressAvailableHRef.current = true;
+    openHeightLockedRef.current = false;
     boardOpenRef.current = true;
     setActiveGameId(gameId);
-    setBoardContentActive(true);
+    setBoardContentActive(false);
+    setBoardInteractReady(false);
     _transition('gameExpanded');
     boardContentFadeAnim.setValue(0);
     handleStretchAnim.setValue(0);
 
-    // Монтируем доску сразу — она скрыта (boardDropAnim=0, boardContentFadeAnim=0)
     if (!boardMountedRef.current) {
       boardMountedRef.current = true;
       setBoardMounted(true);
     }
 
-    const doOpen = (freshMaxH) => {
-      maxSlideRef.current = freshMaxH;
-      setAvailableH(freshMaxH);
+    const prepBoardReveal = (targetH) => {
+      boardFadeStartedRef.current = false;
+      openHeightLockedRef.current = true;
+      pendingBoardRevealRef.current = { finalH: targetH };
+      maxSlideRef.current = targetH;
+      setAvailableH(targetH);
+      setBoardContentActive(true);
+      if (boardFadeFallbackRef.current) clearTimeout(boardFadeFallbackRef.current);
+      boardFadeFallbackRef.current = setTimeout(() => {
+        boardFadeFallbackRef.current = null;
+        if (pendingBoardRevealRef.current) startBoardContentFade();
+      }, 120);
+    };
 
-      /**
-       * Сначала остров расширяется в стороны (ширина), затем сразу вниз (высота).
-       * Оба spring без bounce (высокий damping).
-       */
+    const doOpen = (targetH) => {
+      maxSlideRef.current = targetH;
+
       Animated.parallel([
         Animated.spring(handleWidthAnim, {
           toValue: 1,
@@ -185,42 +242,29 @@ export function useGameIslandAnimation({
         }),
         Animated.sequence([
           Animated.delay(80),
-          Animated.spring(boardDropAnim, {
-            toValue: freshMaxH,
-            damping: 36,
-            stiffness: 180,
-            mass: 1.0,
+          Animated.timing(boardDropAnim, {
+            toValue: targetH,
+            duration: 320,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: false,
           }),
         ]),
       ]).start(({ finished }) => {
         if (!finished) return;
-        suppressAvailableHRef.current = false;
-        computeMaxSlide();
-        // Контент плавно проявляется после раскрытия острова
-        Animated.timing(boardContentFadeAnim, {
-          toValue: 1,
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }).start();
+        prepBoardReveal(targetH);
       });
     };
 
     boardColRef.current?.measureInWindow((_x, bY) => {
       const iY = chatInputTopYRef.current;
-      if (typeof bY === 'number' && typeof iY === 'number' && iY > bY) {
-        doOpen(capBoardH(iY - bY - HANDLE_H - BOTTOM_GAP));
-      } else {
-        doOpen(maxSlideRef.current);
-      }
+      doOpen(resolveBoardAreaH(bY, iY));
     });
   }, [
     _transition,
     boardDropAnim, handleStretchAnim, handleWidthAnim,
     boardContentFadeAnim,
     boardColRef, boardMountedRef,
-    computeMaxSlide, setAvailableH, setBoardContentActive, setBoardMounted, capBoardH,
+    setAvailableH, setBoardContentActive, setBoardMounted, resolveBoardAreaH, startBoardContentFade,
   ]);
 
   // ── runCloseSequence ───────────────────────────────────────────────────────
@@ -229,7 +273,16 @@ export function useGameIslandAnimation({
     if (showAnimDiceRef.current || diceAnimatingRef.current) return;
 
     suppressAvailableHRef.current = true;
+    openHeightLockedRef.current = false;
     boardOpenRef.current = false;
+    setActiveGameId(null);
+    pendingBoardRevealRef.current = null;
+    boardFadeStartedRef.current = false;
+    setBoardInteractReady(false);
+    if (boardFadeFallbackRef.current) {
+      clearTimeout(boardFadeFallbackRef.current);
+      boardFadeFallbackRef.current = null;
+    }
     boardContentFadeAnim.setValue(0);
     handleStretchAnim.stopAnimation();
     handleWidthAnim.stopAnimation();
@@ -274,6 +327,7 @@ export function useGameIslandAnimation({
     _transition,
     boardDropAnim, handleStretchAnim, handleWidthAnim, pickerHeightAnim, boardContentFadeAnim,
     computeMaxSlide, diceAnimatingRef, renderPausedRef, setBoardContentActive, showAnimDiceRef,
+    setActiveGameId,
   ]);
 
   // ── Refs для PanResponder ──────────────────────────────────────────────────
@@ -490,9 +544,15 @@ export function useGameIslandAnimation({
   }, [kbVisible, emojiPickerVisible, computeMaxSlide, setBoardContentActive]);
 
   useEffect(() => {
-    const t = setTimeout(() => computeMaxSlide(), 0);
+    const t = setTimeout(() => {
+      if (suppressAvailableHRef.current || openHeightLockedRef.current) return;
+      computeMaxSlide();
+      if (boardOpenRef.current) {
+        boardDropAnim.setValue(maxSlideRef.current);
+      }
+    }, 0);
     return () => clearTimeout(t);
-  }, [frostedHeaderH, computeMaxSlide]);
+  }, [frostedHeaderH, bottomGap, maxBoardH, tabletBoardTarget, computeMaxSlide, boardDropAnim]);
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -500,6 +560,7 @@ export function useGameIslandAnimation({
     // FSM
     islandState,
     activeGameId,
+    boardInteractReady,
 
     // Animated values (layout)
     boardDropAnim,
@@ -522,6 +583,7 @@ export function useGameIslandAnimation({
     runCloseSequence,
     computeMaxSlide,
     pauseJsForDiceThrow,
+    notifyBoardLayoutReady,
 
     // Pan
     slidePan,

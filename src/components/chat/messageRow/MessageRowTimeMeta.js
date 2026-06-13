@@ -34,6 +34,7 @@ export default function MessageRowTimeMeta({
   isMine,
   ariaPanelUserAsIncoming,
   variant = 'text',
+  tickPausedRef,
 }) {
   const isEphemeral = !!item.expires_at;
   const isEdited = !!item.edited_at;
@@ -41,7 +42,9 @@ export default function MessageRowTimeMeta({
 
   return (
     <>
-      {isEphemeral ? <ChatEphemeralCountdown expiresAt={item.expires_at} /> : null}
+      {isEphemeral ? (
+        <ChatEphemeralCountdown expiresAt={item.expires_at} tickPausedRef={tickPausedRef} />
+      ) : null}
       {isEdited ? (
         <Text style={{ fontSize: TS_TEXT_SIZE - 1, color: timeColor, fontWeight: '400' }}>
           изм.

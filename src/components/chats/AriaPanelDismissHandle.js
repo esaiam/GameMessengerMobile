@@ -11,7 +11,7 @@ import { V } from '../../theme';
 
 const DISMISS_CLOSE_THRESHOLD = 0.78;
 const DISMISS_CLOSE_VELOCITY_Y = -900;
-const COMMIT_SPRING = { damping: 22, stiffness: 240, mass: 0.85 };
+const DISMISS_SNAP_BACK_SPRING = { damping: 26, stiffness: 160, mass: 1.3 };
 
 /**
  * Ползунок под полем ввода: тянуть вверх — закрыть шторку (pullProgress).
@@ -64,7 +64,7 @@ export default function AriaPanelDismissHandle({
             runOnJS(onClose)();
             return;
           }
-          pullProgress.value = withSpring(1, COMMIT_SPRING);
+          pullProgress.value = withSpring(1, DISMISS_SNAP_BACK_SPRING);
         }),
     [committedSv, curtainMaxHeightSv, onClose, dismissStart, pullProgress],
   );

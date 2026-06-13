@@ -143,6 +143,7 @@ export default function ContactProfileView({
           wrapProfileScrollEnd={wrapProfileScrollEnd}
           bottomInset={insets.bottom}
           minScrollContentHeight={minScrollContentHeight}
+          contentWidth={profileLayoutW}
           mediaItems={mediaItems}
           mediaLoading={mediaLoading}
           roomId={roomId}

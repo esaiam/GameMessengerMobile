@@ -43,6 +43,8 @@ export default function MessageRowBubbleInner({
         textSelectable={textSelectable}
         useAriaLinks={useAriaLinks}
         replyMsg={replyMsg}
+        tickPausedRef={env.ephemeralTickPausedRef}
+        env={env}
       />
     );
   }
@@ -98,6 +100,7 @@ export default function MessageRowBubbleInner({
             isMine={isMine}
             ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
             variant="legacy"
+            tickPausedRef={env.ephemeralTickPausedRef}
           />
         </View>
       </>
@@ -134,6 +137,7 @@ export default function MessageRowBubbleInner({
           isMine={isMine}
           ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
           variant="legacy"
+          tickPausedRef={env.ephemeralTickPausedRef}
         />
       </View>
     </>

@@ -3,7 +3,7 @@
 > **Для агента:** если пользователь спрашивает про готовность к MVP, бете или «что осталось» — **сначала прочитай этот файл**, затем `RELEASE_PREP.md`, `BETA_BRIEF.md`, `PROD_SECURITY_CHECKLIST.md`.  
 > **Обновляй этот файл** после крупных вех (APK, VPS, P1).
 
-**Последнее обновление:** 2026-06-10
+**Последнее обновление:** 2026-06-13
 
 ---
 
@@ -12,7 +12,7 @@
 | Уровень | Статус |
 |---------|--------|
 | **Закрытая бета (10–30 человек, invite)** | **Почти готово** — ждём **VPS (Aria)** + **release APK** + раздачу |
-| **Публичный MVP / Store** | **Нет** — после беты: Sentry, server block/DM, Privacy Policy, полный delete account |
+| **Публичный MVP / Store** | **Нет** — после беты: Sentry (crash reporting) |
 
 ---
 
@@ -23,9 +23,12 @@
 - Тег: `beta-0.1.0` @ `4503dac`; дальше фиксы до `c079c4c`+ (scroll ContactProfile, `__DEV__` логи media, docs)
 - `Table` submodule bump делался (проверь актуальный SHA: `git ls-tree HEAD GameMessengerMobile` в корне `Table`)
 
-### QA автоматика
+### QA автomatika
 - `npm run smoke` — OK
 - `npm run smoke:api` — OK (нужен `.env.smoke`)
+- **CI:** `.github/workflows/smoke.yml` — offline smoke на PR / push в main
+- **Maestro baseline:** `.maestro/smoke.yaml` — auth → chat → send → game (ручной запуск, `npm run maestro:smoke`)
+- **Error Boundary:** `VaultErrorBoundary` в `App.js` (Sentry — перед APK)
 
 ### Документация
 - `docs/BETA_BRIEF.md` — brief для тестеров; баги → **esaiam86@gmail.com**, тема `Vault beta`; **APK = TBD**
@@ -33,7 +36,7 @@
 - `docs/PROD_SECURITY_CHECKLIST.md` — SQL-сверка prod
 
 ### Security prod (ручная сверка 2026-05-26)
-- §1 RLS `rooms`/`messages`/`game_sessions` — participant OK; **дубли legacy** на `rooms` + `game_sessions` (опционально почистить SQL)
+- §1 RLS `rooms`/`messages`/`game_sessions` — participant OK; ~~дубли legacy~~ → миграция `20260615_drop_legacy_rls_policies.sql`
 - §2 `users` — нет
 - §3 `vault_public_keys` — OK
 - §4 storage `chat-media` — **исправлено:** убран `chat-media anon insert`
@@ -46,6 +49,12 @@
 
 ### Сознательно снято с очереди
 - **Aria «push есть — лента пустая»** — пользователь подтвердил: **баг закрыт**, не поднимать
+- **DM policy («кто может писать»)** — **не продукт Vault**: invite-only мессенджер, комната = пара; блокировка уже на сервере (`blocked_peers`). UI и `profileSettings.js` без policy; server-side policy не планируется
+
+### Аккаунт, контакты, legal
+- **Удаление аккаунта** — кнопка в `ProfileScreen`, RPC `delete_user_account` (Supabase), каскадное удаление данных пользователя
+- **Удаление контакта** — RPC `delete_contact_room` (`useContactProfileActions.js`), физическое удаление `room` и `messages` из БД
+- **Privacy Policy** — https://esaiam.github.io/vault-privacy-policy, контакт: **vaultprivacy06@gmail.com**
 
 ---
 
@@ -68,23 +77,30 @@
 
 ## P1 — после первой волны беты (не блокирует старт)
 
-- Sentry + Error Boundary  
-- **DM policy** на сервере (сейчас только AsyncStorage, `profileSettings.js`)  
-- ~~Блокировка на сервере~~ — **сделано:** `blocked_peers` + `blockedContacts.js` (миграция legacy AsyncStorage)  
-- Удаление аккаунта: клиент → RPC `delete_user_account`; сверить cascade `auth.users` + storage на prod  
-- E2E UI (Maestro), CI `smoke` на PR  
-- Переименовать таб Poker (Tamagotchi)  
-- **Переслать** — заглушка; **закрепить** — уже в чате (`useChatPinnedMessage`)  
+- Sentry + `captureException` в `VaultErrorBoundary` (перед release APK)
+- ~~Error Boundary~~ — **сделано:** `src/components/VaultErrorBoundary.js`
+- ~~Блокировка на сервере~~ — **сделано:** `blocked_peers` + `blockedContacts.js`
+- ~~Удаление аккаунта~~ — **сделано:** RPC `delete_user_account`
+- ~~Удаление контакта~~ — **сделано:** RPC `delete_contact_room`
+- ~~Privacy Policy~~ — **сделано:** https://esaiam.github.io/vault-privacy-policy
+- ~~CI smoke на PR~~ — **сделано:** `.github/workflows/smoke.yml`
+- Maestro E2E — baseline в `.maestro/`; прогон вручную (`npm run maestro:smoke`)
+- Вкладка **Poker / Tamagotchi** — P1 backlog (сейчас 3 таба)
+- **Переслать** — заглушка; **закрепить** — уже в чате (`useChatPinnedMessage`)
 
 ---
 
-## Опциональный SQL (не блокер беты)
+## Опциональный SQL — legacy RLS cleanup
 
-**Дроп legacy RLS** (остались рядом с `*_participant`):
-- `rooms`: `Authenticated users can insert rooms`, `Users can read/update own rooms`
-- `game_sessions`: все `Users can … own game sessions`
+**Миграция:** `supabase/migrations/20260615_drop_legacy_rls_policies.sql` (зеркало в `docs/migrations/`)
 
-**REVOKE anon EXECUTE** (ужесточение): `purge_message_if_hidden_for_all`, `update_room_last_message`, `trigger_push_on_message` — только если триггеры не ломаются.
+- DROP legacy RLS на `rooms` + `game_sessions` (оставляет `*participant*`)
+- REVOKE `anon EXECUTE` на trigger-функции (`purge_message_if_hidden_for_all`, …)
+- В конце — SELECT для проверки оставшихся политик
+
+**Применить:** SQL Editor на prod **или** `npm run db:migrate:apply` (Supabase CLI linked).
+
+После применения: `npm run smoke:api` + быстрый чат/игра в dev.
 
 ---
 

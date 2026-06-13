@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { parseAriaMessageAttachment } from './ariaAttachment';
+import { supabase } from './supabase';
 
 /** Виртуальная комната ассистента (не строка в `profiles`). */
 export const ARIA_ROOM_ID = 'aria-direct';
@@ -53,6 +54,30 @@ export function resolveAriaApiBaseUrl() {
 /** База Aria-lite / полной Aria (не хардкодить :8000). */
 export function getAriaApiBaseUrl() {
   return resolveAriaApiBaseUrl();
+}
+
+/**
+ * Заголовки для Aria API: Vault Supabase JWT (фаза A3).
+ * Без сессии — только extra; бэкенд вернёт 401 при ARIA_REQUIRE_AUTH=true.
+ */
+export async function getAriaAuthHeaders(extra = {}) {
+  const headers = { ...extra };
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!error && typeof token === 'string' && token.length > 0) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  } catch {
+    // нет сессии — вызывающий код получит 401 от Aria
+  }
+  return headers;
+}
+
+/** fetch к Aria с JWT (кроме публичного /health). */
+async function ariaFetch(url, options = {}) {
+  const headers = await getAriaAuthHeaders(options.headers || {});
+  return fetch(url, { ...options, headers });
 }
 
 export const DEFAULT_ARIA_STATE = {
@@ -144,7 +169,7 @@ export async function fetchAriaState(userId) {
   const base = getAriaApiBaseUrl();
   if (!base || !userId) return null;
   try {
-    const res = await fetch(`${base}/state?user_id=${encodeURIComponent(userId)}`);
+    const res = await ariaFetch(`${base}/state?user_id=${encodeURIComponent(userId)}`);
     if (!res.ok) return null;
     let json = {};
     try {
@@ -180,7 +205,7 @@ export async function fetchAriaPendingMessages(userId) {
   const base = getAriaApiBaseUrl();
   if (!base || !userId) return [];
   try {
-    const res = await fetch(
+    const res = await ariaFetch(
       `${base}/pending_messages?user_id=${encodeURIComponent(userId)}`
     );
     if (!res.ok) return [];
@@ -204,7 +229,7 @@ export async function fetchAriaPendingMessages(userId) {
 export async function postAriaMessage({ userId, text, history }) {
   const base = getAriaApiBaseUrl();
   if (!base || !userId) throw new Error('no_api');
-  const res = await fetch(`${base}/message`, {
+  const res = await ariaFetch(`${base}/message`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -246,7 +271,7 @@ export async function postAriaMessage({ userId, text, history }) {
 export async function transcribeAriaVoice(audioBase64, userId) {
   const base = getAriaApiBaseUrl();
   if (!base) throw new Error('no_api');
-  const res = await fetch(`${base}/transcribe`, {
+  const res = await ariaFetch(`${base}/transcribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -271,9 +296,151 @@ export const ARIA_TYPING_ROW_ID = 'aria-typing-local';
 /** Макс. сообщений в ленте и в `aria_messages` (без typing). */
 export const ARIA_CHAT_MAX_STORED_MESSAGES = 20;
 
+/** Сколько последних реплик слать в POST /message (UI хранит до 20). */
+export const ARIA_HISTORY_LIMIT_FULL = 20;
+export const ARIA_HISTORY_LIMIT_NORMAL = 12;
+export const ARIA_HISTORY_LIMIT_CASUAL = 8;
+export const ARIA_HISTORY_LIMIT_MIN = 6;
+
+const _MEMORY_RECALL_FRAGMENTS = [
+  'помнишь',
+  'запомнила',
+  'запомнил',
+  'мы говорили',
+  'кто я',
+  'кто ты',
+  'кто меня',
+  'кто тебя',
+  'разрабатыва',
+  'мой разработчик',
+  'тебя разрабатывает',
+  'ты помнишь',
+];
+
+const _DETAILED_REQUEST_MARKERS = [
+  'расскажи подробно',
+  'расскажи про',
+  'расскажи о ',
+  'расскажи об ',
+  'расскажи мне',
+  'объясни',
+  'что такое',
+  'кто такой',
+  'как работает',
+  'опиши',
+  'перечисли',
+  'какие бывают',
+  'история возникновения',
+  'история создания',
+  'основная информация',
+  'основную информацию',
+  'основные факты',
+  'основное о',
+  'что знаешь о',
+  'что ты знаешь о',
+];
+
+const _NEWS_QUERY_MARKERS = [
+  'новост',
+  'что происходит',
+  'что случилось',
+  'что в мире',
+  'что нового',
+  'актуальн',
+  'на сегодня',
+  'на данный момент',
+  'текущий момент',
+  'сводка',
+  'что важного',
+  'важные события',
+  'мировые события',
+  'что там в',
+];
+
+const _FOLLOW_UP_MARKERS = [
+  'продолж',
+  'дальше',
+  'насчёт',
+  'насчет',
+  'уточни',
+  'а про ',
+  'а о ',
+  'а об ',
+  'вернёмся',
+  'вернемся',
+  'как мы ',
+  'то что ',
+];
+
+function _normText(text) {
+  return typeof text === 'string' ? text.trim() : '';
+}
+
+/** Запрос «помнишь / кто я» — нужна длинная история. */
+export function isAriaMemoryRecallQuery(text) {
+  const low = _normText(text).toLowerCase();
+  if (!low) return false;
+  return _MEMORY_RECALL_FRAGMENTS.some((frag) => low.includes(frag));
+}
+
+/** Информационный запрос — нужен полный контекст. */
+export function isAriaDetailedRequest(text) {
+  const low = _normText(text).toLowerCase();
+  if (!low) return false;
+  return _DETAILED_REQUEST_MARKERS.some((m) => low.includes(m));
+}
+
+/** Новости / сводка — полный контекст. */
+export function isAriaNewsQuery(text) {
+  const low = _normText(text).toLowerCase();
+  if (!low) return false;
+  return _NEWS_QUERY_MARKERS.some((m) => low.includes(m));
+}
+
+/** Короткий ping без «?» («ок», «привет») — зеркало Aria is_low_semantic_load_message. */
+export function isAriaLowSemanticLoadMessage(text) {
+  const stripped = _normText(text);
+  if (!stripped) return true;
+  if (isAriaMemoryRecallQuery(stripped)) return false;
+  if (stripped.includes('?')) return false;
+  return stripped.length <= 40;
+}
+
+function _looksLikeFollowUp(text) {
+  const low = _normText(text).toLowerCase();
+  if (!low) return false;
+  return _FOLLOW_UP_MARKERS.some((m) => low.includes(m));
+}
+
+/**
+ * Сколько последних сообщений отправить в Aria для текущей реплики.
+ * casual 6–8 / normal 12 / full 20.
+ */
+export function resolveAriaHistoryLimit(currentText) {
+  const t = _normText(currentText);
+  if (!t) return ARIA_HISTORY_LIMIT_CASUAL;
+
+  if (isAriaMemoryRecallQuery(t) || isAriaDetailedRequest(t) || isAriaNewsQuery(t)) {
+    return ARIA_HISTORY_LIMIT_FULL;
+  }
+  if (t.length > 120) return ARIA_HISTORY_LIMIT_FULL;
+  if (_looksLikeFollowUp(t)) return ARIA_HISTORY_LIMIT_NORMAL;
+
+  if (isAriaLowSemanticLoadMessage(t)) {
+    return t.length <= 15 ? ARIA_HISTORY_LIMIT_MIN : ARIA_HISTORY_LIMIT_CASUAL;
+  }
+  if (t.includes('?')) return ARIA_HISTORY_LIMIT_NORMAL;
+  return ARIA_HISTORY_LIMIT_NORMAL;
+}
+
 /** Сообщение для истории API и сохранения (не строка typing). */
 export function isAriaPersistableMessage(m) {
   return m.message_type !== ARIA_MESSAGE_TYPING && !m.isTyping;
+}
+
+/** Новый ответ Aria — показываем typewriter (явный false, не undefined). */
+export function isAriaTypewriterPending(m) {
+  return m != null && m.aria_reveal_done === false;
 }
 
 /** Оставляет последние N persistable; typing-строки не считаются и остаются в хвосте. */
@@ -296,12 +463,31 @@ function historyRoleFromMessage(m) {
 }
 
 /**
- * Последние до 20 сообщений для POST /message.
+ * Последние N сообщений для POST /message (N зависит от типа текущей реплики).
  * role: user | aria | assistant
+ * @param {object} [opts]
+ * @param {string} [opts.currentText] — текущее сообщение пользователя (для лимита)
+ * @param {number} [opts.historyLimit] — явный лимит (иначе resolveAriaHistoryLimit)
+ * @param {string} [opts.lastUserTextOverride] — подмена последней user-реплики
  */
 export function buildAriaRequestHistory(messages, opts = {}) {
   const filtered = messages.filter(isAriaPersistableMessage);
-  const mapped = filtered.slice(-ARIA_CHAT_MAX_STORED_MESSAGES).map((m) => ({
+  const currentText =
+    typeof opts.currentText === 'string'
+      ? opts.currentText
+      : typeof opts.lastUserTextOverride === 'string'
+        ? opts.lastUserTextOverride
+        : '';
+  const limit = Math.min(
+    ARIA_CHAT_MAX_STORED_MESSAGES,
+    Math.max(
+      1,
+      Number.isFinite(opts.historyLimit)
+        ? opts.historyLimit
+        : resolveAriaHistoryLimit(currentText),
+    ),
+  );
+  const mapped = filtered.slice(-limit).map((m) => ({
     role: historyRoleFromMessage(m),
     text: typeof m.text === 'string' ? m.text : '' }));
   if (opts.lastUserTextOverride) {
@@ -311,6 +497,16 @@ export function buildAriaRequestHistory(messages, opts = {}) {
         break;
       }
     }
+  }
+  if (__DEV__ && currentText) {
+    console.log(
+      '[Vault][dev] Aria history:',
+      mapped.length,
+      'msgs (limit',
+      limit,
+      ') for',
+      currentText.slice(0, 48),
+    );
   }
   return mapped;
 }

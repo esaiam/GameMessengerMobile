@@ -14,7 +14,12 @@ const LIST_BOTTOM_PAD = 8;
 /**
  * Inverted-лента Aria в шторке — только нативный скролл, без dismiss-жестов на списке.
  */
-export default function AriaPanelMessageList({ messages, nickname, scrollEnabled }) {
+export default function AriaPanelMessageList({
+  messages,
+  nickname,
+  scrollEnabled,
+  onAriaRevealComplete,
+}) {
   const { width: windowWidth } = useWindowDimensions();
   const roomKey = scrollEnabled ? ARIA_ROOM_ID : null;
   const formattedMessages = useChatFormattedMessagesState(messages, roomKey);
@@ -51,6 +56,7 @@ export default function AriaPanelMessageList({ messages, nickname, scrollEnabled
     isAriaChat: true,
     ariaPlainPanel: true,
     openCalendarFromSeparator: noop,
+    onAriaRevealComplete,
     activeVoiceUri: null,
     activePlayerStatus: { playing: false, currentTime: 0, duration: 0 },
     activeVoiceMessageId: null,

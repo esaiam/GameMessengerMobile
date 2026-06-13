@@ -1,0 +1,18 @@
+appId: ${MAESTRO_APP_ID}
+---
+# Вход, если на экране auth. Аккаунт должен уже иметь @handle (не PickHandle).
+- tapOn:
+    id: auth-email-input
+- eraseText
+- inputText: ${SMOKE_TEST_EMAIL}
+- tapOn:
+    id: auth-password-input
+- eraseText
+- inputText: ${SMOKE_TEST_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-submit-button
+- extendedWaitUntil:
+    notVisible:
+      id: auth-submit-button
+    timeout: 30000

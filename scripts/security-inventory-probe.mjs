@@ -71,15 +71,6 @@ if (profileError) {
   }
 }
 
-const { error: dmColError } = await supabase.from('profiles').select('dm_policy').limit(0);
-if (dmColError?.message?.includes('dm_policy')) {
-  row('profiles.dm_policy column', 'MISSING', 'expected — only AsyncStorage today');
-} else if (dmColError) {
-  row('profiles.dm_policy column', 'FAIL', dmColError.message);
-} else {
-  row('profiles.dm_policy column', 'OK', 'column exists on prod');
-}
-
 const { error: bpError } = await supabase.from('blocked_peers').select('blocked_handle').limit(1);
 if (bpError) {
   row('blocked_peers table + RLS', 'FAIL', bpError.message);

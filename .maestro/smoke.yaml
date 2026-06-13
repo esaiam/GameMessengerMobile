@@ -1,0 +1,26 @@
+appId: ${MAESTRO_APP_ID}
+---
+# Baseline E2E: auth → чат → send → game island.
+# Креды: .env.smoke (SMOKE_TEST_EMAIL, SMOKE_TEST_PASSWORD, SMOKE_TEST_PEER_HANDLE)
+# Запуск: npm run maestro:smoke
+
+- launchApp:
+    clearState: false
+
+- runFlow:
+    when:
+      visible:
+        id: auth-email-input
+    file: subflows/login.yaml
+
+- assertVisible:
+    id: chats-screen
+
+- runFlow:
+    file: subflows/open-chat.yaml
+
+- runFlow:
+    file: subflows/send-text.yaml
+
+- runFlow:
+    file: subflows/open-game.yaml

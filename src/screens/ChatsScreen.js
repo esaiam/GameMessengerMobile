@@ -2,7 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import Animated, { useSharedValue } from 'react-native-reanimated';
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import tw from 'twrnc';
 import { useAndroidTabOverscroll } from '../hooks/useAndroidTabOverscroll';
 import { useMainTabsNavigationOptional } from '../context/MainTabsNavigationContext';
@@ -134,7 +138,7 @@ export default function ChatsScreen({ route, navigation }) {
     releaseTabBarSuppress,
   });
 
-  const { ariaMessages, ariaResolvedNickname, sendToAria, ariaOnline, clearAriaHistory } =
+  const { ariaMessages, ariaResolvedNickname, sendToAria, ariaOnline, clearAriaHistory, markAriaRevealDone } =
     useAriaChatSession(ariaVisible, nickname);
 
   const confirmAriaClearHistory = useCallback(async () => {
@@ -266,8 +270,12 @@ export default function ChatsScreen({ route, navigation }) {
     [headerShellStyle],
   );
 
+  const ariaBackdropScrimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(ariaPullProgress.value, [0, 1], [0, 0.4]),
+  }));
+
   return (
-    <TabBackground backgroundColor={V.bgChatsScreen}>
+    <TabBackground backgroundColor={V.bgChatsScreen} testID="chats-screen">
       <GestureDetector gesture={chatsGesture}>
         <Animated.View
           style={[tw`flex-1`, topPullBounceStyle]}
@@ -318,6 +326,15 @@ export default function ChatsScreen({ route, navigation }) {
         </Animated.View>
       </GestureDetector>
 
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFillObject,
+          styles.ariaBackdropScrim,
+          ariaBackdropScrimStyle,
+        ]}
+      />
+
       <AriaPanelOverlay
         pullProgress={ariaPullProgress}
         committedSv={ariaCommittedSv}
@@ -330,6 +347,7 @@ export default function ChatsScreen({ route, navigation }) {
         }
         sendToAria={sendToAria}
         ariaOnline={ariaOnline}
+        onAriaRevealComplete={markAriaRevealDone}
       />
 
       <View
@@ -431,5 +449,9 @@ const styles = StyleSheet.create({
     elevation: 10,
     backgroundColor: 'transparent',
     overflow: 'visible',
+  },
+  ariaBackdropScrim: {
+    backgroundColor: '#000000',
+    zIndex: 4,
   },
 });

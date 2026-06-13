@@ -432,6 +432,7 @@ export default function ChatComposer({
                 ) : null}
 
                 <TextInput
+                  testID="chat-composer-input"
                   ref={inputRef}
                   style={[
                     tw`flex-1 text-[16px] max-h-24`,
@@ -487,6 +488,7 @@ export default function ChatComposer({
 
                 {text.trim() && !isRecordingVoice ? (
                   <TouchableOpacity
+                    testID="chat-composer-send"
                     onPress={sendMessage}
                     style={{
                       marginLeft: INPUT_BAR_CLIP_MIC_SHIFT,

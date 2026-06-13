@@ -191,6 +191,22 @@ export function useAriaChatSession(enabled, nickname) {
     });
   }, []);
 
+  const markAriaRevealDone = useCallback(
+    (messageId) => {
+      if (!messageId) return;
+      setAriaMessages((prev) => {
+        let changed = false;
+        const next = prev.map((m) => {
+          if (m.id !== messageId || m.aria_reveal_done === true) return m;
+          changed = true;
+          return { ...m, aria_reveal_done: true };
+        });
+        return changed ? next : prev;
+      });
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!enabled) {
       setAriaResolvedNickname(null);
@@ -314,10 +330,10 @@ export function useAriaChatSession(enabled, nickname) {
 
       const baseRow = createAriaMessageBaseRow();
 
-      const history = buildAriaRequestHistory(
-        ariaMessagesRef.current,
-        skipOptimisticUserTyping ? { lastUserTextOverride: trimmed } : {},
-      );
+      const history = buildAriaRequestHistory(ariaMessagesRef.current, {
+        currentText: trimmed,
+        ...(skipOptimisticUserTyping ? { lastUserTextOverride: trimmed } : {}),
+      });
 
       if (!skipOptimisticUserTyping) {
         const userMsgId = `aria-user-${Date.now()}`;
@@ -400,6 +416,7 @@ export function useAriaChatSession(enabled, nickname) {
               read_at: aiNow,
               message_type: 'text',
               aria_api_role: 'aria',
+              aria_reveal_done: false,
               ...(attachment ? { aria_attachment: attachment } : {}),
             },
           ]);
@@ -416,6 +433,7 @@ export function useAriaChatSession(enabled, nickname) {
               created_at: errNow,
               read_at: errNow,
               message_type: 'text',
+              aria_reveal_done: false,
             },
           ]);
         }
@@ -479,6 +497,7 @@ export function useAriaChatSession(enabled, nickname) {
                   read_at: now,
                   message_type: 'text',
                   aria_api_role: 'aria',
+                  aria_reveal_done: false,
                 };
               });
             if (additions.length === 0) return prev;
@@ -517,5 +536,6 @@ export function useAriaChatSession(enabled, nickname) {
     ariaOnline,
     ariaResolvedNickname,
     playAriaReplySound,
+    markAriaRevealDone,
   };
 }

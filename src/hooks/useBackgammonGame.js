@@ -101,17 +101,6 @@ export function useBackgammonGame({
     [isMyTurn, gameState, selectedPoint, highlightedMoves, playerNumber, syncGameState]
   );
 
-  const handleBarPress = useCallback(
-    (barPlayer) => {
-      if (boardMode !== 'match') return;
-      if (!isMyTurn || gameState.turnPhase !== 'move') return;
-      if (barPlayer !== playerNumber || gameState.bar[playerNumber] <= 0) return;
-      setSelectedPoint('bar');
-      setHighlightedMoves(getMoveOptionsForSelection(gameState, 'bar'));
-    },
-    [isMyTurn, gameState, playerNumber, boardMode]
-  );
-
   const handleBearOffPress = useCallback(
     () => {
       if (boardMode !== 'match') return;
@@ -165,9 +154,7 @@ export function useBackgammonGame({
     setSelectedPoint,
     setHighlightedMoves,
     setSandboxUiDice,
-    setMode,
     handlePointPress,
-    handleBarPress,
     handleBearOffPress,
     handleEndTurn };
 }

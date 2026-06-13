@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { AudioModule } from 'expo-audio';
 
 import { LocalAvatarProvider } from './src/context/LocalAvatarContext';
+import VaultErrorBoundary from './src/components/VaultErrorBoundary';
 import { AuthGateProvider, useAuthGate } from './src/context/AuthGateContext';
 import RecoverPasswordScreen from './src/screens/RecoverPasswordScreen';
 import { V } from './src/theme';
@@ -208,16 +209,18 @@ export default function App() {
 
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <KeyboardProvider>
-        <SafeAreaProvider>
-          <LocalAvatarProvider>
-            <AuthGateProvider>
-              <AppNavigationRoot />
-            </AuthGateProvider>
-          </LocalAvatarProvider>
-        </SafeAreaProvider>
-      </KeyboardProvider>
-    </GestureHandlerRootView>
+    <VaultErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <KeyboardProvider>
+          <SafeAreaProvider>
+            <LocalAvatarProvider>
+              <AuthGateProvider>
+                <AppNavigationRoot />
+              </AuthGateProvider>
+            </LocalAvatarProvider>
+          </SafeAreaProvider>
+        </KeyboardProvider>
+      </GestureHandlerRootView>
+    </VaultErrorBoundary>
   );
 }

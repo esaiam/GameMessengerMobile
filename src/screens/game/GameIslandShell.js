@@ -34,10 +34,10 @@ import {
   THUMB_W_MAX,
   THUMB_W_MIN,
   THUMB_H_LINE,
+  ISLAND_COLLAPSED_H,
 } from './gameScreenConstants';
 import GameBoardDiceCenter from './GameBoardDiceCenter';
 import { gameRegistry } from './gameRegistry';
-import { ISLAND_COLLAPSED_H } from './useGameIslandAnimation';
 
 // ─── Константы визуала ────────────────────────────────────────────────────────
 
@@ -86,7 +86,6 @@ export default function GameIslandShell({
   selectedPoint,
   highlightedMoves,
   onPointPress,
-  onBarPress,
   onBearOffPress,
   onSwipe,
   onNewGame,
@@ -104,7 +103,6 @@ export default function GameIslandShell({
   boardRenderW,
   pointH,
   onDiceAnimComplete,
-  diceGlPausedRef,
 
   // Board UI
   boardMode,
@@ -123,6 +121,8 @@ export default function GameIslandShell({
   pickerIconAnims,
   boardContentFadeAnim,
   tapGameIcon,
+  onBoardLayoutReady,
+  boardInteractReady,
 }) {
   const isExpanded = islandState === 'gameExpanded';
   const isPicker   = islandState === 'picker';
@@ -195,6 +195,8 @@ export default function GameIslandShell({
           {
             width: stripWidthAnim,
             borderRadius: borderRadiusAnim,
+            backgroundColor:
+              boardContentActive && !boardInteractReady ? '#000000' : ISLAND_BG,
           },
         ]}
       >
@@ -220,7 +222,6 @@ export default function GameIslandShell({
                   selectedPoint={selectedPoint}
                   highlightedMoves={highlightedMoves}
                   onPointPress={onPointPress}
-                  onBarPress={onBarPress}
                   onBearOffPress={onBearOffPress}
                   onSwipe={onSwipe}
                   topBarMiddle={
@@ -235,8 +236,10 @@ export default function GameIslandShell({
                       <Text style={styles.btnText}>Новая игра</Text>
                     </TouchableOpacity>
                   }
-                  enableLayoutAnimations={!kbTransitioning && !isTabletLayout}
+                  enableLayoutAnimations={!kbTransitioning && !isTabletLayout && boardInteractReady}
                   maxBoardWidth={boardMaxW}
+                  layoutWidthHint={boardRenderW}
+                  onLayoutReady={onBoardLayoutReady}
                   diceOverlay={
                     showAnimDice && (
                       <DiceThrow3D
@@ -246,7 +249,6 @@ export default function GameIslandShell({
                         boardWidth={boardRenderW}
                         boardHeight={pointH * 2}
                         onComplete={onDiceAnimComplete}
-                        pausedRef={diceGlPausedRef}
                       />
                     )
                   }
@@ -290,6 +292,7 @@ export default function GameIslandShell({
 
         {/* ── Нижняя секция island (tap/drag target + контент состояния) ── */}
         <Animated.View
+          testID="game-island-handle"
           {...slidePan.panHandlers}
           style={[styles.islandBottom, { height: effectiveHandleH }]}
           accessibilityRole="button"
@@ -299,8 +302,8 @@ export default function GameIslandShell({
             : 'Нажми, чтобы открыть игры'
           }
         >
-          {/* collapsed: иконка кубиков */}
-          {!isExpanded && !isPicker && (
+          {/* collapsed: кубики */}
+          {!isPicker && !isExpanded && (
             <View pointerEvents="none" style={styles.centeredContent}>
               <Dices
                 size={ISLAND_ICON_SIZE}
@@ -339,7 +342,7 @@ export default function GameIslandShell({
             </View>
           )}
 
-          {/* gameExpanded: drag nub (белая полоска) */}
+          {/* gameExpanded: nub — сразу при раскрытии, без swap на fade */}
           {isExpanded && (
             <Animated.View
               pointerEvents="none"
@@ -386,7 +389,6 @@ const styles = StyleSheet.create({
   // Единая форма острова
   islandOuter: {
     alignSelf: 'center',
-    backgroundColor: ISLAND_BG,
     borderWidth: ISLAND_BORDER_W,
     borderColor: ISLAND_BORDER_COLOR,
     overflow: 'hidden',

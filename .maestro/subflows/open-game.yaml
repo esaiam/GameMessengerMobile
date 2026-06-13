@@ -1,0 +1,13 @@
+appId: ${MAESTRO_APP_ID}
+---
+# GameScreen (Room): раскрыть game island из collapsed.
+- extendedWaitUntil:
+    visible:
+      id: game-island-handle
+    timeout: 15000
+- tapOn:
+    id: game-island-handle
+- extendedWaitUntil:
+    visible:
+      text: "Выбери игру"
+    timeout: 8000

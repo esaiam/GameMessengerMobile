@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NICKNAME_KEY, SWIPE_HINT_KEY, LEGACY_SWIPE_HINT_KEY } from './gameScreenConstants';
+import { SWIPE_HINT_KEY, LEGACY_SWIPE_HINT_KEY } from './gameScreenConstants';
 import { readNicknameFromStorage } from '../../lib/nicknameStorage';
 
 /**

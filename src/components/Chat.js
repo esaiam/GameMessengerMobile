@@ -18,8 +18,8 @@ export default function Chat({
   setAriaMessages,
   /** POST на ARIA_API_URL + очистка typing (реализовано в ChatRoomScreen). */
   sendToAria,
-  onInputBarHeight: _onInputBarHeight,
-  onInputBarTopY: _onInputBarTopY,
+  onInputBarHeight,
+  onInputBarTopY,
   /** GameScreen: сообщает когда emoji picker открыт/закрыт (чтобы скрыть доску). */
   onEmojiPickerChange,
   /** Отступ сверху у ленты (под «парящую» шапку с blur), px */
@@ -27,6 +27,8 @@ export default function Chat({
   /** Данные для frosted-шапки (рендер внутри Chat); если null — шапки нет. */
   chatRoomHeader,
   onTopOverlayHeight,
+  /** GameScreen tablet: доска раскрыта — позже placeholder вместо image/video в ленте */
+  suppressHeavyMedia = false,
   /** GameScreen: true — не трогать JS-таймеры эфемерки (бросок кубиков) */
   renderPausedRef,
   /** GameScreen: ref — отложенные chat INSERT/UPDATE во время 3D-броска */
@@ -38,6 +40,8 @@ export default function Chat({
   overscrollEnabled = true,
   /** Экран комнаты в фокусе (read receipts / cursor только тогда). */
   roomFocused = false,
+  /** Aria: typewriter завершён */
+  onAriaRevealComplete,
 }) {
   const viewProps = useChatController({
     roomId,
@@ -47,10 +51,13 @@ export default function Chat({
     ariaMessages,
     setAriaMessages,
     sendToAria,
+    onInputBarHeight,
+    onInputBarTopY,
     onEmojiPickerChange,
     listPaddingTop,
     chatRoomHeader,
     onTopOverlayHeight,
+    suppressHeavyMedia,
     renderPausedRef,
     diceBusyRef,
     chatFlushDeferredRef,
@@ -58,6 +65,7 @@ export default function Chat({
     showAnimDice,
     overscrollEnabled,
     roomFocused,
+    onAriaRevealComplete,
   });
 
   return <ChatView {...viewProps} />;

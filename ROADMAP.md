@@ -39,7 +39,9 @@
 - [x] Миграции БД: `last_message`, purge hidden, pg_cron, push + Vault
 - [x] RLS на prod — participant-политики, не `supabase_setup_v2` как есть
 - [x] Регрессия чата (ручной чеклист)
-- [x] Профиль контакта: block (`blocked_peers` + миграция из AsyncStorage), delete, контакты + `hidden_for`
+- [x] Профиль контакта: block (`blocked_peers` + миграция из AsyncStorage), delete (`delete_contact_room` — физическое удаление room + messages), контакты + `hidden_for`
+- [x] Удаление аккаунта: `ProfileScreen` → RPC `delete_user_account`, каскадное удаление данных пользователя
+- [x] Privacy Policy: https://esaiam.github.io/vault-privacy-policy (vaultprivacy06@gmail.com)
 - [x] Жесты на фото в чате
 - [x] Prod-логи: `console.*` только в `__DEV__` (кроме фатальных `console.error`)
 - [x] Удалён опасный `scripts/fix-messages-rls-update-delete.sql`
@@ -104,28 +106,32 @@
 
 В prod нет crash reporting, error tracking и метрик — падения у тестеров видны только если напишут; кроме `console.error` на bootstrap/libsodium обратной связи нет.
 
-- [ ] **Crash reporting** — [Sentry](https://sentry.io) (`@sentry/react-native` + EAS): падения, необработанные ошибки, версия сборки, stack trace, алерты
-- [ ] **Error boundaries** — необработанные ошибки React-дерева не теряются молча (связка с Sentry)
+- [ ] **Crash reporting** — [Sentry](https://sentry.io) (`@sentry/react-native` + EAS): перед release APK
+- [x] **Error boundaries** — `VaultErrorBoundary` в `App.js` (Sentry — позже)
 - [ ] *(опционально)* базовые метрики отправки / realtime reconnect — после Sentry, если нужно для широкой беты
 
 ### Качество / QA
 
 > **E2E encryption** (VM2 + libsodium) — уже есть. Ниже — **E2E UI** (автотесты сценариев в приложении).
 
-- [ ] **E2E UI-тесты** — Detox или Maestro: auth → чат → отправка текста/медиа → reply; прогон в CI или перед релизным APK. Сейчас только `npm run smoke` / `smoke:api` (Node) и ручной `docs/chat-regression-checklist.md`
+- [x] **E2E UI baseline (Maestro)** — `.maestro/smoke.yaml`, `npm run maestro:smoke` (ручной прогон на эмуляторе)
+- [x] **CI offline smoke** — `.github/workflows/smoke.yml` на PR
+- [ ] Maestro в CI / перед каждым APK — опционально, нужен эмулятор в runner
 
 ### Продукт
-- [ ] **Aria** — серверная история / sync; fix «пуш пришёл — в чате пусто»
-- [ ] **DM policy** на сервере (сейчас только AsyncStorage, `profileSettings.js`)
+- [ ] **Aria** — серверная история / sync (VPS + `EXPO_PUBLIC_ARIA_API_URL`); ~~fix «пуш / пустая лента»~~ — закрыто
+- ~~**DM policy**~~ — **снято:** не продукт Vault (invite-only DM, `blocked_peers` достаточно)
 - [x] **Блокировка** на сервере — таблица `blocked_peers`, клиент `blockedContacts.js` (однократная миграция legacy AsyncStorage)
-- [ ] Вкладка **Poker** → переименовать (сейчас Tamagotchi)
-- [ ] Удаление аккаунта: клиент вызывает RPC `delete_user_account` — сверить cascade `auth.users` + storage на prod
+- [ ] Вкладка **Poker / Tamagotchi** — добавить 4-й таб (сейчас в коде 3 таба: Chats / Contacts / Profile; `gameRegistry.js` и `tamagotchiApi.js` готовы)
+- [x] Удаление аккаунта: `ProfileScreen` → RPC `delete_user_account`, каскадное удаление данных пользователя
+- [x] Удаление контакта: RPC `delete_contact_room` — физическое удаление room + messages (`useContactProfileActions.js`)
+- [x] Privacy Policy: https://esaiam.github.io/vault-privacy-policy (vaultprivacy06@gmail.com)
 - [x] Контекстное меню: **закрепить** (`rooms.pinned_message_id`, `useChatPinnedMessage`)
 - [ ] Контекстное меню: **переслать** (заглушка «в разработке»)
 
 ### Инфра
 - [ ] Storage RLS: `chat-media` (публичный read/anon insert в `supabase_setup_v2.sql` — сверить с prod)
-- [ ] Cleanup дублирующих RLS policies на prod (`Users can read own rooms` vs `rooms_*_participant`)
+- [x] **SQL cleanup (legacy RLS dupes)** — `supabase/migrations/20260615_drop_legacy_rls_policies.sql`
 - [x] Пометить `supabase_setup_v2.sql` как **legacy / не для prod**
 
 ---

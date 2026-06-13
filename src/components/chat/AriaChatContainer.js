@@ -13,6 +13,7 @@ export function AriaChatContainer({
   ariaMessages,
   setAriaMessages,
   sendToAria,
+  markAriaRevealDone,
   listPaddingTop,
   chatRoomHeader,
   onTopOverlayHeight }) {
@@ -26,6 +27,7 @@ export function AriaChatContainer({
       ariaMessages={ariaMessages}
       setAriaMessages={setAriaMessages}
       sendToAria={sendToAria}
+      onAriaRevealComplete={markAriaRevealDone}
       listPaddingTop={listPaddingTop}
       chatRoomHeader={chatRoomHeader}
       onTopOverlayHeight={onTopOverlayHeight}

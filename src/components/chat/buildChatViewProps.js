@@ -1,6 +1,5 @@
 /** Assembles spread-ready prop bundles for ChatView from hook outputs. */
 export default function buildChatViewProps({
-  ephemeralClockTick,
   chatRoomHeader,
   isAriaChat,
   uiReady,
@@ -148,12 +147,12 @@ export default function buildChatViewProps({
   };
 
   return {
-    ephemeralClockTick,
     chatRoomHeader,
     isAriaChat,
     uiReady,
     insets,
     listViewportStyle,
+    overscrollEnabled,
     overlayProps,
     listProps,
     composerProps,

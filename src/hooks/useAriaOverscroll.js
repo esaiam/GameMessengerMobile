@@ -21,7 +21,8 @@ import {
 } from './ariaPullProgress';
 
 const GLOW_ANIM_DURATION_MS = 300;
-const ARIA_SPRING = { damping: 22, stiffness: 240, mass: 0.85 };
+const ARIA_SPRING = { damping: 28, stiffness: 160, mass: 1.3 };
+const ARIA_CLOSE_SPRING = { damping: 32, stiffness: 180, mass: 1.1 };
 
 /**
  * Pull-down на верхней границе списка чатов:
@@ -222,7 +223,7 @@ export function useAriaOverscroll({
       useNativeDriver: false,
     }).start();
     cancelAnimation(ariaPullProgress);
-    ariaPullProgress.value = withSpring(0, ARIA_SPRING, (finished) => {
+    ariaPullProgress.value = withSpring(0, ARIA_CLOSE_SPRING, (finished) => {
       if (finished) {
         ariaReleaseLatchSv.value = 0;
         tabBarSuppressLatchSv.value = 0;
@@ -367,13 +368,13 @@ export function useAriaOverscroll({
       if (progress > 0.001) {
         cancelAnimation(ariaPullProgress);
         cancelAnimation(topPullPx);
-        ariaPullProgress.value = withSpring(0, ARIA_SPRING, (finished) => {
+        ariaPullProgress.value = withSpring(0, ARIA_CLOSE_SPRING, (finished) => {
           if (finished) {
             topPullPx.value = 0;
             runOnJS(finishAriaPullReleaseJs)(true);
           }
         });
-        topPullPx.value = withSpring(0, ARIA_SPRING);
+        topPullPx.value = withSpring(0, ARIA_CLOSE_SPRING);
         runOnJS(animateGlowTo)(0);
       } else {
         ariaReleaseLatchSv.value = 0;

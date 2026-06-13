@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Dimensions, View, StyleSheet } from 'react-native';
-import { Hand } from 'lucide-react-native/icons';
+import { Hand } from '../icons/lucideIcons';
 
 const W = Dimensions.get('window').width;
 

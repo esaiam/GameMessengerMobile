@@ -21,6 +21,7 @@ function ChatMultiImageGridCell({
   borderRadii,
   showMoreOverlay,
   moreCount,
+  suppressHeavyMedia = false,
   selectionMode,
   item,
   onMessagePress,
@@ -48,7 +49,11 @@ function ChatMultiImageGridCell({
         pressed && multiImageGridStyles.cellPressed,
       ]}
     >
-      <Image source={{ uri }} style={multiImageGridStyles.cellImage} resizeMode="cover" />
+      {suppressHeavyMedia ? (
+        <View style={multiImageGridStyles.cellImage} />
+      ) : (
+        <Image source={{ uri }} style={multiImageGridStyles.cellImage} resizeMode="cover" />
+      )}
       {showMoreOverlay ? (
         <View pointerEvents="none" style={multiImageGridStyles.moreOverlay}>
           <Text style={multiImageGridStyles.moreOverlayText}>+{moreCount}</Text>
@@ -76,6 +81,8 @@ function ChatMultiImageGrid({
   onDoubleTapHeart,
   onCaptionPress,
   onLongPress,
+  suppressHeavyMedia = false,
+  tickPausedRef,
 }) {
   const hasCaption = Boolean(String(caption || '').trim());
   const gridW = Math.floor(layoutMaxWidth);
@@ -84,6 +91,7 @@ function ChatMultiImageGrid({
   const R = GRID_RADIUS;
 
   const cellProps = {
+    suppressHeavyMedia,
     selectionMode,
     item,
     onMessagePress,
@@ -224,7 +232,9 @@ function ChatMultiImageGrid({
           </View>
         ) : null}
         <View pointerEvents="none" style={multiImageGridStyles.metaOverlay}>
-          {isEphemeral ? <ChatEphemeralCountdown expiresAt={expiresAt} /> : null}
+          {isEphemeral ? (
+            <ChatEphemeralCountdown expiresAt={expiresAt} tickPausedRef={tickPausedRef} />
+          ) : null}
           <Text style={multiImageGridStyles.timeText}>{formattedTime}</Text>
           <ChatReadCheck isRead={isRead} isMine={isMine} variant="overlay" />
         </View>

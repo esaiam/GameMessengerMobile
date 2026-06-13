@@ -31,11 +31,12 @@ export default function MessageRowVideoContent({
     borderRadius: VIDEO_FEED_CIRCLE_IDLE / 2,
     ...(isEphemeral ? { borderWidth: 0.5, borderColor: V.accentGold } : {}),
   };
+  const showNativeVideo = isVideoRenderable && !listExtra.suppressHeavyMedia;
   const videoCircleNode = (
     <View style={videoCircleAnchorStyle}>
       <Animated.View style={{ transform: [{ scale: bounceAnimVideo }] }}>
         <View style={{ ...videoCircleChrome, alignSelf: 'flex-start' }}>
-          {isVideoRenderable
+          {showNativeVideo
             ? env.renderMessageContent(item, isMine)
             : (
               <ChatVideoPlaceholder
@@ -88,6 +89,7 @@ export default function MessageRowVideoContent({
             isMine={isMine}
             ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
             variant="legacy"
+            tickPausedRef={env.ephemeralTickPausedRef}
           />
         </View>
       </View>

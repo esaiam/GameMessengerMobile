@@ -69,7 +69,7 @@ export function useContactProfileActions({
       const { data } = await supabase
         .from('profiles')
         .select('handle')
-        .eq('id', peerName)
+        .eq('handle', peerName)
         .maybeSingle();
       const handle = typeof data?.handle === 'string' ? data.handle.trim() : '';
       if (handle) message = `Контакт в Vault Messenger: @${handle}`;

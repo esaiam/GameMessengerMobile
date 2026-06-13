@@ -40,7 +40,7 @@ export default function useGameBoardSwipe({
         gameState.turnPhase === 'preroll' &&
         gameState.currentPlayer !== playerNumber
       ) {
-        Alert.alert('Подожди', 'Сначала должен бросить игрок 1.');
+        Alert.alert('Подожди', `Сейчас бросает игрок ${gameState.currentPlayer}.`);
         return;
       }
       if (!inSandbox && !gameStarted && playerNumber !== 1) {

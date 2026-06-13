@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import { View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
@@ -32,7 +32,15 @@ const TopTab = createMaterialTopTabNavigator();
 
 const TAB_ROUTE_NAMES = ['Chats', 'Contacts', 'Profile'];
 
-const TAB_ICON_SIZE = TAB_BAR_LAYOUT.iconSize;
+const TAB_ICON_SIZE = TAB_BAR_LAYOUT.tabIconSize;
+
+/** Пробрасывает `position` pager-а в GlassTabBar (Animated interpolation 0…n-1). */
+function PagerPositionBridge({ position, onPosition }) {
+  useLayoutEffect(() => {
+    onPosition(position);
+  }, [position, onPosition]);
+  return null;
+}
 
 const TABS = [
   { key: 'Chats',    name: 'Chats',    icon: (color) => <MessageCircle color={color} size={TAB_ICON_SIZE} strokeWidth={1.5} />, activeTint: V.accentSage },
@@ -147,7 +155,12 @@ export function MainTabs({ navigation, route }) {
   const [pagerInteractionLocked, setPagerInteractionLocked] = useState(false);
   const [tabBarSuppressed, setTabBarSuppressed] = useState(false);
   const [tabBarSuppressAnimated, setTabBarSuppressAnimated] = useState(false);
+  const [pagerPosition, setPagerPosition] = useState(null);
   const tabBarSuppressedRef = useRef(false);
+
+  const handlePagerPosition = useCallback((position) => {
+    setPagerPosition((prev) => (prev === position ? prev : position));
+  }, []);
 
   useEffect(() => {
     tabBarSuppressedRef.current = tabBarSuppressed;
@@ -245,7 +258,12 @@ export function MainTabs({ navigation, route }) {
         initialRouteName="Chats"
         tabBar={(props) => {
           topTabNavRef.current = props.navigation;
-          return null;
+          return (
+            <PagerPositionBridge
+              position={props.position}
+              onPosition={handlePagerPosition}
+            />
+          );
         }}
         screenListeners={{
           state: handleTopTabState,
@@ -268,6 +286,7 @@ export function MainTabs({ navigation, route }) {
       </TopTab.Navigator>
       <GlassTabBar
         activeIndex={activeIndex}
+        pagerPosition={pagerPosition}
         tabs={TABS}
         onTabPress={handleTabPress}
         visible={tabBarVisible && (!tabBarSuppressed || tabBarAriaPullDrive)}

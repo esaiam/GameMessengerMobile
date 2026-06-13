@@ -151,6 +151,7 @@ const ChatsListRow = React.memo(
     return (
       <View style={styles.row} onLayout={onLayout}>
         <Pressable
+          testID={item.isAria ? 'chat-row-aria' : `chat-row-${item.roomId}`}
           onPressIn={selectionMode ? undefined : onPressIn}
           onPress={onRowPress}
           onLongPress={onLongPress}

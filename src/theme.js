@@ -65,6 +65,11 @@ export const V = {
   tabBarShellBorder: 'rgba(255,255,255,0.14)',
   /** Тинт таб-бара: тёмный серый, почти чёрный (поверх blur) */
   tabBarGlassTintBg: 'rgba(16, 18, 24, 0.88)',
+  /** Open Design glass-strong: oklch(22% 0.03 265 / 0.58) */
+  tabBarGlassStrongTintBg: 'rgba(34, 38, 48, 0.58)',
+  /** Petrol iridescent glow (oklch 68% 0.16 195) */
+  petrolGlow: 'rgba(62, 196, 196, 0.12)',
+  petrolGlowSoft: 'rgba(62, 196, 196, 0.08)',
 
   dangerMuted: '#B56B6B',
 
@@ -72,6 +77,29 @@ export const V = {
   vaultAvatarFill: '#171B22',
   vaultAvatarInitial: '#A2A4A7',
   vaultAvatarBorder: '#262930' };
+
+/** Petrol iridescent gradient stops (Open Design shared.css). */
+export const PETROL_GRADIENT = {
+  colors: ['#3EC4C8', '#7B72D4', '#52C98A', '#C860A8', '#3EC4C8'],
+  locations: [0, 0.33, 0.55, 0.78, 1],
+};
+
+/** Приглушённый petrol — подписи и мягкое свечение под стеклом. */
+export const PETROL_GRADIENT_SOFT = {
+  colors: [
+    'rgba(62, 196, 196, 0.42)',
+    'rgba(123, 114, 212, 0.34)',
+    'rgba(82, 201, 138, 0.32)',
+    'rgba(200, 96, 168, 0.28)',
+    'rgba(62, 196, 196, 0.42)',
+  ],
+  locations: [0, 0.33, 0.55, 0.78, 1],
+};
+
+export const PETROL_SHIMMER_MS = {
+  text: 10000,
+  tab: 7000,
+};
 
 /** Низ градиента затемнения ленты над композером (95%, rgb совпадает с `V.bgApp`). */
 export const chatListBottomFadeBottom = 'rgba(13, 15, 20, 0.95)';
@@ -112,11 +140,16 @@ export const TAB_BAR_LAYOUT = {
   /** Доп. padding ряда при 3 вкладках — иконки не разъезжаются шире, чем при 4. */
   threeTabRowPaddingHExtra: 16,
   rowPaddingV: 13,
+  /** Иконки вкладок (Open Design nav-btn svg 22px) */
+  tabIconSize: 22,
   iconSize: 26,
   topCornerRadius: 32,
   bottomCornerRadius: 32,
   /** Круг подсветки активной вкладки (чуть меньше высоты ряда). */
-  activeHighlightSize: 44 };
+  activeHighlightSize: 44,
+  /** Мягкий petrol-halo за стеклом таб-бара. */
+  activeHighlightGlowSize: 46,
+};
 
 /** Горизонтальный padding оболочки таб-бара (с каждой стороны). */
 export function getTabBarShellHorizontalPad(windowWidth, isTablet = false) {

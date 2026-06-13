@@ -68,16 +68,9 @@ import { registerPushToken } from '../lib/notifications';
 import { profileAvatarSaveErrorMessage } from '../lib/profileAvatarUpload';
 
 import {
-
-  DM_POLICY_LABELS,
-
   getChatWallpaperEnabled,
-
-  getDmPolicy,
-
   setChatWallpaperEnabled,
-
-  setDmPolicy } from '../lib/profileSettings';
+} from '../lib/profileSettings';
 
 import { getBlockedPeers } from '../lib/blockedContacts';
 
@@ -224,8 +217,6 @@ export default function ProfileScreen({ route, navigation }) {
 
   const showActionSheet = (config) => setActionSheet(config);
 
-  const [dmPolicyLabel, setDmPolicyLabel] = useState(DM_POLICY_LABELS.everyone);
-
   const [wallpaperOn, setWallpaperOn] = useState(true);
 
   const [pushStatusLabel, setPushStatusLabel] = useState('');
@@ -295,19 +286,11 @@ export default function ProfileScreen({ route, navigation }) {
 
   const refreshSettingsLabels = useCallback(async () => {
 
-    const [policy, wallpaper, perm, blocked] = await Promise.all([
-
-      getDmPolicy(),
-
+    const [wallpaper, perm, blocked] = await Promise.all([
       getChatWallpaperEnabled(),
-
       Notifications.getPermissionsAsync(),
-
       nickname ? getBlockedPeers(nickname) : Promise.resolve(new Set()),
-
     ]);
-
-    setDmPolicyLabel(DM_POLICY_LABELS[policy] || DM_POLICY_LABELS.everyone);
 
     setWallpaperOn(wallpaper);
 
@@ -394,56 +377,6 @@ export default function ProfileScreen({ route, navigation }) {
     const tabNav = navigation.getParent?.();
 
     tabNav?.setParams?.({ nickname: slug });
-
-  };
-
-
-
-  const openDmPolicyPicker = () => {
-
-    showActionSheet({
-
-      title: 'Кто может написать мне',
-
-      message: 'Выберите вариант',
-
-      options: [
-
-        {
-
-          label: DM_POLICY_LABELS.everyone,
-
-          onPress: async () => {
-
-            await setDmPolicy('everyone');
-
-            setDmPolicyLabel(DM_POLICY_LABELS.everyone);
-
-          } },
-
-        {
-
-          label: DM_POLICY_LABELS.contacts,
-
-          onPress: async () => {
-
-            await setDmPolicy('contacts');
-
-            setDmPolicyLabel(DM_POLICY_LABELS.contacts);
-
-          } },
-
-        {
-
-          label: DM_POLICY_LABELS.nobody,
-
-          onPress: async () => {
-
-            await setDmPolicy('nobody');
-
-            setDmPolicyLabel(DM_POLICY_LABELS.nobody);
-
-          } }] });
 
   };
 
@@ -694,11 +627,6 @@ export default function ProfileScreen({ route, navigation }) {
             </Section>
 
             <Section title="ПРИВАТНОСТЬ">
-              <RowButton
-                title="Кто может написать мне"
-                subtitle={dmPolicyLabel}
-                onPress={openDmPolicyPicker}
-              />
               <RowButton
                 title="Заблокированные контакты"
                 subtitle={

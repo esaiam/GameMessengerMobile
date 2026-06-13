@@ -320,7 +320,7 @@ function clearGlOverlay(ctx) {
   gl.endFrameEXP();
 }
 
-function startPlayback(ctx, sim, bw, bh, rollGen, pausedRef, doneRef, cbRef) {
+function startPlayback(ctx, sim, bw, bh, rollGen, doneRef, cbRef) {
   const { renderer, gl, scene, cam, d1, d2, sh1, sh2 } = ctx;
   if (!renderer || !gl || !scene || !cam || !d1 || !d2) return;
 
@@ -330,7 +330,6 @@ function startPlayback(ctx, sim, bw, bh, rollGen, pausedRef, doneRef, cbRef) {
   sh2.visible = true;
 
   let t0 = Date.now();
-  let pausedAt = 0;
   let lastFrameTime = 0;
   const TARGET_FRAME_MS = 1000 / 60;
   const half = DIE / 2;
@@ -341,15 +340,6 @@ function startPlayback(ctx, sim, bw, bh, rollGen, pausedRef, doneRef, cbRef) {
 
   const loop = () => {
     if (rollGen !== ctx.rollGen) return;
-    if (pausedRef?.current) {
-      if (!pausedAt) pausedAt = Date.now();
-      setTimeout(loop, 50);
-      return;
-    }
-    if (pausedAt) {
-      t0 += Date.now() - pausedAt;
-      pausedAt = 0;
-    }
 
     const now = performance.now();
     const elapsed = now - lastFrameTime;
@@ -421,7 +411,6 @@ export default function DiceThrow3D({
   boardWidth,
   boardHeight,
   onComplete,
-  pausedRef,
 }) {
   const aliveRef = useRef(true);
   const doneRef = useRef(false);
@@ -519,7 +508,7 @@ export default function DiceThrow3D({
     requestAnimationFrame(() => {
       if (!aliveRef.current || rollGen !== ctx.rollGen) return;
       const sim = buildSim(startPos, endPos, bw, bh, dice);
-      startPlayback(ctx, sim, bw, bh, rollGen, pausedRef, doneRef, cbRef);
+      startPlayback(ctx, sim, bw, bh, rollGen, doneRef, cbRef);
     });
   }, [
     glReady,
@@ -528,7 +517,6 @@ export default function DiceThrow3D({
     endPos,
     boardWidth,
     boardHeight,
-    pausedRef,
   ]);
 
   return (

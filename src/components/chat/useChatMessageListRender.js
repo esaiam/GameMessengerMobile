@@ -7,6 +7,7 @@ export default function useChatMessageListRender({
   formattedMessages,
   nickname,
   windowWidth,
+  isTablet = false,
   selectedIds,
   getReplyMessage,
   ensureMessageAnims,
@@ -30,6 +31,12 @@ export default function useChatMessageListRender({
   selectedHash,
   renderableVideoIds,
   onUnlockVideo,
+  /** GameScreen tablet + gameExpanded — placeholder вместо image/video в ленте */
+  suppressHeavyMedia = false,
+  /** GameScreen: пауза ephemeral-тиков во время 3D-броска */
+  ephemeralTickPausedRef,
+  /** Aria: колбэк после typewriter-анимации ответа */
+  onAriaRevealComplete,
 }) {
   const rowEnvRef = useRef({});
   const playbackEnvRef = useRef({});
@@ -65,8 +72,17 @@ export default function useChatMessageListRender({
       onUnlockVideo,
       isAriaChat,
       ariaPlainPanel,
+      suppressHeavyMedia,
     }),
-    [selectionMode, selectedHash, renderableVideoIds, onUnlockVideo, isAriaChat, ariaPlainPanel],
+    [
+      selectionMode,
+      selectedHash,
+      renderableVideoIds,
+      onUnlockVideo,
+      isAriaChat,
+      ariaPlainPanel,
+      suppressHeavyMedia,
+    ],
   );
 
   const voiceProgressSig = useMemo(() => {
@@ -125,10 +141,14 @@ export default function useChatMessageListRender({
     [listExtraDataStable, onMessagePress, onMessageLongPress],
   );
 
+  const onAriaRevealCompleteRef = useRef(onAriaRevealComplete);
+  onAriaRevealCompleteRef.current = onAriaRevealComplete;
+
   fmtLenRef.current = formattedMessages.length;
   rowEnvRef.current = {
     nickname,
     windowWidth,
+    isTablet,
     selectedIds,
     getReplyMessage,
     ensureMessageAnims,
@@ -141,6 +161,10 @@ export default function useChatMessageListRender({
     isAriaChat,
     ariaPeerName: ARIA_CONTACT.display_name,
     onDateSeparatorPress: openCalendarFromSeparator,
+    ephemeralTickPausedRef,
+    onAriaRevealComplete: (messageId) => {
+      onAriaRevealCompleteRef.current?.(messageId);
+    },
   };
 
   return { renderItem, listExtraDataStable, fmtLenRef, rowEnvRef };

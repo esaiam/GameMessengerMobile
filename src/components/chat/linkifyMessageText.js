@@ -44,7 +44,9 @@ export function LinkifyMessageText({ text, style, linkStyle, selectable = false 
     [body, trimmed],
   );
 
-  if (!trimmed) return null;
+  if (!trimmed) {
+    return <Text style={style}>{''}</Text>;
+  }
 
   const linkStyles = linkStyle ?? {
     color: V.accentSage,

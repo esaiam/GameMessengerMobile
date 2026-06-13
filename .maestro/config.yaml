@@ -1,0 +1,3 @@
+# Maestro workspace config.
+# appId переопределяется через MAESTRO_APP_ID (-e) в scripts/maestro-smoke.mjs
+appId: com.vault.messenger

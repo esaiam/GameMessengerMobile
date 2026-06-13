@@ -41,7 +41,7 @@ export default function useChatMessagePipeline({
 
   const vaultChatSyncRef = useRef(null);
 
-  const { fadeAnims, scaleAnims, ensureMessageAnims, popMessage } = useMessageRowAnimations(messages);
+  const { fadeAnims, scaleAnims, ensureMessageAnims, popMessage, restoreMessage } = useMessageRowAnimations(messages);
 
   const {
     optimisticVideoTempIdRef,
@@ -160,6 +160,7 @@ export default function useChatMessagePipeline({
     scaleAnims,
     ensureMessageAnims,
     popMessage,
+    restoreMessage,
     optimisticVideoTempIdRef,
     pendingVideoActiveIdMigrationRef,
     handleVideoRecorded,

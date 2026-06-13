@@ -51,7 +51,8 @@ import {
   Sparkles,
   EllipsisVertical,
   FileText,
-  Pencil } from 'lucide-react-native/icons';
+  Pencil,
+  Hand } from 'lucide-react-native/icons';
 
 /** В lucide-react-native нет `Unlock` — это `LockOpen` */
 const Unlock = LockOpen;
@@ -114,4 +115,5 @@ export {
   Sparkles,
   EllipsisVertical,
   FileText,
-  Pencil };
+  Pencil,
+  Hand };

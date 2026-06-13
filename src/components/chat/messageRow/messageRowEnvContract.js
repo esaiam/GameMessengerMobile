@@ -5,6 +5,7 @@
  * @typedef {object} MessageRowEnv
  * @property {string} nickname — isMine via item.player_name === nickname
  * @property {number} windowWidth — bubbleMaxW = windowWidth * 0.75
+ * @property {boolean} isTablet — useIsSplitLayout(); cap photo/GIF preview width
  * @property {Set<string>} selectedIds — selection mode highlight
  * @property {(replyToId: string) => object|null} getReplyMessage
  * @property {(messageId: string) => { opacity: Animated.Value, scale: Animated.Value }} ensureMessageAnims
@@ -15,6 +16,8 @@
  * @property {(messageId: string, emoji: string) => void} toggleReaction
  * @property {(item: object) => void} [replyToMessage]
  * @property {(anchor: object, dateKey: string, dateLabel: string) => void} [onDateSeparatorPress]
+ * @property {import('react').MutableRefObject<boolean>} [ephemeralTickPausedRef] — GameScreen dice throw
+ * @property {(messageId: string) => void} [onAriaRevealComplete] — Aria typewriter done
  */
 
 export {};

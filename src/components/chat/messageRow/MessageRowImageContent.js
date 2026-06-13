@@ -3,8 +3,10 @@ import { View } from 'react-native';
 import { useDoubleTapPress } from './useDoubleTapPress';
 import ChatReplyPreview from '../ChatReplyPreview';
 import ChatImageMessage from '../ChatImageMessage';
+import ChatMediaPlaceholder from '../ChatMediaPlaceholder';
 import ChatMultiImageGrid from './ChatMultiImageGrid';
 import { isGifMediaUrl } from '../../../lib/isGifMediaUrl';
+import { resolveChatMediaLayoutMaxWidth } from '../messageBubbleLayoutConstants';
 
 /** Зона «рядом с фото» — тап открывает меню; flex забирает пустое место в строке */
 const imageRowStyles = {
@@ -43,6 +45,27 @@ export default function MessageRowImageContent({
     onDoubleTapHeart,
   );
 
+  const isGif = isGifMediaUrl(item.media_url);
+  const layoutMaxWidth = resolveChatMediaLayoutMaxWidth(windowWidth, bubbleMaxW, {
+    isTablet: env.isTablet,
+    isGif,
+  });
+  const imageMessageProps = {
+    caption: item.text,
+    formattedTime: item._formattedTime,
+    isRead: !!item.read_at,
+    isMine,
+    isGif,
+    layoutMaxWidth,
+    isEphemeral,
+    expiresAt: item.expires_at,
+    isSelected,
+    isUploading: item._isOptimistic === true,
+    onPress: handleImagePress,
+    onCaptionPress,
+    onLongPress,
+  };
+
   return (
     <>
       <ChatReplyPreview replyMsg={replyMsg} />
@@ -52,7 +75,7 @@ export default function MessageRowImageContent({
           <ChatMultiImageGrid
             urls={item.media_urls}
             caption={item.text}
-            layoutMaxWidth={bubbleMaxW}
+            layoutMaxWidth={layoutMaxWidth}
             formattedTime={item._formattedTime}
             isRead={!!item.read_at}
             isMine={isMine}
@@ -67,27 +90,18 @@ export default function MessageRowImageContent({
             onDoubleTapHeart={onDoubleTapHeart}
             onCaptionPress={onCaptionPress}
             onLongPress={onLongPress}
+            suppressHeavyMedia={listExtra.suppressHeavyMedia}
+            tickPausedRef={env.ephemeralTickPausedRef}
+          />
+        ) : listExtra.suppressHeavyMedia ? (
+          <ChatMediaPlaceholder
+            {...imageMessageProps}
+            tickPausedRef={env.ephemeralTickPausedRef}
           />
         ) : (
           <ChatImageMessage
             uri={item.media_url}
-            caption={item.text}
-            formattedTime={item._formattedTime}
-            isRead={!!item.read_at}
-            isMine={isMine}
-            isGif={isGifMediaUrl(item.media_url)}
-            layoutMaxWidth={
-              isGifMediaUrl(item.media_url)
-                ? Math.floor(windowWidth * 0.86)
-                : bubbleMaxW
-            }
-            isEphemeral={isEphemeral}
-            expiresAt={item.expires_at}
-            isSelected={isSelected}
-            isUploading={item._isOptimistic === true}
-            onPress={handleImagePress}
-            onCaptionPress={onCaptionPress}
-            onLongPress={onLongPress}
+            {...imageMessageProps}
           />
         )}
         {!isMine ? <View style={imageRowStyles.chromeHit} /> : null}

@@ -330,12 +330,6 @@ export function useGameSession({
     }
   }, [roomId, activeSessionId, useLegacyRoomState]);
 
-  const leaveRoom = useCallback(() => {
-    Keyboard.dismiss();
-    setKbVisible(false);
-    safeGoBackToMessengerList(navigation);
-  }, [navigation]);
-
   return {
     room,
     playerNumber,
@@ -344,6 +338,5 @@ export function useGameSession({
     opponentOnline,
     syncGameState,
     newGame,
-    leaveRoom,
-    channelRef };
+  };
 }

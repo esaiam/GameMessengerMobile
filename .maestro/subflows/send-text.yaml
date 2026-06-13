@@ -1,0 +1,13 @@
+appId: ${MAESTRO_APP_ID}
+---
+- tapOn:
+    id: chat-composer-input
+- eraseText
+- inputText: ${MAESTRO_MESSAGE_TEXT}
+- hideKeyboard
+- tapOn:
+    id: chat-composer-send
+- extendedWaitUntil:
+    visible:
+      text: ${MAESTRO_MESSAGE_TEXT}
+    timeout: 20000

@@ -24,6 +24,7 @@ export default function useChatMessageMutations({
   roomId,
   isAriaChat = false,
   popMessage,
+  restoreMessage,
   setDeletingIds,
   setDeleteConfirmVisible,
   setSelectedMessage,
@@ -101,6 +102,7 @@ export default function useChatMessageMutations({
             'Не удалось удалить',
             chatMutationErrorMessage(error, 'Не удалось удалить сообщение'),
           );
+          restoreMessage?.(messageId);
           setDeletingIds((prev) => {
             const next = new Set(prev);
             next.delete(messageId);
@@ -117,7 +119,7 @@ export default function useChatMessageMutations({
         return next;
       });
     },
-    [messages, popMessage, setMessages, setDeletingIds],
+    [messages, popMessage, restoreMessage, setMessages, setDeletingIds],
   );
 
   const deleteMessageForMe = useCallback(
@@ -140,6 +142,7 @@ export default function useChatMessageMutations({
           'Не удалось скрыть сообщение',
           chatMutationErrorMessage(error, 'Не удалось скрыть сообщение'),
         );
+        restoreMessage?.(messageId);
         setDeletingIds((prev) => {
           const next = new Set(prev);
           next.delete(messageId);
@@ -154,7 +157,7 @@ export default function useChatMessageMutations({
         return next;
       });
     },
-    [isAriaChat, deleteAriaMessage, messages, nickname, popMessage, removeMessageFromState, setDeletingIds],
+    [isAriaChat, deleteAriaMessage, messages, nickname, popMessage, restoreMessage, removeMessageFromState, setDeletingIds],
   );
 
   const closeDeleteConfirm = useCallback(() => {
@@ -189,6 +192,7 @@ export default function useChatMessageMutations({
           'Не удалось удалить у всех',
           chatMutationErrorMessage(roomErr, 'Не удалось загрузить данные комнаты'),
         );
+        restoreMessage?.(messageId);
         setDeletingIds((prev) => {
           const next = new Set(prev);
           next.delete(messageId);
@@ -202,6 +206,7 @@ export default function useChatMessageMutations({
           'Не удалось удалить у всех',
           'Комната не найдена на сервере. Закрой чат и открой диалог снова из Контактов.',
         );
+        restoreMessage?.(messageId);
         setDeletingIds((prev) => {
           const next = new Set(prev);
           next.delete(messageId);
@@ -220,6 +225,7 @@ export default function useChatMessageMutations({
           'Не удалось удалить у всех',
           chatMutationErrorMessage(error, 'Не удалось удалить у всех'),
         );
+        restoreMessage?.(messageId);
         setDeletingIds((prev) => {
           const next = new Set(prev);
           next.delete(messageId);
@@ -237,7 +243,7 @@ export default function useChatMessageMutations({
       await unpinMessageIfMatches?.(messageId);
       chatSyncRef?.current?.hideMessage?.(messageId);
     },
-    [isAriaChat, deleteAriaMessage, messages, nickname, peerName, popMessage, removeMessageFromState, roomId, setDeletingIds, chatSyncRef, unpinMessageIfMatches],
+    [isAriaChat, deleteAriaMessage, messages, nickname, peerName, popMessage, restoreMessage, removeMessageFromState, roomId, setDeletingIds, chatSyncRef, unpinMessageIfMatches],
   );
 
   return {

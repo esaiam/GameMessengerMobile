@@ -1,0 +1,18 @@
+appId: ${MAESTRO_APP_ID}
+---
+# Открыть DM-чат из списка. SMOKE_TEST_PEER_HANDLE = display name в списке.
+- extendedWaitUntil:
+    visible:
+      id: chats-screen
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: ${SMOKE_TEST_PEER_HANDLE}
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    text: ${SMOKE_TEST_PEER_HANDLE}
+- extendedWaitUntil:
+    visible:
+      id: chat-composer-input
+    timeout: 15000

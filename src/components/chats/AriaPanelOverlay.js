@@ -40,7 +40,7 @@ const CONTENT_BOTTOM_RESERVE = INPUT_PANEL_H + INPUT_BOTTOM + DISMISS_HANDLE_H;
 const INPUT_TEXT_H = 52;
 const CONTENT_FADE_MS = 250;
 const INPUT_EXPAND_MS = 420;
-const COMMIT_SPRING = { damping: 22, stiffness: 240, mass: 0.85 };
+const COMMIT_SPRING = { damping: 28, stiffness: 160, mass: 1.3 };
 const INPUT_EXPAND_EASING = Easing.out(Easing.cubic);
 /** Окно ввода — когда шторка почти у низа; узкий диапазон для drag, плавный ramp */
 const INPUT_REVEAL_FROM = 0.996;
@@ -136,6 +136,7 @@ export default function AriaPanelOverlay({
   ariaDisplayNickname = '',
   sendToAria,
   ariaOnline = null,
+  onAriaRevealComplete,
 }) {
   const { height: screenHeight } = useWindowDimensions();
   const curtainMaxHeight = Math.max(0, screenHeight - headerMinHeight);
@@ -317,6 +318,7 @@ export default function AriaPanelOverlay({
               typeof ariaDisplayNickname === 'string' ? ariaDisplayNickname : ''
             }
             scrollEnabled={committed}
+            onAriaRevealComplete={onAriaRevealComplete}
           />
         </Animated.View>
         <GestureDetector gesture={dismissKeyboardTap}>

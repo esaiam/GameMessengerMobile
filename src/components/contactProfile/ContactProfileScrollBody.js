@@ -17,6 +17,7 @@ export default function ContactProfileScrollBody({
   wrapProfileScrollEnd,
   bottomInset,
   minScrollContentHeight,
+  contentWidth,
   mediaItems,
   mediaLoading,
   roomId,
@@ -57,6 +58,7 @@ export default function ContactProfileScrollBody({
           items={mediaItems}
           loading={mediaLoading}
           roomId={roomId}
+          contentWidth={contentWidth}
           selectionMode={selectionMode}
           selectedIds={selectedIds}
           hiddenTileId={hiddenTileId}

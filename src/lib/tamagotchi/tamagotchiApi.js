@@ -1,4 +1,9 @@
-import { getAriaApiBaseUrl, fetchAriaPendingMessages, fetchAriaState, normalizeAriaState } from '../aria';
+import {
+  getAriaApiBaseUrl,
+  getAriaAuthHeaders,
+  fetchAriaPendingMessages,
+  fetchAriaState,
+  normalizeAriaState } from '../aria';
 
 export {
   DEFAULT_ARIA_STATE,
@@ -37,9 +42,10 @@ function parseRetryAfter(res) {
 export async function postAriaAction(userId, action) {
   const base = getAriaApiBaseUrl();
   if (!base || !userId) throw new Error('no_api');
+  const headers = await getAriaAuthHeaders({ 'Content-Type': 'application/json' });
   const res = await fetch(`${base}/action`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ user_id: userId, action }) });
   if (res.status === 429) {
     throw new AriaRateLimitError(parseRetryAfter(res));

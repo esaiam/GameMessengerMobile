@@ -10,6 +10,8 @@ export function RoomChatContainer({
   roomCode,
   nickname,
   peerName,
+  /** GameScreen tablet: доска gameExpanded — не декодировать image/video в ленте */
+  suppressHeavyMedia = false,
   renderPausedRef,
   diceBusyRef,
   chatFlushDeferredRef,
@@ -29,6 +31,7 @@ export function RoomChatContainer({
       nickname={nickname}
       peerName={peerName}
       isAriaChat={false}
+      suppressHeavyMedia={suppressHeavyMedia}
       renderPausedRef={renderPausedRef}
       diceBusyRef={diceBusyRef}
       chatFlushDeferredRef={chatFlushDeferredRef}

@@ -17,6 +17,8 @@ npx supabase link           # если ещё не link
 npx supabase db query --linked --file supabase/migrations/20260521_rooms_last_message.sql
 ```
 
+**Важно:** `apply-supabase-migrations.ps1` прогоняет **все** `.sql` подряд. На prod с данными — только **новые** файлы, не весь каталог. Миграция `20260524_clear_messages_pre_beta.sql` была one-time wipe и теперь no-op (раньше `DELETE FROM messages`).
+
 ## Файлы
 
 | Файл | Назначение |

@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -18,10 +18,6 @@ import { V, TAB_BAR_LAYOUT, TAB_BAR_INNER_ROW_H, getTabBarShellHorizontalPad } f
 const DEFAULT_ACTIVE = V.accentSage;
 const DEFAULT_INACTIVE = V.textMuted;
 const HIGHLIGHT_SIZE = TAB_BAR_LAYOUT.activeHighlightSize;
-const COMPRESS_SCALE = 0.36;
-const T_COMPRESS = 90;
-const T_MOVE = 140;
-const T_EXPAND = 100;
 /** Совпадает с `animationDuration` native-stack в `MainTabsNavigator`. */
 const T_VISIBILITY = 200;
 
@@ -35,8 +31,44 @@ function tabCenterLeft(layouts, index, size = HIGHLIGHT_SIZE) {
   return L.x + L.width / 2 - size / 2;
 }
 
+function buildPagerHighlightTransform(pagerPosition, tabLayouts, tabCount) {
+  const inputRangeX = [];
+  const outputRangeX = [];
+  for (let i = 0; i < tabCount; i += 1) {
+    const left = tabCenterLeft(tabLayouts, i);
+    if (left == null) return null;
+    inputRangeX.push(i);
+    outputRangeX.push(left);
+  }
+
+  const inputRangeScale = [];
+  const outputRangeScale = [];
+  for (let i = 0; i < tabCount; i += 1) {
+    inputRangeScale.push(i);
+    outputRangeScale.push(1);
+    if (i < tabCount - 1) {
+      inputRangeScale.push(i + 0.5);
+      outputRangeScale.push(0);
+    }
+  }
+
+  return {
+    translateX: pagerPosition.interpolate({
+      inputRange: inputRangeX,
+      outputRange: outputRangeX,
+      extrapolate: 'clamp',
+    }),
+    scale: pagerPosition.interpolate({
+      inputRange: inputRangeScale,
+      outputRange: outputRangeScale,
+      extrapolate: 'clamp',
+    }),
+  };
+}
+
 export default function GlassTabBar({
   activeIndex,
+  pagerPosition = null,
   tabs,
   onTabPress,
   visible,
@@ -52,9 +84,6 @@ export default function GlassTabBar({
   const translateX = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
   const iconScaleByKeyRef = useRef({}).current;
-  const settledIndexRef = useRef(activeIndex);
-  const layoutDoneRef = useRef(false);
-  const runAnimRef = useRef(null);
   const runVisibilityRef = useRef(null);
   const runIconAnimByKeyRef = useRef({}).current;
   const visibility = useRef(new Animated.Value(visible ? 0 : 1)).current;
@@ -165,55 +194,22 @@ export default function GlassTabBar({
   const layoutsReady =
     tabLayouts.length >= n && tabLayouts.slice(0, n).every((L) => L && typeof L.x === 'number');
 
+  const pagerHighlightTransform = useMemo(
+    () => (
+      pagerPosition && layoutsReady
+        ? buildPagerHighlightTransform(pagerPosition, tabLayouts, n)
+        : null
+    ),
+    [pagerPosition, layoutsReady, tabLayouts, n],
+  );
+
   useLayoutEffect(() => {
-    if (!layoutsReady) return;
-    const idx = activeIndex;
-    const leftTo = tabCenterLeft(tabLayouts, idx);
+    if (pagerPosition || !layoutsReady) return;
+    const leftTo = tabCenterLeft(tabLayouts, activeIndex);
     if (leftTo == null) return;
-
-    const snapHighlightTo = (left) => {
-      runAnimRef.current?.stop?.();
-      translateX.setValue(left);
-      scale.setValue(1);
-    };
-
-    if (!layoutDoneRef.current) {
-      snapHighlightTo(leftTo);
-      settledIndexRef.current = idx;
-      layoutDoneRef.current = true;
-      return;
-    }
-
-    const from = settledIndexRef.current;
-    if (from === idx) {
-      translateX.setValue(leftTo);
-      return;
-    }
-
-    if (!visible) {
-      snapHighlightTo(leftTo);
-      settledIndexRef.current = idx;
-      return;
-    }
-
-    const leftFrom = tabCenterLeft(tabLayouts, from);
-    if (leftFrom == null) {
-      snapHighlightTo(leftTo);
-      settledIndexRef.current = idx;
-      return;
-    }
-
-    runAnimRef.current?.stop?.();
-    translateX.setValue(leftFrom);
+    translateX.setValue(leftTo);
     scale.setValue(1);
-    const anim = Animated.sequence([
-      Animated.timing(scale, { toValue: COMPRESS_SCALE, duration: T_COMPRESS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(translateX, { toValue: leftTo, duration: T_MOVE, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 1, duration: T_EXPAND, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-    ]);
-    runAnimRef.current = anim;
-    anim.start(({ finished }) => { if (finished) settledIndexRef.current = idx; });
-  }, [visible, activeIndex, layoutsReady, tabLayouts, translateX, scale]);
+  }, [pagerPosition, activeIndex, layoutsReady, tabLayouts, translateX, scale]);
 
   const slideY = ariaTabBarDrive ? null : Animated.multiply(visibility, hideOffsetPx);
   const tabBarBlurEnabled =
@@ -250,7 +246,15 @@ export default function GlassTabBar({
           pointerEvents="none"
           style={[
             styles.highlight,
-            { backgroundColor: V.bgElevated, transform: [{ translateX }, { scale }] },
+            {
+              backgroundColor: V.bgElevated,
+              transform: pagerHighlightTransform
+                ? [
+                    { translateX: pagerHighlightTransform.translateX },
+                    { scale: pagerHighlightTransform.scale },
+                  ]
+                : [{ translateX }, { scale }],
+            },
           ]}
         />
         {tabs.map((tab, index) => {
@@ -350,7 +354,7 @@ const styles = StyleSheet.create({
     width: HIGHLIGHT_SIZE,
     height: HIGHLIGHT_SIZE,
     borderRadius: HIGHLIGHT_SIZE / 2,
-    top: TAB_BAR_LAYOUT.rowPaddingV + TAB_BAR_LAYOUT.iconSize / 2 - HIGHLIGHT_SIZE / 2,
+    top: TAB_BAR_LAYOUT.rowPaddingV + TAB_BAR_LAYOUT.tabIconSize / 2 - HIGHLIGHT_SIZE / 2,
     zIndex: 0,
   },
   tab: {

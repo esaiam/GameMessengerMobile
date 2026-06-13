@@ -19,6 +19,23 @@ export const VIDEO_FEED_TIME_OVERLAP_PX = 18;
 export const VIDEO_FEED_CIRCLE_IDLE = 200 + VIDEO_FEED_TIME_OVERLAP_PX;
 export const VIDEO_FEED_CIRCLE_ACTIVE = Math.round(VIDEO_FEED_CIRCLE_IDLE * (280 / 200));
 
+/** ~75% типичного телефона (~400dp) — превью фото/GIF в ленте на планшете. */
+export const CHAT_MEDIA_MAX_WIDTH_TABLET = 300;
+
+/**
+ * Макс. ширина превью фото/GIF в ленте.
+ * На планшете не масштабируем с полной шириной экрана — оставляем «телефонный» размер.
+ */
+export function resolveChatMediaLayoutMaxWidth(
+  windowWidth,
+  bubbleMaxW,
+  { isTablet = false, isGif = false } = {},
+) {
+  const raw = isGif ? Math.floor(windowWidth * 0.86) : bubbleMaxW;
+  if (!isTablet) return raw;
+  return Math.min(raw, CHAT_MEDIA_MAX_WIDTH_TABLET);
+}
+
 /** Реакции: оверлей у левого нижнего угла пузыря (как в Telegram). */
 export const REACTION_OVERLAY_LEFT = 8;
 export const REACTION_OVERLAY_BOTTOM = -8;

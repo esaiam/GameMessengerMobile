@@ -18,6 +18,7 @@ import {
   StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import tw from 'twrnc';
 import { V, boardPalette } from '../theme';
 
@@ -35,37 +36,95 @@ function maxVisibleForPointHeight(pointHeight, minH, maxH) {
 const COLORS = {
   darkTriangle: boardPalette.triangleDark,
   lightTriangle: boardPalette.triangleLight,
-  player1: boardPalette.checkerLight,
-  player1Border: boardPalette.checkerLightBorder,
-  player2: boardPalette.checkerDark,
-  player2Border: boardPalette.checkerDarkBorder,
   highlight: V.accentGold,
   selected: V.accentSage,
   barBg: boardPalette.bar };
 
+/** Матовая фишка: мягкий градиент и диффузный свет без зеркальных бликов. */
+const CHECKER_MATERIAL = {
+  light: {
+    gradient: ['#EBE7DE', boardPalette.checkerLight, '#D8D4CC'],
+    diffuseLight: 'rgba(255, 255, 255, 0.09)',
+    innerShadow: 'rgba(100, 92, 82, 0.14)',
+    rim: boardPalette.checkerLightBorder,
+    castShadowOpacity: 0.16 },
+  dark: {
+    gradient: ['#242933', boardPalette.checkerDark, '#151922'],
+    diffuseLight: 'rgba(255, 255, 255, 0.03)',
+    innerShadow: 'rgba(0, 0, 0, 0.28)',
+    rim: boardPalette.checkerDarkBorder,
+    castShadowOpacity: 0.24 } };
+
 const Checker = memo(function Checker({ player, size, isSelected }) {
-  const bg = player === 1 ? COLORS.player1 : COLORS.player2;
-  const border = player === 1 ? COLORS.player1Border : COLORS.player2Border;
+  const material = player === 1 ? CHECKER_MATERIAL.light : CHECKER_MATERIAL.dark;
+  const radius = size / 2;
+
   return (
     <View
-      style={[
-        tw`rounded-full items-center justify-center`,
-        {
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: Math.max(1, size * 0.07) },
+        shadowOpacity: material.castShadowOpacity,
+        shadowRadius: Math.max(2, size * 0.08),
+        elevation: 3 }}
+    >
+      <LinearGradient
+        colors={material.gradient}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0.5, y: 0.05 }}
+        end={{ x: 0.5, y: 0.98 }}
+        style={{
           width: size,
           height: size,
-          backgroundColor: bg,
+          borderRadius: radius,
           borderWidth: 2,
-          borderColor: isSelected ? COLORS.selected : border }]}
-    >
-      {isSelected && (
+          borderColor: isSelected ? COLORS.selected : material.rim,
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden' }}
+      >
         <View
+          pointerEvents="none"
           style={{
-            width: size * 0.3,
-            height: size * 0.3,
-            borderRadius: size * 0.15,
-            backgroundColor: COLORS.selected }}
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: size * 0.56,
+            borderTopLeftRadius: radius - 2,
+            borderTopRightRadius: radius - 2,
+            backgroundColor: material.diffuseLight }}
         />
-      )}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: size * 0.38,
+            borderBottomLeftRadius: radius - 2,
+            borderBottomRightRadius: radius - 2,
+            backgroundColor: material.innerShadow }}
+        />
+        {isSelected && (
+          <View
+            style={{
+              width: size * 0.3,
+              height: size * 0.3,
+              borderRadius: size * 0.15,
+              backgroundColor: COLORS.selected,
+              shadowColor: COLORS.selected,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.55,
+              shadowRadius: 4,
+              elevation: 2 }}
+          />
+        )}
+      </LinearGradient>
     </View>
   );
 });
@@ -75,20 +134,53 @@ const Checker = memo(function Checker({ player, size, isSelected }) {
 // cos(i * π/14) даёт плавную дугу ~65°: [1.0, 0.975, 0.901, 0.781, 0.625, 0.433]
 const TRIANGLE_ARC = Array.from({ length: 6 }, (_, i) => Math.cos(i * Math.PI / 14));
 
-const Triangle = memo(function Triangle({
-  index,
+const TriangleShape = memo(function TriangleShape({
   isTop,
   color,
+  pointHeight,
+  triangleH,
+  pointWidth,
+}) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        width: pointWidth,
+        height: pointHeight,
+        alignItems: 'center',
+        justifyContent: isTop ? 'flex-start' : 'flex-end' }}
+    >
+      <View
+        style={{
+          width: 0,
+          height: 0,
+          borderLeftWidth: Math.max(0, pointWidth / 2 - 1),
+          borderRightWidth: Math.max(0, pointWidth / 2 - 1),
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          ...(isTop
+            ? { borderTopWidth: triangleH ?? pointHeight * 0.8, borderTopColor: color }
+            : { borderBottomWidth: triangleH ?? pointHeight * 0.8, borderBottomColor: color }),
+          position: 'absolute',
+          [isTop ? 'top' : 'bottom']: 0 }}
+      />
+    </View>
+  );
+});
+
+const PointCell = memo(function PointCell({
+  index,
+  isTop,
   checkers,
   player,
   isHighlighted,
   isSelected,
   onPointPress,
   pointHeight,
-  triangleH,
   maxDisplay,
   pointWidth,
-  checkerSize }) {
+  checkerSize,
+}) {
   const handlePointPress = useCallback(() => {
     onPointPress(index);
   }, [onPointPress, index]);
@@ -117,21 +209,6 @@ const Triangle = memo(function Triangle({
     >
       <View
         style={{
-          width: 0,
-          height: 0,
-          borderLeftWidth: Math.max(0, pointWidth / 2 - 1),
-          borderRightWidth: Math.max(0, pointWidth / 2 - 1),
-          borderLeftColor: 'transparent',
-          borderRightColor: 'transparent',
-          ...(isTop
-            ? { borderTopWidth: triangleH ?? pointHeight * 0.8, borderTopColor: color }
-            : { borderBottomWidth: triangleH ?? pointHeight * 0.8, borderBottomColor: color }),
-          position: 'absolute',
-          [isTop ? 'top' : 'bottom']: 0 }}
-      />
-
-      <View
-        style={{
           position: 'absolute',
           [isTop ? 'top' : 'bottom']: 2,
           alignItems: 'center' }}
@@ -158,7 +235,6 @@ const Triangle = memo(function Triangle({
     </TouchableOpacity>
   );
 });
-
 /** Роза ветров из PNG (подложка подогнана под bg доски, см. scripts/tint-compass-to-board.mjs) */
 function PrisonCompassStarImage({ size }) {
   return (
@@ -289,7 +365,6 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
   selectedPoint,
   highlightedMoves,
   onPointPress,
-  onBarPress,
   onBearOffPress,
   onSwipe,
   diceOverlay,
@@ -301,6 +376,8 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
   pointHeightMax = 260,
   enableLayoutAnimations = true,
   maxBoardWidth,
+  layoutWidthHint,
+  onLayoutReady,
   renderPausedRef,
   isMyTurn,
   turnPhase,
@@ -314,12 +391,24 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
   const { board, bar = { 1: 0, 2: 0 }, borneOff } = gameState;
 
   const [containerW, setContainerW] = useState(0);
+  const layoutReadySentRef = useRef(false);
   const layoutBoardW = useMemo(() => {
-    const w = containerW > 0 ? containerW : 0;
-    if (!w) return 0;
-    const cap = typeof maxBoardWidth === 'number' && maxBoardWidth > 0 ? maxBoardWidth : w;
-    return Math.floor(Math.min(w, cap));
-  }, [containerW, maxBoardWidth]);
+    const hint = typeof layoutWidthHint === 'number' && layoutWidthHint > 0 ? layoutWidthHint : 0;
+    const measured = containerW > 0 ? containerW : 0;
+    const seed = hint || measured
+      || (typeof maxBoardWidth === 'number' && maxBoardWidth > 0 ? maxBoardWidth : 0);
+    if (!seed) return 0;
+    const cap = typeof maxBoardWidth === 'number' && maxBoardWidth > 0 ? maxBoardWidth : seed;
+    return Math.floor(Math.min(seed, cap));
+  }, [containerW, maxBoardWidth, layoutWidthHint]);
+
+  useEffect(() => {
+    if (layoutReadySentRef.current) return;
+    if (layoutBoardW > 0 && pointHeight > 0) {
+      layoutReadySentRef.current = true;
+      onLayoutReady?.();
+    }
+  }, [layoutBoardW, pointHeight, onLayoutReady]);
 
   const { barW, pointW, checkerSize } = useMemo(() => {
     const bw = layoutBoardW || 0;
@@ -402,42 +491,71 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
   const topIndices = useMemo(() => [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], []);
   const bottomIndices = useMemo(() => [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0], []);
 
-  const onBarPressPlayer2 = useCallback(() => onBarPress(2), [onBarPress]);
-  const onBarPressPlayer1 = useCallback(() => onBarPress(1), [onBarPress]);
-
   const renderHalf = (indices, isTop) => {
     const leftHalf = indices.slice(0, 6);
     const rightHalf = indices.slice(6, 12);
 
+    const renderTriangleRow = (half, arcFn) =>
+      half.map((idx, sliceIdx) => {
+        const color = idx % 2 === 0 ? COLORS.darkTriangle : COLORS.lightTriangle;
+        return (
+          <TriangleShape
+            key={`tri-${idx}`}
+            isTop={isTop}
+            color={color}
+            pointHeight={pointHeight}
+            triangleH={pointHeight * 0.8 * arcFn(sliceIdx)}
+            pointWidth={pointW}
+          />
+        );
+      });
+
+    const renderPointRow = (half) =>
+      half.map((idx) => {
+        const val = board[idx];
+        const player = val > 0 ? 1 : val < 0 ? 2 : 0;
+        return (
+          <PointCell
+            key={idx}
+            index={idx}
+            isTop={isTop}
+            checkers={val}
+            player={player}
+            isHighlighted={highlightedTargets.has(idx)}
+            isSelected={selectedPoint === idx}
+            onPointPress={onPointPress}
+            pointHeight={pointHeight}
+            maxDisplay={maxVisible}
+            pointWidth={pointW}
+            checkerSize={checkerSize}
+          />
+        );
+      });
+
     return (
       <View style={{ position: 'relative', width: layoutBoardW, height: pointHeight }}>
-        <View style={tw`flex-row`}>
-          {leftHalf.map((idx, sliceIdx) => {
-            const val = board[idx];
-            const player = val > 0 ? 1 : val < 0 ? 2 : 0;
-            const color = idx % 2 === 0 ? COLORS.darkTriangle : COLORS.lightTriangle;
-            return (
-              <Triangle
-                key={idx}
-                index={idx}
-                isTop={isTop}
-                color={color}
-                checkers={val}
-                player={player}
-                isHighlighted={highlightedTargets.has(idx)}
-                isSelected={selectedPoint === idx}
-                onPointPress={onPointPress}
-                pointHeight={pointHeight}
-                triangleH={pointHeight * 0.8 * TRIANGLE_ARC[sliceIdx]}
-                maxDisplay={maxVisible}
-                pointWidth={pointW}
-                checkerSize={checkerSize}
-              />
-            );
-          })}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            flexDirection: 'row',
+            zIndex: 0,
+            elevation: 0 }}
+        >
+          {renderTriangleRow(leftHalf, (sliceIdx) => TRIANGLE_ARC[sliceIdx])}
+          <View style={{ width: barW, height: pointHeight }} />
+          {renderTriangleRow(rightHalf, (sliceIdx) => TRIANGLE_ARC[5 - sliceIdx])}
+        </View>
 
-          <TouchableOpacity
-            onPress={isTop ? onBarPressPlayer2 : onBarPressPlayer1}
+        <View style={[tw`flex-row`, { zIndex: 1, elevation: 1 }]}>
+          {renderPointRow(leftHalf)}
+
+          <View
+            pointerEvents="none"
             style={{
               width: barW,
               height: pointHeight,
@@ -448,7 +566,7 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
           >
             {(isTop ? bar[2] : bar[1]) > 0 && (
               <View style={tw`items-center`}>
-                <Checker player={isTop ? 2 : 1} size={Math.max(16, checkerSize - 4)} isSelected={selectedPoint === 'bar'} />
+                <Checker player={isTop ? 2 : 1} size={Math.max(16, checkerSize - 4)} />
                 {(isTop ? bar[2] : bar[1]) > 1 && (
                   <Text style={[tw`text-[10px] font-medium mt-1`, { color: V.textPrimary }]}>
                     {isTop ? bar[2] : bar[1]}
@@ -456,32 +574,9 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
                 )}
               </View>
             )}
-          </TouchableOpacity>
+          </View>
 
-          {rightHalf.map((idx, sliceIdx) => {
-            const val = board[idx];
-            const player = val > 0 ? 1 : val < 0 ? 2 : 0;
-            const color = idx % 2 === 0 ? COLORS.darkTriangle : COLORS.lightTriangle;
-            // Правая половина: sliceIdx 0 — ближний к бару, 5 — внешний, дуга зеркальная
-            return (
-              <Triangle
-                key={idx}
-                index={idx}
-                isTop={isTop}
-                color={color}
-                checkers={val}
-                player={player}
-                isHighlighted={highlightedTargets.has(idx)}
-                isSelected={selectedPoint === idx}
-                onPointPress={onPointPress}
-                pointHeight={pointHeight}
-                triangleH={pointHeight * 0.8 * TRIANGLE_ARC[5 - sliceIdx]}
-                maxDisplay={maxVisible}
-                pointWidth={pointW}
-                checkerSize={checkerSize}
-              />
-            );
-          })}
+          {renderPointRow(rightHalf)}
         </View>
       </View>
     );
@@ -550,9 +645,11 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
             });
           }}
           collapsable={false}
+          accessibilityLabel="Свайп для броска кубиков"
           style={{
             position: 'relative',
             width: layoutBoardW || '100%',
+            minHeight: pointHeight * 2,
             backgroundColor: boardPalette.bg,
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: boardPalette.rim,
@@ -614,21 +711,6 @@ const BackgammonBoard = memo(forwardRef(function BackgammonBoard({
           >
             {centerOverlay}
           </View>
-        )}
-        {!!onSwipe && !!layoutBoardW && (
-          <View
-            pointerEvents="auto"
-            accessibilityLabel="Свайп для броска кубиков"
-            style={{
-              position: 'absolute',
-              left: layoutBoardW * 0.18,
-              width: layoutBoardW * 0.64,
-              top: pointHeight * 0.1,
-              height: pointHeight * 1.8,
-              zIndex: 25,
-              elevation: 25,
-            }}
-          />
         )}
         {!!diceOverlay && (
           <View

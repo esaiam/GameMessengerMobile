@@ -18,7 +18,7 @@ import { SEARCH_FIELD_LAYOUT } from '../theme';
 import { cappedRubberBandPullPx, computeAriaPullProgress } from './ariaPullProgress';
 import { tabOverscrollRubberBand } from './useAndroidTabOverscroll';
 
-const SPRING = { damping: 22, stiffness: 240, mass: 0.85 };
+const SPRING = { damping: 28, stiffness: 160, mass: 1.3 };
 const AT_TOP_THRESHOLD_PX = 12;
 const SNAP_OPEN_THRESHOLD = 0.38;
 const SNAP_SETTLED_EPS = 0.04;

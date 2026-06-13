@@ -6,7 +6,6 @@ import Reanimated from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import ChatRoomHeader from '../ChatRoomHeader';
 import ChatOverlays from './ChatOverlays';
-import { EphemeralClockContext } from './ephemeralClockContext';
 import ChatMessageList from './ChatMessageList';
 import ChatComposer from './ChatComposer';
 import ChatRoomWallpaper from './ChatRoomWallpaper';
@@ -16,7 +15,6 @@ import { V } from '../../theme';
 
 /** Presentational shell: wallpaper, overlays, message list, composer, frosted header. */
 export default function ChatView({
-  ephemeralClockTick,
   chatRoomHeader,
   isAriaChat,
   uiReady,
@@ -48,8 +46,7 @@ export default function ChatView({
   } = headerShell;
 
   return (
-    <EphemeralClockContext.Provider value={ephemeralClockTick}>
-      <Reanimated.View
+    <Reanimated.View
         style={[
           tw`flex-1`,
           {
@@ -173,6 +170,5 @@ export default function ChatView({
           </>
         ) : null}
       </Reanimated.View>
-    </EphemeralClockContext.Provider>
   );
 }

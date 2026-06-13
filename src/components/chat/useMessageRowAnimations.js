@@ -33,6 +33,20 @@ export default function useMessageRowAnimations(messages) {
     [ensureMessageAnims],
   );
 
+  /** Откат pop-анимации (например, когда удаление на сервере не удалось). */
+  const restoreMessage = useCallback(
+    (id, opts = {}) => {
+      const { opacity, scale } = ensureMessageAnims(id);
+      const duration = opts.duration ?? 160;
+      return new Promise((resolve) => {
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 1, duration, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1, duration, useNativeDriver: true })]).start(({ finished }) => resolve(!!finished));
+      });
+    },
+    [ensureMessageAnims],
+  );
+
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       const currentIds = new Set(messages.map((m) => m.id));
@@ -46,5 +60,5 @@ export default function useMessageRowAnimations(messages) {
     return () => cancelAnimationFrame(id);
   }, [messages, fadeAnims, scaleAnims]);
 
-  return { fadeAnims, scaleAnims, ensureMessageAnims, popMessage };
+  return { fadeAnims, scaleAnims, ensureMessageAnims, popMessage, restoreMessage };
 }

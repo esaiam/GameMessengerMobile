@@ -23,6 +23,9 @@ export default function useChatListKeyboardLayout({
   listOpacity,
   keyboardHeightLib,
   emojiPanelHeightShared,
+  inputBarRef,
+  onInputBarTopY,
+  onInputBarHeight,
 }) {
   const lastComposerLayoutHRef = useRef(0);
   const pendingComposerHeightRef = useRef(null);
@@ -37,12 +40,19 @@ export default function useChatListKeyboardLayout({
     armComposerInsetSettling();
   }, [armComposerInsetSettling, composerStackHeightShared]);
 
+  const reportComposerTopY = useCallback(() => {
+    inputBarRef?.current?.measureInWindow((_x, y) => {
+      if (typeof y === 'number') onInputBarTopY?.(y);
+    });
+  }, [inputBarRef, onInputBarTopY]);
+
   const flushPendingComposerStackHeight = useCallback(() => {
     const pending = pendingComposerHeightRef.current;
     if (pending == null) return;
     pendingComposerHeightRef.current = null;
     applyComposerStackHeight(pending);
-  }, [applyComposerStackHeight]);
+    reportComposerTopY();
+  }, [applyComposerStackHeight, reportComposerTopY]);
 
   /** Layout во время KB часто stale — на close сбрасываем, не применяем (рывок marginBottom). */
   const discardPendingComposerHeight = useCallback(() => {
@@ -51,13 +61,24 @@ export default function useChatListKeyboardLayout({
 
   const reportComposerBaseHeight = useCallback((layoutH) => {
     if (typeof layoutH !== 'number' || layoutH <= 0) return;
-    if (Math.abs(layoutH - lastComposerLayoutHRef.current) < 0.5) return;
+    onInputBarHeight?.(layoutH);
+    if (Math.abs(layoutH - lastComposerLayoutHRef.current) < 0.5) {
+      reportComposerTopY();
+      return;
+    }
     if (keyboardSettlingRef.current) {
       pendingComposerHeightRef.current = layoutH;
+      reportComposerTopY();
       return;
     }
     applyComposerStackHeight(layoutH);
-  }, [applyComposerStackHeight, keyboardSettlingRef]);
+    reportComposerTopY();
+  }, [
+    applyComposerStackHeight,
+    keyboardSettlingRef,
+    onInputBarHeight,
+    reportComposerTopY,
+  ]);
 
   const listAnimatedStyle = useAnimatedStyle(() => ({
     opacity: listOpacity.value,
@@ -95,13 +116,19 @@ export default function useChatListKeyboardLayout({
         'worklet';
         if (e.height <= 0) {
           runOnJS(discardPendingComposerHeight)();
+          runOnJS(reportComposerTopY)();
         } else {
           runOnJS(flushPendingComposerStackHeight)();
         }
       },
     },
-    [discardPendingComposerHeight, flushPendingComposerStackHeight],
+    [discardPendingComposerHeight, flushPendingComposerStackHeight, reportComposerTopY],
   );
+
+  useLayoutEffect(() => {
+    const t = setTimeout(() => reportComposerTopY(), 0);
+    return () => clearTimeout(t);
+  }, [reportComposerTopY]);
 
   /** Только manual lift; без resize окна (двойной offset). */
   useLayoutEffect(() => {

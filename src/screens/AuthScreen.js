@@ -187,6 +187,7 @@ export default function AuthScreen() {
             Email
           </Text>
           <TextInput
+            testID="auth-email-input"
             style={[
               tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
               {
@@ -211,6 +212,7 @@ export default function AuthScreen() {
               Пароль
             </Text>
             <TextInput
+              testID="auth-password-input"
               style={[
                 tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
                 {
@@ -303,6 +305,7 @@ export default function AuthScreen() {
         ) : null}
 
         <TouchableOpacity
+          testID="auth-submit-button"
           style={[
             tw`w-full rounded-[10px] py-3.5 items-center flex-row justify-center`,
             {

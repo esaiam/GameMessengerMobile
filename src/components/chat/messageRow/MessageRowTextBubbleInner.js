@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { V } from '../../../theme';
 import { Mic } from '../../../icons/lucideIcons';
+import { isAriaTypewriterPending } from '../../../lib/aria';
 import ChatReplyPreview from '../ChatReplyPreview';
+import AriaTypewriterText from '../AriaTypewriterText';
 import { LinkifyMessageText } from '../linkifyMessageText';
 import MessageRowTimeMeta, { computeMessageRowMetaReservePx } from './MessageRowTimeMeta';
 import { MSG_TEXT_SIZE, MSG_LINE_HEIGHT } from '../messageBubbleLayoutConstants';
@@ -16,6 +18,8 @@ export default function MessageRowTextBubbleInner({
   textSelectable,
   useAriaLinks,
   replyMsg,
+  tickPausedRef,
+  env,
 }) {
   const textBodyColor =
     isMine && !ariaPanelUserAsIncoming ? V.outBubbleText : V.inBubbleText;
@@ -30,6 +34,8 @@ export default function MessageRowTextBubbleInner({
     isEphemeral,
     isEdited,
   });
+  const ariaIncoming = useAriaLinks && !isMine && !item.aria_voice_message;
+  const typewriterPending = ariaIncoming && isAriaTypewriterPending(item);
 
   return (
     <>
@@ -64,6 +70,17 @@ export default function MessageRowTextBubbleInner({
               {item.text}
             </Text>
           </View>
+        ) : ariaIncoming ? (
+          <AriaTypewriterText
+            key={item.id}
+            text={item.text}
+            done={!typewriterPending}
+            messageId={item.id}
+            onRevealComplete={env?.onAriaRevealComplete}
+            style={ariaTextBodyStyle}
+            useLinks={useAriaLinks}
+            selectable={textSelectable}
+          />
         ) : useAriaLinks ? (
           <LinkifyMessageText
             text={item.text}
@@ -90,6 +107,7 @@ export default function MessageRowTextBubbleInner({
             isMine={isMine}
             ariaPanelUserAsIncoming={ariaPanelUserAsIncoming}
             variant="text"
+            tickPausedRef={tickPausedRef}
           />
         </View>
       </View>

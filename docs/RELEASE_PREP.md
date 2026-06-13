@@ -74,7 +74,12 @@ npx eas build -p android --profile production --non-interactive
 ## Не блокирует черновик brief
 
 - EAS quota / локальный Gradle
-- Privacy Policy URL (нужен перед Play Store, не для 10 друзей с APK в Telegram)
+
+## Legal (готово)
+
+- [x] **Privacy Policy** — https://esaiam.github.io/vault-privacy-policy (контакт: vaultprivacy06@gmail.com)
+- [x] **Удаление аккаунта** — `ProfileScreen` → RPC `delete_user_account`, каскад в Supabase
+- [x] **Удаление контакта** — RPC `delete_contact_room`, физическое удаление room + messages
 
 ## Env для smoke перед каждым релизом
 

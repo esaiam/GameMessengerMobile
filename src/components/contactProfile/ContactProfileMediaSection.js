@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Platform,
   ActivityIndicator,
-  useWindowDimensions,
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -18,14 +17,20 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import { Play, Check } from '../../icons/lucideIcons';
 import { V } from '../../theme';
 import { isGifMediaUrl } from '../../lib/isGifMediaUrl';
+import { useIsSplitLayout } from '../../hooks/useIsSplitLayout';
 
-const COLS = 3;
+const COLS_PHONE = 3;
+const COLS_TABLET = 4;
 /** Совпадает с paddingHorizontal скролла ContactProfileScreen */
 const SCROLL_HORIZONTAL_PAD = 16;
 const MEDIA_GRID_RADIUS = 20;
 const TILE_SELECT_SCALE = 0.88;
 const SELECTION_BADGE_SIZE = 22;
 const SELECT_SPRING = { damping: 18, stiffness: 280, mass: 0.85 };
+
+function resolveMediaGridWidth(contentWidth) {
+  return Math.max(0, Math.floor(contentWidth));
+}
 
 function MediaTile({
   item,
@@ -172,6 +177,7 @@ function MediaTile({
 
 function MediaRow({
   items,
+  cols,
   selectionMode,
   selectedIds,
   hiddenTileId,
@@ -181,13 +187,13 @@ function MediaRow({
   onRegisterTransitionSource,
 }) {
   const slots = [...items];
-  while (slots.length < COLS) {
+  while (slots.length < cols) {
     slots.push(null);
   }
 
   return (
     <View style={styles.row}>
-      {slots.slice(0, COLS).map((item, i) =>
+      {slots.slice(0, cols).map((item, i) =>
         item ? (
           <MediaTile
             key={item.id}
@@ -212,6 +218,7 @@ export default function ContactProfileMediaSection({
   items,
   loading,
   roomId,
+  contentWidth,
   selectionMode,
   selectedIds,
   hiddenTileId,
@@ -220,12 +227,14 @@ export default function ContactProfileMediaSection({
   onTileLayout,
   onRegisterTransitionSource,
 }) {
-  const rows = [];
-  for (let i = 0; i < items.length; i += COLS) {
-    rows.push(items.slice(i, i + COLS));
-  }
+  const isTablet = useIsSplitLayout();
+  const cols = isTablet ? COLS_TABLET : COLS_PHONE;
+  const gridWidth = resolveMediaGridWidth(contentWidth);
 
-  const { width: screenW } = useWindowDimensions();
+  const rows = [];
+  for (let i = 0; i < items.length; i += cols) {
+    rows.push(items.slice(i, i + cols));
+  }
 
   if (!roomId) return null;
 
@@ -236,7 +245,7 @@ export default function ContactProfileMediaSection({
         style={[
           styles.grid,
           {
-            width: screenW,
+            width: gridWidth,
             marginHorizontal: -SCROLL_HORIZONTAL_PAD,
             borderRadius: MEDIA_GRID_RADIUS,
           },
@@ -256,6 +265,7 @@ export default function ContactProfileMediaSection({
           <MediaRow
             key={`row-${rowIdx}`}
             items={row}
+            cols={cols}
             selectionMode={selectionMode}
             selectedIds={selectedIds}
             hiddenTileId={hiddenTileId}

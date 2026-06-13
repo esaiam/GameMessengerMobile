@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useWindowDimensions } from 'react-native';
+import { useIsSplitLayout } from '../../hooks/useIsSplitLayout';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -12,7 +13,6 @@ import useChatPlayback from './useChatPlayback';
 import useChatHeaderOverlay from './useChatHeaderOverlay';
 import useChatComposerChrome from './useChatComposerChrome';
 import { useAriaChatListBootstrap } from './useAriaChatListBootstrap';
-import { useChatEphemeralClockTick } from '../../hooks/useChatEphemeralClockTick';
 import { useChatFormattedMessagesState } from '../../hooks/useChatFormattedMessagesState';
 import { useChatInvertedListScroll } from '../../hooks/useChatInvertedListScroll';
 import useChatMessageFilters from './useChatMessageFilters';
@@ -35,10 +35,14 @@ export default function useChatController({
   ariaMessages,
   setAriaMessages,
   sendToAria,
+  onInputBarHeight,
+  onInputBarTopY,
   onEmojiPickerChange,
   listPaddingTop,
   chatRoomHeader,
   onTopOverlayHeight,
+  /** GameScreen tablet + gameExpanded — listExtra.suppressHeavyMedia */
+  suppressHeavyMedia = false,
   renderPausedRef,
   diceBusyRef,
   chatFlushDeferredRef,
@@ -46,8 +50,10 @@ export default function useChatController({
   showAnimDice = false,
   overscrollEnabled = true,
   roomFocused = false,
+  onAriaRevealComplete,
 }) {
   const { width: windowWidth } = useWindowDimensions();
+  const isTablet = useIsSplitLayout();
   const insets = useSafeAreaInsets();
   const inputBarRef = useRef(null);
 
@@ -152,7 +158,7 @@ export default function useChatController({
     initialHistoryReady,
   );
 
-  const ephemeralClockTick = useChatEphemeralClockTick(messages, renderPausedRef);
+
   const formattedMessages = useChatFormattedMessagesState(messages, roomId);
 
   const {
@@ -172,6 +178,11 @@ export default function useChatController({
     formattedMessages,
     isRecordingVoice,
   });
+
+  useEffect(() => {
+    if (!suppressHeavyMedia) return;
+    stopVideo();
+  }, [suppressHeavyMedia, stopVideo]);
 
   const {
     daysWithMessages,
@@ -235,6 +246,9 @@ export default function useChatController({
     listOpacity,
     keyboardHeightLib,
     emojiPanelHeightShared,
+    inputBarRef,
+    onInputBarTopY,
+    onInputBarHeight,
   });
 
   const navigation = useNavigation();
@@ -255,6 +269,7 @@ export default function useChatController({
     vaultChatSyncRef,
     ensureMessageAnims,
     popMessage,
+    restoreMessage,
     handleVideoRecorded,
     handleVideoSendError,
     handleVideoUploadFinished,
@@ -345,6 +360,7 @@ export default function useChatController({
     messagesRef,
     vaultChatSyncRef,
     popMessage,
+    restoreMessage,
     editInProgressRef,
     navigation,
     setPinnedBarH,
@@ -410,6 +426,7 @@ export default function useChatController({
     formattedMessages,
     nickname,
     windowWidth,
+    isTablet,
     selectedIds,
     getReplyMessage,
     ensureMessageAnims,
@@ -423,6 +440,7 @@ export default function useChatController({
     replyToMessage,
     isAriaChat,
     openCalendarFromSeparator,
+    suppressHeavyMedia,
     activeVoiceUri,
     activePlayerStatus,
     activeVoiceMessageId,
@@ -432,10 +450,11 @@ export default function useChatController({
     selectedHash,
     renderableVideoIds,
     onUnlockVideo,
+    ephemeralTickPausedRef: renderPausedRef,
+    onAriaRevealComplete,
   });
 
   return buildChatViewProps({
-    ephemeralClockTick,
     chatRoomHeader,
     isAriaChat,
     uiReady: overlay.uiReady,
@@ -444,6 +463,7 @@ export default function useChatController({
     overscrollEnabled,
     overlay: {
       ...overlay,
+      uploading,
       daysWithMessages,
       handleCalendarDayPress,
       setReplyTarget,
