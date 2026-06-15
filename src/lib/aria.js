@@ -6,10 +6,7 @@ import { supabase } from './supabase';
 /** Виртуальная комната ассистента (не строка в `profiles`). */
 export const ARIA_ROOM_ID = 'aria-direct';
 
-/** Aria-lite на LAN (IP ПК в Wi‑Fi; тот же, что у Metro QR — `ipconfig`, сейчас .101). */
-export const ARIA_LITE_LAN_URL = 'http://192.168.1.101:8001';
-
-/** Тот же ПК, что и сервер (Expo web / клиент на localhost). */
+/** Локальный Aria-lite на том же хосте (Expo web / localhost). */
 export const ARIA_LITE_LOCAL_URL = 'http://127.0.0.1:8001';
 
 function stripTrailingSlashes(url) {
@@ -34,21 +31,21 @@ function ariaUrlFromDevMetro() {
 }
 
 /**
- * Dev native: IP из Metro (не зашитый в EAS dev APK eas.json).
- * Web dev: 127.0.0.1. Prod: EXPO_PUBLIC_ARIA_API_URL.
+ * Dev native: IP из Metro QR (hostUri → :8001).
+ * Web dev: localhost или EXPO_PUBLIC_ARIA_API_URL.
+ * Prod: EXPO_PUBLIC_ARIA_API_URL.
  */
 export function resolveAriaApiBaseUrl() {
+  const fromEnv = stripTrailingSlashes(process.env.EXPO_PUBLIC_ARIA_API_URL);
+
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    if (Platform.OS === 'web') return ARIA_LITE_LOCAL_URL;
+    if (Platform.OS === 'web') return fromEnv || ARIA_LITE_LOCAL_URL;
     const fromMetro = ariaUrlFromDevMetro();
     if (fromMetro) return fromMetro;
+    if (fromEnv) return fromEnv;
+    return '';
   }
-  const fromEnv = stripTrailingSlashes(process.env.EXPO_PUBLIC_ARIA_API_URL);
-  if (fromEnv) return fromEnv;
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    return ARIA_LITE_LAN_URL;
-  }
-  return '';
+  return fromEnv || '';
 }
 
 /** База Aria-lite / полной Aria (не хардкодить :8000). */
@@ -141,7 +138,12 @@ export async function checkAriaHealth(signal) {
     } catch {
       json = {};
     }
-    const ok = res.ok && (json?.status === 'ok' || json?.status === 'OK' || json?.ok === true);
+    const ok =
+      res.ok &&
+      (json?.status === 'ok' ||
+        json?.status === 'OK' ||
+        json?.status === 'degraded' ||
+        json?.ok === true);
     if (__DEV__ && !ok) {
       console.warn('[Vault][dev] Aria health', url, '->', res.status, json);
     }
