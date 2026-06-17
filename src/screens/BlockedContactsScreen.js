@@ -8,7 +8,6 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import tw from 'twrnc';
 import TabBackground from '../components/TabBackground';
 import { UserAvatar } from '../components/UserAvatar';
 import { V } from '../theme';
@@ -20,6 +19,47 @@ import { normalizeUserPair } from '../utils/roomIds';
 import { useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
 import { useNicknameFromRoute } from '../hooks/useNicknameFromRoute';
 import { profileStackGoBack, useProfileStackBackHandler } from '../lib/profileStackGoBack';
+
+const CARD_RADIUS = 12;
+const UNBLOCK_BTN_H = 36;
+
+function BlockedContactRow({ peerHandle, busy, onOpenProfile, onUnblock }) {
+  return (
+    <View style={styles.rowCard}>
+      <TouchableOpacity
+        style={styles.rowMain}
+        onPress={() => onOpenProfile(peerHandle)}
+        activeOpacity={0.7}
+        disabled={busy}
+      >
+        <UserAvatar name={peerHandle} uri={null} size={44} />
+        <View style={styles.rowTextCol}>
+          <Text style={styles.peerName} numberOfLines={1}>
+            {peerHandle}
+          </Text>
+          <Text style={styles.peerHint}>Профиль контакта</Text>
+        </View>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() =>
+          Alert.alert('Разблокировать', `Разблокировать ${peerHandle}?`, [
+            { text: 'Отмена', style: 'cancel' },
+            { text: 'Разблокировать', onPress: () => onUnblock(peerHandle) },
+          ])
+        }
+        disabled={busy}
+        style={[styles.unblockBtn, busy && styles.unblockBtnBusy]}
+        activeOpacity={0.85}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" color={V.accentSage} />
+        ) : (
+          <Text style={styles.unblockBtnText}>Разблокировать</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function BlockedContactsScreen({ route, navigation }) {
   useProfileStackBackHandler(navigation);
@@ -88,85 +128,40 @@ export default function BlockedContactsScreen({ route, navigation }) {
     [nickname, navigation],
   );
 
-  const renderItem = ({ item }) => {
-    const busy = busyHandle === item;
-    return (
-      <View
-        style={[
-          tw`flex-row items-center py-3 px-3 rounded-[10px] mb-2`,
-          { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border },
-        ]}
-      >
-        <TouchableOpacity
-          style={tw`flex-1 flex-row items-center`}
-          onPress={() => openContactProfile(item)}
-          activeOpacity={0.7}
-          disabled={busy}
-        >
-          <UserAvatar name={item} uri={null} size={44} />
-          <View style={tw`flex-1 ml-3`}>
-            <Text style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]} numberOfLines={1}>
-              {item}
-            </Text>
-            <Text style={[tw`text-[11px] mt-0.5`, { color: V.textMuted }]}>Профиль контакта</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() =>
-            Alert.alert('Разблокировать', `Разблокировать ${item}?`, [
-              { text: 'Отмена', style: 'cancel' },
-              { text: 'Разблокировать', onPress: () => runUnblock(item) },
-            ])
-          }
-          disabled={busy}
-          style={[
-            tw`rounded-[8px] px-3 py-1.5 ml-2`,
-            { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.accentSage },
-            busy && { opacity: 0.5 },
-          ]}
-        >
-          {busy ? (
-            <ActivityIndicator size="small" color={V.accentSage} />
-          ) : (
-            <Text style={[tw`text-[10px] font-medium`, { color: V.accentSage }]}>Разблокировать</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    );
-  };
+  const renderItem = ({ item }) => (
+    <BlockedContactRow
+      peerHandle={item}
+      busy={busyHandle === item}
+      onOpenProfile={openContactProfile}
+      onUnblock={runUnblock}
+    />
+  );
 
   return (
     <TabBackground>
-      <View style={[tw`flex-1`, { backgroundColor: 'transparent' }]}>
-        <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
+      <View style={styles.screen}>
+        <View style={[headerLayout.containerStyle, styles.header]}>
           <TouchableOpacity
             onPress={() => profileStackGoBack(navigation)}
-            style={{
-              minHeight: headerLayout.contentMinHeight,
-              justifyContent: 'center',
-              flexDirection: 'row',
-              alignItems: 'center',
-              alignSelf: 'flex-start',
-            }}
+            style={[styles.backBtn, { minHeight: headerLayout.contentMinHeight }]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
           >
             <ArrowLeft size={18} color={V.textSecondary} strokeWidth={1.5} />
-            <Text style={[tw`text-[14px] font-medium ml-2`, { color: V.textSecondary }]}>Назад</Text>
+            <Text style={styles.backText}>Назад</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={tw`flex-1 px-4`}>
-          <Text style={[tw`text-[17px] font-medium mb-2`, { color: V.textPrimary }]}>
-            Заблокированные
-          </Text>
-          <Text style={[tw`text-[12px] mb-4`, { color: V.textSecondary, lineHeight: 18 }]}>
+        <View style={styles.body}>
+          <Text style={styles.title}>Заблокированные</Text>
+          <Text style={styles.lead}>
             Блокировка на сервере: заблокированные не могут вам писать. Разблокируйте, чтобы снова
             видеть переписку и писать.
           </Text>
 
-          <View style={tw`flex-1`}>
+          <View style={styles.listWrap}>
             <TabOverscrollFlatList
-              style={tw`flex-1`}
+              style={styles.list}
               data={peers}
               keyExtractor={(item) => item}
               renderItem={renderItem}
@@ -174,14 +169,12 @@ export default function BlockedContactsScreen({ route, navigation }) {
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
                 loading ? null : (
-                  <Text style={[tw`text-[13px] py-4`, { color: V.textMuted }]}>
-                    Нет заблокированных контактов.
-                  </Text>
+                  <Text style={styles.emptyText}>Нет заблокированных контактов.</Text>
                 )
               }
             />
             {loading && peers.length === 0 ? (
-              <View style={[styles.loadingOverlay, { backgroundColor: V.bgApp }]}>
+              <View style={styles.loadingOverlay}>
                 <ActivityIndicator color={V.textMuted} />
               </View>
             ) : null}
@@ -193,9 +186,111 @@ export default function BlockedContactsScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  header: {
+    backgroundColor: 'transparent',
+  },
+  backBtn: {
+    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  backText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: V.textSecondary,
+    marginLeft: 8,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: V.textPrimary,
+    marginBottom: 8,
+  },
+  lead: {
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 18,
+    color: V.textSecondary,
+    marginBottom: 16,
+  },
+  listWrap: {
+    flex: 1,
+  },
+  list: {
+    flex: 1,
+  },
+  emptyText: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: V.textMuted,
+    paddingVertical: 16,
+    lineHeight: 20,
+  },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: V.bgChatsScreen,
+  },
+  rowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: CARD_RADIUS,
+    backgroundColor: V.glassNeutralBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+  },
+  rowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  rowTextCol: {
+    flex: 1,
+    marginLeft: 12,
+    minWidth: 0,
+  },
+  peerName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: V.textPrimary,
+  },
+  peerHint: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: V.textMuted,
+    marginTop: 2,
+  },
+  unblockBtn: {
+    height: UNBLOCK_BTN_H,
+    borderRadius: UNBLOCK_BTN_H / 2,
+    paddingHorizontal: 12,
+    marginLeft: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: V.btnPrimaryBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.sageBorder,
+  },
+  unblockBtnBusy: {
+    opacity: 0.5,
+  },
+  unblockBtnText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: V.accentSage,
   },
 });

@@ -16,8 +16,7 @@ const AVATAR_CIRCLE_SIZE = 52;
 const AVATAR_SLOT_SIZE = 56;
 const SELECTION_BADGE_SIZE = 20;
 
-/** Внутренняя область под фото: border 1.5 внутри. */
-const ARIA_LIST_IMAGE_SIZE = AVATAR_CIRCLE_SIZE - 3;
+const ARIA_LIST_IMAGE_SIZE = AVATAR_CIRCLE_SIZE;
 
 function PeerListAvatar({ name }) {
   const { avatarUri } = usePeerAvatar(name);

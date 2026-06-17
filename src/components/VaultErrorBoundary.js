@@ -1,12 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-
-const BG = '#0D0F14';
-const SURFACE = '#1A1D24';
-const TEXT_PRIMARY = '#E8E4DA';
-const TEXT_SECONDARY = '#9E9789';
-const SAGE = '#5A9E9A';
-const BORDER = 'rgba(255,255,255,0.06)';
+import { V } from '../theme';
 
 /**
  * Верхнеуровневый Error Boundary.
@@ -69,7 +63,7 @@ export default class VaultErrorBoundary extends React.Component {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: V.bgApp,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -77,46 +71,46 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: SURFACE,
+    backgroundColor: V.bgSurface,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
+    borderColor: V.border,
     padding: 24,
     gap: 16,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: V.textPrimary,
     fontSize: 17,
     fontWeight: '600',
   },
   body: {
-    color: TEXT_SECONDARY,
+    color: V.textSecondary,
     fontSize: 14,
     fontWeight: '400',
     lineHeight: 20,
   },
   devError: {
-    color: '#B56B6B',
+    color: V.dangerMuted,
     fontSize: 11,
     fontFamily: 'monospace',
-    backgroundColor: 'rgba(181,107,107,0.08)',
+    backgroundColor: V.bgElevated,
     borderRadius: 6,
     padding: 8,
   },
   btn: {
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1A2E2E',
+    backgroundColor: V.btnPrimaryBg,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(90,158,154,0.25)',
+    borderColor: V.sageBorder,
   },
   btnPressed: {
     opacity: 0.7,
   },
   btnText: {
-    color: SAGE,
+    color: V.accentSage,
     fontSize: 15,
     fontWeight: '500',
   },

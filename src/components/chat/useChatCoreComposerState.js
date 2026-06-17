@@ -22,6 +22,7 @@ export default function useChatCoreComposerState({
 
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [initialHistoryReady, setInitialHistoryReady] = useState(isAriaChat);
+  const [historyDataReady, setHistoryDataReady] = useState(false);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const [visibleReplyTo, setVisibleReplyTo] = useState(null);
@@ -78,6 +79,7 @@ export default function useChatCoreComposerState({
 
   useEffect(() => {
     setInitialHistoryReady(isAriaChat);
+    setHistoryDataReady(isAriaChat);
   }, [roomId, isAriaChat]);
 
   return {
@@ -88,6 +90,8 @@ export default function useChatCoreComposerState({
     setMessagesLoading,
     initialHistoryReady,
     setInitialHistoryReady,
+    historyDataReady,
+    setHistoryDataReady,
     text,
     setText,
     replyTo,

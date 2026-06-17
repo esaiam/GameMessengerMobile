@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Animated } from 'react-native';
+import { View, Animated, Text } from 'react-native';
 import { V } from '../../../theme';
 import { isAriaTypewriterPending } from '../../../lib/aria';
-import { AriaTypingDots } from '../AriaChatUi';
+import { AriaTypingIndicator } from '../AriaChatUi';
 import AriaGeneratedAttachment from '../AriaGeneratedAttachment';
 import AriaTypewriterText from '../AriaTypewriterText';
 import { MSG_TEXT_SIZE, MSG_LINE_HEIGHT } from '../messageBubbleLayoutConstants';
@@ -85,11 +85,27 @@ export default function MessageRowAriaPlain({
   env,
 }) {
   if (kind === 'ariaPlainTyping') {
+    const preview =
+      typeof item?.aria_stream_preview === 'string' ? item.aria_stream_preview : '';
     return (
       <View style={{ marginBottom: rowMarginBottom, zIndex: index }}>
         {dateSeparatorEl}
-        <View style={{ paddingVertical: 8, alignItems: 'flex-start' }}>
-          <AriaTypingDots />
+        <View style={{ paddingVertical: 6, alignItems: 'flex-start', backgroundColor: 'transparent' }}>
+          <AriaTypingIndicator phase={item?.aria_stream_phase} hideLabel={preview.length > 0} />
+          {preview.length > 0 ? (
+            <Text
+              style={{
+                marginTop: 10,
+                fontSize: MSG_TEXT_SIZE,
+                lineHeight: MSG_LINE_HEIGHT,
+                fontWeight: '400',
+                color: V.textPrimary,
+                maxWidth: '100%',
+              }}
+            >
+              {preview}
+            </Text>
+          ) : null}
         </View>
       </View>
     );

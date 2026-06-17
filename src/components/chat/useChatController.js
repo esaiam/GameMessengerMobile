@@ -65,6 +65,8 @@ export default function useChatController({
     setMessagesLoading,
     initialHistoryReady,
     setInitialHistoryReady,
+    historyDataReady,
+    setHistoryDataReady,
     text,
     setText,
     replyTo,
@@ -156,6 +158,7 @@ export default function useChatController({
     listScrollSuppressRefs,
     isAriaChat ? null : listOpacity,
     initialHistoryReady,
+    historyDataReady,
   );
 
 
@@ -294,6 +297,7 @@ export default function useChatController({
     messagesLoading,
     setMessagesLoading,
     setInitialHistoryReady,
+    setHistoryDataReady,
     decryptMsg,
     decryptBatch,
     filterExpired,

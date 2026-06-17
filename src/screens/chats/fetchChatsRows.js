@@ -1,5 +1,4 @@
 import { supabase } from '../../lib/supabase';
-import roomMessagesCache from '../../utils/roomMessagesCache';
 
 /**
  * Загружает комнаты пользователя, отсортированные по времени последнего сообщения.
@@ -52,13 +51,6 @@ export async function fetchChatsRows(nickname) {
       roomCode: r.code,
       contactName: other,
       last };
-  });
-
-  // Засеять in-memory кэш только если он ещё пустой
-  next.forEach(({ roomId, last }) => {
-    if (!last) return;
-    if (roomMessagesCache.has(roomId)) return;
-    roomMessagesCache.set(roomId, [last]);
   });
 
   return { rows: next, error: false };

@@ -55,6 +55,7 @@ export default function useChatRoomEffects({
   setMessagesLoading,
   messagesRef,
   onInitialPageLoaded,
+  setHistoryDataReady,
   /** Комната на экране (не просто смонтирована в stack) — иначе read cursor сбрасывается в фоне. */
   roomFocused = false,
   /** ref для отправки broadcast после «удалить у всех» / очистки (когда postgres UPDATE не доходит из‑за RLS) */
@@ -114,6 +115,7 @@ export default function useChatRoomEffects({
       if (cached && cached.length > 0) {
         setMessages(cached);
         setMessagesLoading(false);
+        setHistoryDataReady(true);
       } else {
         setMessagesLoading(true);
       }

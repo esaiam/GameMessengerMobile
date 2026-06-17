@@ -84,6 +84,8 @@ export function messageRowContentSig(m) {
     m.audio_uri ?? '',
     stableAriaAttachmentSig(m.aria_attachment),
     m.isTyping ? '1' : '0',
+    m.aria_stream_phase ?? '',
+    m.aria_stream_preview ?? '',
     m.aria_reveal_done === false ? '0' : '1',
     stableReactionsSig(m.reactions)].join('\x1e');
 }

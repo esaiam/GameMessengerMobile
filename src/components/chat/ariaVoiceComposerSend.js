@@ -41,7 +41,9 @@ export function startAriaVoiceComposerSend({ uri, nickname, setMessages, sendToA
     created_at: now,
     read_at: null,
     message_type: ARIA_MESSAGE_TYPING,
-    isTyping: true };
+    isTyping: true,
+    aria_stream_phase: 'memory',
+  };
 
   setMessages((prev) => [...prev, userRow, typingRow]);
 

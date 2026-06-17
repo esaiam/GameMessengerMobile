@@ -5,13 +5,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Share } from 'react-native';
+  Share,
+  StyleSheet,
+  ScrollView,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import tw from 'twrnc';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
-import { V } from '../theme';
-import TabOverscrollFlatList from '../components/TabOverscrollFlatList';
+import { V, SEARCH_FIELD_LAYOUT, SEARCH_CHATS_CAPSULE_RADIUS } from '../theme';
 import TabBackground from '../components/TabBackground';
 import { ArrowLeft, Copy, Forward } from '../icons/lucideIcons';
 import InviteQrBlock from '../components/InviteQrBlock';
@@ -20,9 +21,12 @@ import { buildInviteQrPayload } from '../utils/inviteDeepLink';
 import { useMessengerHeaderLayout } from '../components/MessengerHeaderLayout';
 import { profileStackGoBack, useProfileStackBackHandler } from '../lib/profileStackGoBack';
 
-const LIST_LIMIT = 10;
 const INSERT_RETRIES = 3;
 const INVITE_VALID_DAYS = 7;
+const BTN_H = SEARCH_FIELD_LAYOUT.chatsHeight;
+const BTN_RADIUS = SEARCH_CHATS_CAPSULE_RADIUS;
+const CARD_RADIUS = 12;
+const ACTION_BTN_H = 36;
 
 function formatExpires(iso) {
   if (!iso) return 'Без срока';
@@ -35,41 +39,109 @@ function formatExpires(iso) {
   }
 }
 
+function isInviteActive(row) {
+  if (!row) return false;
+  const maxUses = Number(row.max_uses) || 1;
+  if (Number(row.uses_count) >= maxUses) return false;
+  const exp = new Date(row.expires_at);
+  return !Number.isNaN(exp.getTime()) && exp.getTime() > Date.now();
+}
+
 /** Текст для системного «Поделиться»: почта, мессенджеры, SMS и т.д. */
 function buildInviteShareMessage(code, expiresAtIso) {
   const link = buildInviteQrPayload(code);
   const until = formatExpires(expiresAtIso);
   const parts = [
     'Привет! Приглашаю в Vault Messenger (нарды и чаты).',
-    `Код приглашения: ${code}`];
+    `Код приглашения: ${code}`,
+  ];
   if (link) parts.push(`Ссылка для приложения: ${link}`);
   parts.push(
     'Как зарегистрироваться: установи приложение → экран входа → «Регистрация» → введи код вручную или отсканируй QR с экрана «Приглашения» у того, кто пригласил.',
-    `Срок кода: до ${until}.`
+    `Срок кода: до ${until}.`,
   );
   return parts.join('\n\n');
 }
 
+function ActiveInviteCard({ invite, onCopy, onShare }) {
+  return (
+    <View style={styles.inviteBlock}>
+      <View style={styles.card}>
+        <View style={styles.cardMain}>
+          <Text style={styles.codeText}>{invite.code}</Text>
+          <Text style={styles.codeMeta}>
+            Действует до {formatExpires(invite.expires_at)} · одно использование
+          </Text>
+        </View>
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            onPress={() => onCopy(invite.code)}
+            style={[styles.actionBtn, styles.actionBtnPrimary]}
+            accessibilityLabel="Скопировать код"
+            activeOpacity={0.85}
+          >
+            <Copy size={16} color={V.accentSage} strokeWidth={1.5} />
+            <Text style={styles.actionBtnPrimaryText}>Копировать</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => onShare(invite.code, invite.expires_at)}
+            style={[styles.actionBtn, styles.actionBtnGhost]}
+            accessibilityLabel="Отправить приглашение"
+            activeOpacity={0.85}
+          >
+            <Forward size={16} color={V.textSecondary} strokeWidth={1.5} />
+            <Text style={styles.actionBtnGhostText}>Отправить…</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <InviteQrBlock code={invite.code} />
+    </View>
+  );
+}
+
 export default function InviteFriendsScreen({ navigation }) {
   useProfileStackBackHandler(navigation);
-  const [rows, setRows] = useState([]);
+  const [activeInvite, setActiveInvite] = useState(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const headerLayout = useMessengerHeaderLayout();
 
-  const loadCodes = useCallback(async () => {
+  const loadActiveInvite = useCallback(async () => {
     setLoading(true);
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
+      if (!uid) {
+        setActiveInvite(null);
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+
+      // Сгоревшие коды убираем из БД (best effort; RLS — только свои).
+      await supabase
+        .from('invite_codes')
+        .delete()
+        .eq('created_by', uid)
+        .or(`expires_at.lt.${nowIso},uses_count.gte.1`);
+
       const { data, error } = await supabase
         .from('invite_codes')
         .select('id, code, expires_at, max_uses, uses_count, created_at')
+        .eq('created_by', uid)
+        .gt('expires_at', nowIso)
+        .eq('uses_count', 0)
         .order('created_at', { ascending: false })
-        .limit(LIST_LIMIT);
+        .limit(1)
+        .maybeSingle();
+
       if (error) throw error;
-      setRows(data || []);
+      setActiveInvite(isInviteActive(data) ? data : null);
     } catch (e) {
-      setRows([]);
-      Alert.alert('Ошибка', e?.message || 'Не удалось загрузить приглашения');
+      setActiveInvite(null);
+      Alert.alert('Ошибка', e?.message || 'Не удалось загрузить приглашение');
     } finally {
       setLoading(false);
     }
@@ -77,8 +149,8 @@ export default function InviteFriendsScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      loadCodes();
-    }, [loadCodes])
+      loadActiveInvite();
+    }, [loadActiveInvite]),
   );
 
   const copyCode = async (code) => {
@@ -104,7 +176,8 @@ export default function InviteFriendsScreen({ navigation }) {
     try {
       await Share.share({
         title: 'Приглашение Vault Messenger',
-        message: buildInviteShareMessage(s, expiresAtIso) });
+        message: buildInviteShareMessage(s, expiresAtIso),
+      });
     } catch (e) {
       if (e?.name === 'AbortError') return;
       Alert.alert('Ошибка', e?.message || 'Не удалось открыть меню «Поделиться».');
@@ -113,15 +186,24 @@ export default function InviteFriendsScreen({ navigation }) {
 
   const createInvite = async () => {
     const {
-      data: { session } } = await supabase.auth.getSession();
+      data: { session },
+    } = await supabase.auth.getSession();
     const uid = session?.user?.id;
     if (!uid) {
       Alert.alert('Сессия', 'Войдите в аккаунт, чтобы создать приглашение.');
       return;
     }
 
+    if (activeInvite) {
+      Alert.alert(
+        'Код ещё действует',
+        `Текущее приглашение активно до ${formatExpires(activeInvite.expires_at)}. После использования или истечения срока можно создать новое.`,
+      );
+      return;
+    }
+
     const expiresAt = new Date(
-      Date.now() + INVITE_VALID_DAYS * 24 * 60 * 60 * 1000
+      Date.now() + INVITE_VALID_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();
 
     setCreating(true);
@@ -133,9 +215,10 @@ export default function InviteFriendsScreen({ navigation }) {
           code,
           created_by: uid,
           max_uses: 1,
-          expires_at: expiresAt });
+          expires_at: expiresAt,
+        });
         if (!error) {
-          await loadCodes();
+          await loadActiveInvite();
           try {
             await Clipboard.setStringAsync(code);
           } catch {
@@ -143,130 +226,212 @@ export default function InviteFriendsScreen({ navigation }) {
           }
           Alert.alert(
             'Готово',
-            `Код добавлен в список и скопирован в буфер. Действует ${INVITE_VALID_DAYS} дней (до ${formatExpires(expiresAt)}).`
+            `Код скопирован в буфер. Действует ${INVITE_VALID_DAYS} дней (до ${formatExpires(expiresAt)}), одно использование.`,
           );
           return;
         }
         lastErr = error;
         if (String(error.code) !== '23505') break;
       }
-      Alert.alert(
-        'Не удалось создать',
-        lastErr?.message || 'Повторите позже.'
-      );
+      Alert.alert('Не удалось создать', lastErr?.message || 'Повторите позже.');
     } finally {
       setCreating(false);
     }
   };
 
-  const renderItem = ({ item }) => (
-    <View style={tw`mb-3`}>
-      <View
-        style={[
-          tw`flex-row items-center py-3 px-3 rounded-[12px]`,
-          { backgroundColor: V.bgSurface, borderWidth: 0.5, borderColor: V.border }]}
-      >
-        <View style={tw`flex-1 mr-2`}>
-          <Text style={[tw`text-[15px] font-medium`, { color: V.textPrimary }]}>
-            {item.code}
-          </Text>
-          <Text style={[tw`text-[11px] mt-1`, { color: V.textMuted }]}>
-            до {formatExpires(item.expires_at)} · использований {item.uses_count}/{item.max_uses}
-          </Text>
-        </View>
-        <View style={tw`items-end`}>
-          <TouchableOpacity
-            onPress={() => copyCode(item.code)}
-            style={[
-              tw`rounded-[10px] px-3 py-2 flex-row items-center`,
-              { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.accentSage }]}
-            accessibilityLabel="Скопировать код"
-          >
-            <Copy size={16} color={V.accentSage} strokeWidth={1.5} />
-            <Text style={[tw`text-[12px] font-medium ml-1.5`, { color: V.accentSage }]}>Копировать</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => shareInvite(item.code, item.expires_at)}
-            style={[
-              tw`rounded-[10px] px-3 py-2 flex-row items-center mt-2`,
-              { backgroundColor: V.btnPrimaryBg, borderWidth: 0.5, borderColor: V.border }]}
-            accessibilityLabel="Отправить приглашение"
-          >
-            <Forward size={16} color={V.textSecondary} strokeWidth={1.5} />
-            <Text style={[tw`text-[12px] font-medium ml-1.5`, { color: V.textSecondary }]}>Отправить…</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-      <InviteQrBlock code={item.code} />
-    </View>
-  );
+  const hasActiveInvite = !!activeInvite;
 
   return (
     <TabBackground>
-      <View style={[tw`flex-1`, {backgroundColor: 'transparent'}]}>
-        <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
+      <View style={styles.screen}>
+        <View style={[headerLayout.containerStyle, styles.header]}>
           <TouchableOpacity
             onPress={() => profileStackGoBack(navigation)}
-            style={{ minHeight: headerLayout.contentMinHeight, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}
+            style={[styles.backBtn, { minHeight: headerLayout.contentMinHeight }]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
           >
             <ArrowLeft size={18} color={V.textSecondary} strokeWidth={1.5} />
-            <Text style={[tw`text-[14px] font-medium ml-2`, { color: V.textSecondary }]}>Назад</Text>
+            <Text style={styles.backText}>Назад</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={tw`flex-1 px-4`}>
-          <Text style={[tw`text-[17px] font-medium mb-2`, { color: V.textPrimary }]}>Приглашения</Text>
-          <Text style={[tw`text-[12px] mb-5`, { color: V.textSecondary, lineHeight: 18 }]}>
-            Код для регистрации друга. Срок действия нового кода — {INVITE_VALID_DAYS} календарных дней с
-            момента создания (указано в списке ниже). «Отправить…» открывает системное меню: почта, мессенджеры,
-            SMS и другие приложения. Сканирование QR — в режиме «Регистрация» на экране входа (при
-            необходимости выйди из аккаунта).
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.body}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>Приглашения</Text>
+          <Text style={styles.lead}>
+            Одно приглашение на {INVITE_VALID_DAYS} дней и одну регистрацию. После использования или
+            истечения срока код сгорает — можно создать новый. «Отправить…» открывает системное меню.
+            QR сканируется на экране «Регистрация» при входе.
           </Text>
 
-        <TouchableOpacity
-          onPress={createInvite}
-          disabled={creating}
-          style={[
-            tw`rounded-[10px] py-3.5 items-center flex-row justify-center mb-5`,
-            {
-              backgroundColor: V.btnPrimaryBg,
-              borderWidth: 0.5,
-              borderColor: V.accentSage,
-              opacity: creating ? 0.6 : 1 }]}
-        >
-          {creating ? (
-            <ActivityIndicator color={V.accentSage} />
-          ) : (
-            <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>Создать приглашение</Text>
-          )}
-        </TouchableOpacity>
-
-        <Text style={[tw`text-[13px] font-medium mb-2`, { color: V.textSecondary }]}>
-          Мои коды (последние {LIST_LIMIT})
-        </Text>
-
           {loading ? (
-            <View style={tw`py-8 items-center`}>
+            <View style={styles.loaderWrap}>
               <ActivityIndicator color={V.textMuted} />
             </View>
-          ) : (
-            <TabOverscrollFlatList
-              style={tw`flex-1`}
-              data={rows}
-              keyExtractor={(item) => item.id}
-              renderItem={renderItem}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <Text style={[tw`text-[13px] py-4`, { color: V.textMuted }]}>
-                  Пока нет кодов. Нажми «Создать приглашение» выше.
-                </Text>
-              }
+          ) : hasActiveInvite ? (
+            <ActiveInviteCard
+              invite={activeInvite}
+              onCopy={copyCode}
+              onShare={shareInvite}
             />
+          ) : (
+            <>
+              <Text style={styles.emptyText}>
+                Активного приглашения нет. Создай код и отправь другу.
+              </Text>
+              <TouchableOpacity
+                onPress={createInvite}
+                disabled={creating}
+                style={[styles.createBtn, creating && styles.createBtnBusy]}
+                activeOpacity={0.85}
+              >
+                {creating ? (
+                  <ActivityIndicator color={V.accentSage} />
+                ) : (
+                  <Text style={styles.createBtnText}>Создать приглашение</Text>
+                )}
+              </TouchableOpacity>
+            </>
           )}
-        </View>
+        </ScrollView>
       </View>
     </TabBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  header: {
+    backgroundColor: 'transparent',
+  },
+  backBtn: {
+    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  backText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: V.textSecondary,
+    marginLeft: 8,
+  },
+  scroll: {
+    flex: 1,
+  },
+  body: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: V.textPrimary,
+    marginBottom: 8,
+  },
+  lead: {
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 18,
+    color: V.textSecondary,
+    marginBottom: 20,
+  },
+  createBtn: {
+    height: BTN_H,
+    borderRadius: BTN_RADIUS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: V.btnPrimaryBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.sageBorder,
+    marginTop: 8,
+  },
+  createBtnBusy: {
+    opacity: 0.6,
+  },
+  createBtnText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: V.accentSage,
+  },
+  loaderWrap: {
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: V.textMuted,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  inviteBlock: {
+    marginBottom: 12,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: CARD_RADIUS,
+    backgroundColor: V.glassNeutralBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+  },
+  cardMain: {
+    flex: 1,
+    marginRight: 8,
+  },
+  codeText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: V.textPrimary,
+  },
+  codeMeta: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: V.textMuted,
+    marginTop: 4,
+  },
+  cardActions: {
+    alignItems: 'flex-end',
+  },
+  actionBtn: {
+    height: ACTION_BTN_H,
+    borderRadius: ACTION_BTN_H / 2,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  actionBtnPrimary: {
+    backgroundColor: V.btnPrimaryBg,
+    borderColor: V.sageBorder,
+  },
+  actionBtnPrimaryText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: V.accentSage,
+    marginLeft: 6,
+  },
+  actionBtnGhost: {
+    backgroundColor: V.hoverBg,
+    borderColor: V.border,
+    marginTop: 8,
+  },
+  actionBtnGhostText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: V.textSecondary,
+    marginLeft: 6,
+  },
+});

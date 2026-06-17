@@ -228,6 +228,24 @@ export async function fetchAriaPendingMessages(userId) {
  * attachment — при генерации файла: file_base64, filename, mime_type, size_bytes.
  * @param {{ userId: string, text: string, history: Array<{ role: string, text: string }> }} p
  */
+function normalizeAriaMessageResponse(json) {
+  const replyRaw = json?.reply;
+  const reply =
+    typeof replyRaw === 'string' && replyRaw.length > 0
+      ? replyRaw
+      : typeof json?.message === 'string' && json.message.length > 0
+        ? json.message
+        : '';
+  const attachment = parseAriaMessageAttachment(json);
+  return {
+    reply,
+    mood: json?.mood,
+    trust: json?.trust,
+    state: normalizeAriaState(json),
+    attachment,
+  };
+}
+
 export async function postAriaMessage({ userId, text, history }) {
   const base = getAriaApiBaseUrl();
   if (!base || !userId) throw new Error('no_api');
@@ -238,7 +256,10 @@ export async function postAriaMessage({ userId, text, history }) {
       user_id: userId,
       text,
       platform: 'vault',
-      history: Array.isArray(history) ? history : [] }) });
+      history: Array.isArray(history) ? history : [],
+      skip_push: true,
+    }),
+  });
   let json = {};
   try {
     json = await res.json();
@@ -246,23 +267,113 @@ export async function postAriaMessage({ userId, text, history }) {
     json = {};
   }
   if (!res.ok) throw new Error(`http_${res.status}`);
+  return normalizeAriaMessageResponse(json);
+}
 
-  const replyRaw = json?.reply;
-  const reply =
-    typeof replyRaw === 'string' && replyRaw.length > 0
-      ? replyRaw
-      : typeof json?.message === 'string' && json.message.length > 0
-        ? json.message
-        : '';
+function parseSseBlocks(buffer) {
+  const events = [];
+  const parts = buffer.split('\n\n');
+  const remainder = parts.pop() ?? '';
+  for (const block of parts) {
+    if (!block.trim()) continue;
+    let event = 'message';
+    const dataLines = [];
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^\s/, ''));
+    }
+    const raw = dataLines.join('\n');
+    let data = raw;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      /* plain text frame */
+    }
+    events.push({ event, data });
+  }
+  return { events, remainder };
+}
 
-  const attachment = parseAriaMessageAttachment(json);
+/**
+ * POST /message/stream — SSE: status → delta* → (replace?) → done.
+ */
+export async function postAriaMessageStream({
+  userId,
+  text,
+  history,
+  onStatus,
+  onDelta,
+  onReplace,
+  signal,
+}) {
+  const base = getAriaApiBaseUrl();
+  if (!base || !userId) throw new Error('no_api');
+  const res = await ariaFetch(`${base}/message/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      text,
+      platform: 'vault',
+      history: Array.isArray(history) ? history : [],
+      skip_push: true,
+    }),
+    signal,
+  });
+  if (!res.ok) throw new Error(`http_${res.status}`);
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    throw new Error('no_stream_body');
+  }
 
-  return {
-    reply,
-    mood: json?.mood,
-    trust: json?.trust,
-    state: normalizeAriaState(json),
-    attachment };
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let streamedText = '';
+  let finalPayload = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const { events, remainder } = parseSseBlocks(buffer);
+    buffer = remainder;
+    for (const frame of events) {
+      const { event, data } = frame;
+      if (event === 'status' && data && typeof data === 'object' && data.phase) {
+        onStatus?.(data.phase);
+      } else if (event === 'delta' && data && typeof data === 'object' && typeof data.text === 'string') {
+        streamedText += data.text;
+        onDelta?.(data.text, streamedText);
+      } else if (event === 'replace' && data && typeof data === 'object' && typeof data.text === 'string') {
+        streamedText = data.text;
+        onReplace?.(data.text);
+        onDelta?.('', streamedText);
+      } else if (event === 'done' && data && typeof data === 'object') {
+        finalPayload = data;
+      } else if (event === 'error') {
+        const detail =
+          data && typeof data === 'object' && data.detail != null
+            ? String(data.detail)
+            : 'stream_error';
+        throw new Error(detail);
+      }
+    }
+  }
+
+  if (!finalPayload) {
+    if (streamedText.trim()) {
+      return normalizeAriaMessageResponse({ reply: streamedText });
+    }
+    throw new Error('stream_incomplete');
+  }
+  const normalized = normalizeAriaMessageResponse(finalPayload);
+  if (!normalized.reply && streamedText) {
+    normalized.reply = streamedText;
+  }
+  return normalized;
 }
 
 /**
@@ -294,6 +405,19 @@ export async function transcribeAriaVoice(audioBase64, userId) {
 export const ARIA_MESSAGE_TYPING = 'aria_typing';
 
 export const ARIA_TYPING_ROW_ID = 'aria-typing-local';
+
+/** SSE /message/stream phases → подпись под сферой (сфера = процесс мышления, не «печатает»). */
+export function formatAriaStreamPhase(phase) {
+  switch (phase) {
+    case 'memory':
+      return 'вспоминаю…';
+    case 'thinking':
+    case 'generating':
+    case 'ready':
+    default:
+      return 'думаю…';
+  }
+}
 
 /** Макс. сообщений в ленте и в `aria_messages` (без typing). */
 export const ARIA_CHAT_MAX_STORED_MESSAGES = 20;

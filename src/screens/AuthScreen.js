@@ -7,21 +7,42 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert } from 'react-native';
+  Alert,
+  StyleSheet,
+  ScrollView,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import tw from 'twrnc';
-import { Dices } from '../icons/lucideIcons';
-import { V } from '../theme';
+import { PetrolShimmerText } from '../components/petrol/PetrolShimmer';
+import { V, SEARCH_FIELD_LAYOUT, SEARCH_CHATS_CAPSULE_RADIUS } from '../theme';
 import { supabase } from '../lib/supabase';
 import {
   VAULT_PENDING_INVITE_KEY,
   normalizePendingInviteCode,
-  serializePendingInvite } from '../utils/inviteRedeem';
+  serializePendingInvite,
+} from '../utils/inviteRedeem';
 import {
   AUTH_RECOVERY_REDIRECT_URL,
   AUTH_CONFIRM_REDIRECT_URL,
 } from '../utils/authRecoveryDeepLink';
+
+const INPUT_H = SEARCH_FIELD_LAYOUT.chatsHeight;
+const INPUT_RADIUS = SEARCH_CHATS_CAPSULE_RADIUS;
+const H_PAD = 32;
+
+function AuthFieldLabel({ children }) {
+  return <Text style={styles.fieldLabel}>{children}</Text>;
+}
+
+function AuthTextInput(props) {
+  return (
+    <TextInput
+      {...props}
+      style={[styles.input, props.style]}
+      placeholderTextColor={V.textGhost}
+    />
+  );
+}
 
 export default function AuthScreen() {
   const navigation = useNavigation();
@@ -51,12 +72,13 @@ export default function AuthScreen() {
     setBusy(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-        redirectTo: AUTH_RECOVERY_REDIRECT_URL });
+        redirectTo: AUTH_RECOVERY_REDIRECT_URL,
+      });
       if (error) throw error;
       Alert.alert(
         'Сброс пароля',
         'Письмо со ссылкой для сброса пароля отправлено на ' + trimmedEmail,
-        [{ text: 'Ок', onPress: () => setMode('signIn') }]
+        [{ text: 'Ок', onPress: () => setMode('signIn') }],
       );
     } catch (e) {
       Alert.alert('Ошибка', e?.message || 'Не удалось отправить письмо');
@@ -79,7 +101,7 @@ export default function AuthScreen() {
       if (!signupInviteNorm) {
         Alert.alert(
           'Регистрация',
-          'Новый аккаунт только по приглашению. Введите код из раздела «Приглашения» в профиле.'
+          'Новый аккаунт только по приглашению. Введите код из раздела «Приглашения» в профиле.',
         );
         return;
       }
@@ -94,26 +116,27 @@ export default function AuthScreen() {
       if (mode === 'signIn') {
         const { error } = await supabase.auth.signInWithPassword({
           email: trimmedEmail,
-          password });
+          password,
+        });
         if (error) throw error;
       } else {
         await AsyncStorage.setItem(
           VAULT_PENDING_INVITE_KEY,
-          serializePendingInvite(trimmedEmail, signupInviteNorm)
+          serializePendingInvite(trimmedEmail, signupInviteNorm),
         );
         try {
           const { data, error } = await supabase.auth.signUp({
             email: trimmedEmail,
             password,
             options: {
-              emailRedirectTo: AUTH_CONFIRM_REDIRECT_URL
-            }
+              emailRedirectTo: AUTH_CONFIRM_REDIRECT_URL,
+            },
           });
           if (error) throw error;
           if (!data.session) {
             Alert.alert(
               'Регистрация',
-              'Подтвердите email по ссылке из письма. Код приглашения будет применён автоматически после первого входа.'
+              'Подтвердите email по ссылке из письма. Код приглашения будет применён автоматически после первого входа.',
             );
           } else {
             Alert.alert('Регистрация', 'Аккаунт создан, приглашение применяется…');
@@ -134,19 +157,21 @@ export default function AuthScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[tw`flex-1`, { backgroundColor: V.bgApp }]}
+      style={styles.root}
     >
-      <View style={tw`flex-1 items-center justify-center px-8`}>
-        <View style={tw`flex-row items-center mb-2`}>
-          <Dices size={20} color={V.accentGold} strokeWidth={1.5} style={tw`mr-2`} />
-          <Text style={[tw`text-[17px] font-medium`, { color: V.textPrimary }]}>Нарды</Text>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
+        <View style={styles.brandBlock}>
+          <Text style={styles.brandTitle}>Vault</Text>
+          <PetrolShimmerText textStyle={styles.brandSubtitle}>SECURE SPACE</PetrolShimmerText>
+          <Text style={styles.brandHint}>Чаты, нарды и синхронизация профиля</Text>
         </View>
-        <Text style={[tw`text-[13px] mb-8`, { color: V.textSecondary, lineHeight: 20 }]}>
-          Вход по email для синхронизации профиля
-        </Text>
 
         {mode !== 'resetPassword' ? (
-          <View style={tw`w-full flex-row mb-4 rounded-[10px] overflow-hidden`}>
+          <View style={styles.modeSwitch}>
             {['signIn', 'signUp'].map((m) => (
               <TouchableOpacity
                 key={m}
@@ -155,16 +180,16 @@ export default function AuthScreen() {
                   setMode(m);
                 }}
                 style={[
-                  tw`flex-1 py-2.5 items-center`,
-                  {
-                    backgroundColor: mode === m ? V.bgElevated : V.bgSurface,
-                    borderWidth: 0.5,
-                    borderColor: V.border }]}
+                  styles.modeSegment,
+                  mode === m ? styles.modeSegmentActive : styles.modeSegmentIdle,
+                ]}
+                activeOpacity={0.85}
               >
                 <Text
                   style={[
-                    tw`text-[13px] font-medium`,
-                    { color: mode === m ? V.accentSage : V.textMuted }]}
+                    styles.modeSegmentText,
+                    { color: mode === m ? V.accentSage : V.textMuted },
+                  ]}
                 >
                   {m === 'signIn' ? 'Вход' : 'Регистрация'}
                 </Text>
@@ -172,31 +197,17 @@ export default function AuthScreen() {
             ))}
           </View>
         ) : (
-          <View style={tw`w-full mb-4`}>
-            <Text style={[tw`text-[15px] font-medium text-center`, { color: V.textPrimary }]}>
-              Сброс пароля
-            </Text>
-            <Text style={[tw`text-[12px] text-center mt-1`, { color: V.textSecondary }]}>
-              Введите email — пришлём ссылку для сброса
-            </Text>
+          <View style={styles.resetHeader}>
+            <Text style={styles.resetTitle}>Сброс пароля</Text>
+            <Text style={styles.resetHint}>Введите email — пришлём ссылку для сброса</Text>
           </View>
         )}
 
-        <View style={tw`w-full mb-4`}>
-          <Text style={[tw`text-[13px] font-medium mb-2 ml-1`, { color: V.textSecondary }]}>
-            Email
-          </Text>
-          <TextInput
+        <View style={styles.fieldBlock}>
+          <AuthFieldLabel>Email</AuthFieldLabel>
+          <AuthTextInput
             testID="auth-email-input"
-            style={[
-              tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
-              {
-                backgroundColor: V.bgSurface,
-                color: V.textPrimary,
-                borderWidth: 0.5,
-                borderColor: V.border }]}
-            placeholder="you@example.com"
-            placeholderTextColor={V.textGhost}
+            placeholder="email@example.com"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -207,21 +218,11 @@ export default function AuthScreen() {
         </View>
 
         {mode !== 'resetPassword' ? (
-          <View style={tw`w-full ${mode === 'signUp' ? 'mb-4' : 'mb-2'}`}>
-            <Text style={[tw`text-[13px] font-medium mb-2 ml-1`, { color: V.textSecondary }]}>
-              Пароль
-            </Text>
-            <TextInput
+          <View style={[styles.fieldBlock, mode === 'signUp' ? null : styles.fieldBlockTight]}>
+            <AuthFieldLabel>Пароль</AuthFieldLabel>
+            <AuthTextInput
               testID="auth-password-input"
-              style={[
-                tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
-                {
-                  backgroundColor: V.bgSurface,
-                  color: V.textPrimary,
-                  borderWidth: 0.5,
-                  borderColor: V.border }]}
               placeholder="••••••••"
-              placeholderTextColor={V.textGhost}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -235,29 +236,20 @@ export default function AuthScreen() {
           <TouchableOpacity
             onPress={() => setMode('resetPassword')}
             disabled={busy}
-            style={tw`w-full items-end mb-4`}
+            style={styles.forgotLink}
+            activeOpacity={0.7}
           >
-            <Text style={[tw`text-[12px]`, { color: V.textMuted }]}>Забыли пароль?</Text>
+            <Text style={styles.forgotLinkText}>Забыли пароль?</Text>
           </TouchableOpacity>
         ) : mode !== 'resetPassword' ? (
-          <View style={tw`mb-4`} />
+          <View style={styles.forgotSpacer} />
         ) : null}
 
         {mode === 'signUp' ? (
-          <View style={tw`w-full mb-4`}>
-            <Text style={[tw`text-[13px] font-medium mb-2 ml-1`, { color: V.textSecondary }]}>
-              Подтверждение пароля
-            </Text>
-            <TextInput
-              style={[
-                tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
-                {
-                  backgroundColor: V.bgSurface,
-                  color: V.textPrimary,
-                  borderWidth: 0.5,
-                  borderColor: V.border }]}
+          <View style={styles.fieldBlock}>
+            <AuthFieldLabel>Подтверждение пароля</AuthFieldLabel>
+            <AuthTextInput
               placeholder="••••••••"
-              placeholderTextColor={V.textGhost}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
@@ -268,63 +260,47 @@ export default function AuthScreen() {
         ) : null}
 
         {mode === 'signUp' ? (
-          <View style={tw`w-full mb-6`}>
-            <Text style={[tw`text-[13px] font-medium mb-2 ml-1`, { color: V.textSecondary }]}>
-              Код приглашения
-            </Text>
-            <TextInput
-              style={[
-                tw`w-full px-4 py-3.5 text-[16px] rounded-[10px]`,
-                {
-                  backgroundColor: V.bgSurface,
-                  color: V.textPrimary,
-                  borderWidth: 0.5,
-                  borderColor: V.border }]}
+          <View style={styles.inviteBlock}>
+            <AuthFieldLabel>Код приглашения</AuthFieldLabel>
+            <AuthTextInput
               placeholder="Вставьте код из профиля"
-              placeholderTextColor={V.textGhost}
               value={inviteCode}
               onChangeText={(t) => setInviteCode(normalizePendingInviteCode(t))}
               autoCapitalize="none"
               autoCorrect={false}
               editable={!busy}
             />
-            <Text style={[tw`text-[11px] mt-2 ml-1`, { color: V.textMuted, lineHeight: 16 }]}>
-              Новый аккаунт только со инвайтом. Регистрация без кода недоступна. Для входа существующего
-              пользователя переключитесь на «Вход» — код не нужен.
+            <Text style={styles.inviteHint}>
+              Новый аккаунт только со инвайтом. Регистрация без кода недоступна. Для входа
+              существующего пользователя переключитесь на «Вход» — код не нужен.
             </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate('InviteScan')}
               disabled={busy}
-              style={tw`mt-3 py-2`}
+              style={styles.qrLink}
+              activeOpacity={0.7}
             >
-              <Text style={[tw`text-[13px] font-medium text-center`, { color: V.accentSage }]}>
-                Сканировать QR приглашения
-              </Text>
+              <Text style={styles.qrLinkText}>Сканировать QR приглашения</Text>
             </TouchableOpacity>
           </View>
         ) : null}
 
         <TouchableOpacity
           testID="auth-submit-button"
-          style={[
-            tw`w-full rounded-[10px] py-3.5 items-center flex-row justify-center`,
-            {
-              backgroundColor: V.btnPrimaryBg,
-              borderWidth: 0.5,
-              borderColor: V.accentSage,
-              opacity: busy ? 0.6 : 1 }]}
+          style={[styles.submitBtn, busy && styles.submitBtnBusy]}
           onPress={onSubmit}
           disabled={busy}
+          activeOpacity={0.85}
         >
           {busy ? (
             <ActivityIndicator color={V.accentSage} />
           ) : (
-            <Text style={[tw`text-[13px] font-medium`, { color: V.accentSage }]}>
+            <Text style={styles.submitBtnText}>
               {mode === 'signIn'
                 ? 'Войти'
                 : mode === 'resetPassword'
-                ? 'Отправить письмо'
-                : 'Создать аккаунт'}
+                  ? 'Отправить письмо'
+                  : 'Создать аккаунт'}
             </Text>
           )}
         </TouchableOpacity>
@@ -333,14 +309,180 @@ export default function AuthScreen() {
           <TouchableOpacity
             onPress={() => setMode('signIn')}
             disabled={busy}
-            style={tw`mt-4 py-2`}
+            style={styles.backLink}
+            activeOpacity={0.7}
           >
-            <Text style={[tw`text-[13px] text-center`, { color: V.textMuted }]}>
-              Назад к входу
-            </Text>
+            <Text style={styles.backLinkText}>Назад к входу</Text>
           </TouchableOpacity>
         ) : null}
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: V.bgChatsScreen,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: H_PAD,
+    paddingVertical: 32,
+  },
+  brandBlock: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  brandTitle: {
+    fontSize: 17,
+    fontWeight: '300',
+    letterSpacing: 0.06 * 17,
+    color: V.textPrimary,
+  },
+  brandSubtitle: {
+    marginTop: 3,
+    fontSize: 9,
+    fontWeight: '300',
+    letterSpacing: 0.1 * 9,
+    textTransform: 'uppercase',
+  },
+  brandHint: {
+    marginTop: 12,
+    fontSize: 13,
+    fontWeight: '400',
+    lineHeight: 20,
+    color: V.textSecondary,
+    textAlign: 'center',
+  },
+  modeSwitch: {
+    flexDirection: 'row',
+    height: INPUT_H,
+    borderRadius: INPUT_RADIUS,
+    overflow: 'hidden',
+    marginBottom: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+  },
+  modeSegment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeSegmentActive: {
+    backgroundColor: V.glassNeutralBg,
+  },
+  modeSegmentIdle: {
+    backgroundColor: V.bgSurface,
+  },
+  modeSegmentText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  resetHeader: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  resetTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: V.textPrimary,
+  },
+  resetHint: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: V.textSecondary,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  fieldBlock: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  fieldBlockTight: {
+    marginBottom: 8,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: V.textSecondary,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  input: {
+    width: '100%',
+    height: INPUT_H,
+    borderRadius: INPUT_RADIUS,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    fontWeight: '400',
+    color: V.textPrimary,
+    backgroundColor: V.glassNeutralBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+  },
+  forgotLink: {
+    width: '100%',
+    alignItems: 'flex-end',
+    marginBottom: 16,
+  },
+  forgotLinkText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: V.textMuted,
+  },
+  forgotSpacer: {
+    marginBottom: 16,
+  },
+  inviteBlock: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  inviteHint: {
+    fontSize: 11,
+    fontWeight: '400',
+    lineHeight: 16,
+    color: V.textMuted,
+    marginTop: 8,
+    marginLeft: 4,
+  },
+  qrLink: {
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  qrLinkText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: V.accentSage,
+    textAlign: 'center',
+  },
+  submitBtn: {
+    width: '100%',
+    height: INPUT_H,
+    borderRadius: INPUT_RADIUS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: V.btnPrimaryBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.sageBorder,
+  },
+  submitBtnBusy: {
+    opacity: 0.6,
+  },
+  submitBtnText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: V.accentSage,
+  },
+  backLink: {
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  backLinkText: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: V.textMuted,
+    textAlign: 'center',
+  },
+});

@@ -4,10 +4,11 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  Alert } from 'react-native';
+  Alert,
+  StyleSheet,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import tw from 'twrnc';
-import { V } from '../theme';
+import { V, SEARCH_FIELD_LAYOUT, SEARCH_CHATS_CAPSULE_RADIUS } from '../theme';
 import TabOverscrollFlatList from '../components/TabOverscrollFlatList';
 import TabBackground from '../components/TabBackground';
 import { ArrowLeft, Trash2 } from '../icons/lucideIcons';
@@ -16,7 +17,12 @@ import { profileStackGoBack, useProfileStackBackHandler } from '../lib/profileSt
 import {
   getCacheSizeInfo,
   listCacheEntriesSorted,
-  manualClearCache } from '../storage/CacheManager';
+  manualClearCache,
+} from '../storage/CacheManager';
+
+const BTN_H = SEARCH_FIELD_LAYOUT.chatsHeight;
+const BTN_RADIUS = SEARCH_CHATS_CAPSULE_RADIUS;
+const CARD_RADIUS = 12;
 
 function formatBytes(n) {
   if (typeof n !== 'number' || !Number.isFinite(n)) return '0';
@@ -33,10 +39,24 @@ function formatTs(ts) {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
-      minute: '2-digit' });
+      minute: '2-digit',
+    });
   } catch {
     return '—';
   }
+}
+
+function CacheEntryRow({ item }) {
+  return (
+    <View style={styles.entryRow}>
+      <Text style={styles.entryUri} numberOfLines={2}>
+        {item.uri}
+      </Text>
+      <Text style={styles.entryMeta}>
+        {formatBytes(item.size)} МБ · последний доступ {formatTs(item.lastAccessed)}
+      </Text>
+    </View>
+  );
 }
 
 export default function StorageScreen({ navigation }) {
@@ -64,7 +84,7 @@ export default function StorageScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       refresh();
-    }, [refresh])
+    }, [refresh]),
   );
 
   const onManualClear = () => {
@@ -83,105 +103,92 @@ export default function StorageScreen({ navigation }) {
               await refresh();
               Alert.alert(
                 'Готово',
-                `Удалено записей: ${r.removedCount}. Освобождено около ${formatBytes(r.freedBytes)} МБ.`
+                `Удалено записей: ${r.removedCount}. Освобождено около ${formatBytes(r.freedBytes)} МБ.`,
               );
             } catch (e) {
               Alert.alert('Ошибка', e?.message || 'Не удалось очистить кэш.');
             } finally {
               setClearing(false);
             }
-          } }]
+          },
+        },
+      ],
     );
   };
 
-  const renderEntry = ({ item }) => (
-    <View
-      style={[
-        tw`py-2 border-b`,
-        { borderBottomWidth: 0.5, borderBottomColor: V.border }]}
-    >
-      <Text style={[tw`text-[11px]`, { color: V.textMuted }]} numberOfLines={2}>
-        {item.uri}
-      </Text>
-      <Text style={[tw`text-[11px] mt-1`, { color: V.textSecondary }]}>
-        {formatBytes(item.size)} МБ · последний доступ {formatTs(item.lastAccessed)}
-      </Text>
-    </View>
-  );
-
   const usedRounded = Number.isFinite(info.usedMB) ? info.usedMB.toFixed(2) : '0';
+  const percentRounded = Math.round(info.percentUsed);
 
   return (
     <TabBackground>
-      <View style={[tw`flex-1`, {backgroundColor: 'transparent'}]}>
-        <View style={[headerLayout.containerStyle, { backgroundColor: 'transparent' }]}>
+      <View style={styles.screen}>
+        <View style={[headerLayout.containerStyle, styles.header]}>
           <TouchableOpacity
             onPress={() => profileStackGoBack(navigation)}
-            style={{
-              minHeight: headerLayout.contentMinHeight,
-              justifyContent: 'center',
-              flexDirection: 'row',
-              alignItems: 'center',
-              alignSelf: 'flex-start' }}
+            style={[styles.backBtn, { minHeight: headerLayout.contentMinHeight }]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
           >
             <ArrowLeft size={18} color={V.textSecondary} strokeWidth={1.5} />
-            <Text style={[tw`text-[14px] font-medium ml-2`, { color: V.textSecondary }]}>Назад</Text>
+            <Text style={styles.backText}>Назад</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={tw`flex-1 px-4`}>
-          <Text style={[tw`text-[17px] font-medium mb-2`, { color: V.textPrimary }]}>Хранилище</Text>
-          <Text style={[tw`text-[13px] mb-4`, { color: V.textSecondary, lineHeight: 18 }]}>
+        <View style={styles.body}>
+          <Text style={styles.title}>Хранилище</Text>
+          <Text style={styles.lead}>
             Кэш голосовых сообщений и превью видео. Лимит {info.limitMB} МБ; при уходе приложения в фон
             удаляются файлы старше 14 дней и лишнее по LRU.
           </Text>
 
           {loading ? (
-            <View style={tw`py-6 items-center`}>
+            <View style={styles.loaderWrap}>
               <ActivityIndicator color={V.textMuted} />
             </View>
           ) : (
             <>
-              <Text style={[tw`text-[14px] mb-1`, { color: V.textPrimary }]}>
-                Размер кэша: {usedRounded} МБ из {info.limitMB} МБ ({Math.round(info.percentUsed)}%)
-              </Text>
+              <View style={styles.usageCard}>
+                <Text style={styles.usageLabel}>Размер кэша</Text>
+                <Text style={styles.usageValue}>
+                  {usedRounded} МБ из {info.limitMB} МБ
+                </Text>
+                <View style={styles.usageBarTrack}>
+                  <View
+                    style={[
+                      styles.usageBarFill,
+                      { width: `${Math.min(100, Math.max(0, percentRounded))}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.usagePercent}>{percentRounded}%</Text>
+              </View>
 
               <TouchableOpacity
                 onPress={onManualClear}
                 disabled={clearing}
-                style={[
-                  tw`rounded-[10px] py-3.5 items-center flex-row justify-center mt-4 mb-5`,
-                  {
-                    backgroundColor: V.bgSurface,
-                    borderWidth: 0.5,
-                    borderColor: V.border,
-                    opacity: clearing ? 0.6 : 1 }]}
+                style={[styles.clearBtn, clearing && styles.clearBtnBusy]}
+                activeOpacity={0.85}
               >
                 {clearing ? (
-                  <ActivityIndicator color={V.accentSage} />
+                  <ActivityIndicator color={V.dangerMuted} />
                 ) : (
                   <>
-                    <Trash2 size={20} color={V.accentSage} strokeWidth={1.5} />
-                    <Text style={[tw`text-[13px] font-medium ml-2`, { color: V.accentSage }]}>
-                      Очистить кэш сейчас
-                    </Text>
+                    <Trash2 size={18} color={V.dangerMuted} strokeWidth={1.5} />
+                    <Text style={styles.clearBtnText}>Очистить кэш сейчас</Text>
                   </>
                 )}
               </TouchableOpacity>
 
-              <Text style={[tw`text-[12px] font-medium mb-2`, { color: V.textSecondary }]}>
-                Файлы в кэше ({entries.length})
-              </Text>
+              <Text style={styles.sectionLabel}>Файлы в кэше ({entries.length})</Text>
               <TabOverscrollFlatList
-                style={tw`flex-1`}
+                style={styles.list}
                 data={entries}
                 keyExtractor={(item, index) => `${item.uri}-${index}`}
-                renderItem={renderEntry}
+                renderItem={({ item }) => <CacheEntryRow item={item} />}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
-                  <Text style={[tw`text-[13px] py-4`, { color: V.textMuted }]}>
+                  <Text style={styles.emptyText}>
                     Пока нет записей — откройте чат с голосом или видео.
                   </Text>
                 }
@@ -193,3 +200,138 @@ export default function StorageScreen({ navigation }) {
     </TabBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  header: {
+    backgroundColor: 'transparent',
+  },
+  backBtn: {
+    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  backText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: V.textSecondary,
+    marginLeft: 8,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: V.textPrimary,
+    marginBottom: 8,
+  },
+  lead: {
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 18,
+    color: V.textSecondary,
+    marginBottom: 20,
+  },
+  loaderWrap: {
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
+  usageCard: {
+    borderRadius: CARD_RADIUS,
+    backgroundColor: V.glassNeutralBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
+  usageLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: V.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 6,
+  },
+  usageValue: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: V.textPrimary,
+    marginBottom: 10,
+  },
+  usageBarTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: V.bgSurface,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  usageBarFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: V.accentSage,
+  },
+  usagePercent: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: V.textSecondary,
+  },
+  clearBtn: {
+    height: BTN_H,
+    borderRadius: BTN_RADIUS,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: V.hoverBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V.border,
+    marginBottom: 20,
+  },
+  clearBtnBusy: {
+    opacity: 0.6,
+  },
+  clearBtnText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: V.dangerMuted,
+    marginLeft: 8,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: V.textSecondary,
+    marginBottom: 8,
+  },
+  list: {
+    flex: 1,
+  },
+  emptyText: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: V.textMuted,
+    paddingVertical: 16,
+    lineHeight: 20,
+  },
+  entryRow: {
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: V.sectionBorder,
+  },
+  entryUri: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: V.textMuted,
+  },
+  entryMeta: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: V.textSecondary,
+    marginTop: 4,
+  },
+});

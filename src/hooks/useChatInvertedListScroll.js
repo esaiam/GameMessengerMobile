@@ -22,13 +22,15 @@ export function useChatInvertedListScroll(
   listOpacity,
   /** false до первой страницы с сервера — иначе кэш из одного preview открывает ленту не у низа. */
   initialHistoryReady = true,
+  /** true когда messages уже заполнены из memory/disk кэша — открывает historyGate без network fetch. */
+  historyDataReady = false,
 ) {
   const flatListRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const initialScrollDoneRef = useRef(false);
   const listLayoutSeenRef = useRef(false);
   const messagesTailPrevRef = useRef([]);
-  const historyGateOpen = listOpacity == null || initialHistoryReady;
+  const historyGateOpen = listOpacity == null || initialHistoryReady || historyDataReady;
 
   const onScroll = useCallback(
     (e) => {

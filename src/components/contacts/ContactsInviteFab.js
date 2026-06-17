@@ -8,7 +8,6 @@ import { TAB_BAR_LAYOUT, V } from '../../theme';
 export const CONTACTS_INVITE_FAB_SIZE = 56;
 const INVITE_ICON_SIZE = 24;
 const TAB_CLEARANCE_PX = 12;
-const GLOW_RING_INSET = 8;
 
 export default function ContactsInviteFab({ onPress }) {
   const insets = useSafeAreaInsets();
@@ -90,17 +89,6 @@ export default function ContactsInviteFab({ onPress }) {
       >
         <RNAnimated.View
           style={[
-            styles.glowRing,
-            {
-              width: CONTACTS_INVITE_FAB_SIZE + GLOW_RING_INSET * 2,
-              height: CONTACTS_INVITE_FAB_SIZE + GLOW_RING_INSET * 2,
-              borderRadius: (CONTACTS_INVITE_FAB_SIZE + GLOW_RING_INSET * 2) / 2,
-            },
-          ]}
-          pointerEvents="none"
-        />
-        <RNAnimated.View
-          style={[
             styles.circle,
             {
               width: CONTACTS_INVITE_FAB_SIZE,
@@ -126,10 +114,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
-  },
-  glowRing: {
-    position: 'absolute',
-    backgroundColor: V.goldGlow,
   },
   circle: {
     alignItems: 'center',

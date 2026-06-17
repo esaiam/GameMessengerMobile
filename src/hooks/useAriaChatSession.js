@@ -12,6 +12,7 @@ import {
   fetchAriaPendingMessages,
   getAriaSeedMessages,
   postAriaMessage,
+  postAriaMessageStream,
   trimAriaDisplayMessages,
   ARIA_CHAT_MAX_STORED_MESSAGES,
 } from '../lib/aria';
@@ -178,16 +179,11 @@ export function useAriaChatSession(enabled, nickname) {
     };
   }, [enabled]);
 
-  /** Перед обновлением ленты убирает предыдущий typing-row. */
+  /** Обновление ленты Aria с trim по лимиту (typing-строки сохраняются в prev). */
   const setAriaMessagesForChat = useCallback((update) => {
     setAriaMessages((prev) => {
-      if (typeof update !== 'function') {
-        return trimAriaDisplayMessages(update);
-      }
-      const prevSansTyping = prev.filter(
-        (m) => !(m.message_type === ARIA_MESSAGE_TYPING || m.isTyping),
-      );
-      return trimAriaDisplayMessages(update(prevSansTyping));
+      const next = typeof update === 'function' ? update(prev) : update;
+      return trimAriaDisplayMessages(next);
     });
   }, []);
 
@@ -358,11 +354,48 @@ export function useAriaChatSession(enabled, nickname) {
           read_at: null,
           message_type: ARIA_MESSAGE_TYPING,
           isTyping: true,
+          aria_stream_phase: 'memory',
         };
-        setAriaMessagesForChat((prev) => [...prev, userRow, typingRow]);
+        setAriaMessagesForChat((prev) => {
+          const base = prev.filter(
+            (m) => !(m.message_type === ARIA_MESSAGE_TYPING || m.isTyping),
+          );
+          return [...base, userRow, typingRow];
+        });
       }
 
-      const stripTyping = (prev) => prev.filter((m) => m.id !== typingId);
+      const stripTyping = (prev) =>
+        prev.filter((m) => !(m.message_type === ARIA_MESSAGE_TYPING || m.isTyping));
+
+      const updateTypingPhase = (phase) => {
+        setAriaMessagesForChat((prev) =>
+          prev.map((m) =>
+            m.message_type === ARIA_MESSAGE_TYPING || m.isTyping
+              ? { ...m, aria_stream_phase: phase }
+              : m,
+          ),
+        );
+      };
+      const aiMsgId = `aria-ai-${Date.now()}`;
+      let streamPreviewSeen = false;
+      let lastStreamPreview = '';
+      let replySoundPlayed = false;
+
+      const maybePlayReplySound = () => {
+        if (replySoundPlayed) return;
+        replySoundPlayed = true;
+        void playAriaReplySound();
+      };
+
+      const updateStreamPreview = (partialText) => {
+        setAriaMessagesForChat((prev) =>
+          prev.map((m) =>
+            m.message_type === ARIA_MESSAGE_TYPING || m.isTyping
+              ? { ...m, aria_stream_preview: partialText }
+              : m,
+          ),
+        );
+      };
 
       void (async () => {
         try {
@@ -382,13 +415,48 @@ export function useAriaChatSession(enabled, nickname) {
             /* не блокируем отправку */
           }
 
-          const { reply, attachment } = await postAriaMessage({
-            userId: user_id,
-            text: trimmed,
-            history,
-          });
+          let replyResult;
+          try {
+            replyResult = await postAriaMessageStream({
+              userId: user_id,
+              text: trimmed,
+              history,
+              onStatus: updateTypingPhase,
+              onDelta: (_chunk, fullText) => {
+                lastStreamPreview = fullText;
+                streamPreviewSeen = true;
+                maybePlayReplySound();
+                updateStreamPreview(fullText);
+              },
+              onReplace: (fullText) => {
+                lastStreamPreview = fullText;
+                streamPreviewSeen = true;
+                updateStreamPreview(fullText);
+              },
+            });
+          } catch (streamErr) {
+            if (__DEV__) console.warn('[Aria] stream fallback:', streamErr?.message || streamErr);
+            const partial = lastStreamPreview.trim();
+            if (partial) {
+              replyResult = {
+                reply: partial,
+                mood: undefined,
+                trust: undefined,
+                state: undefined,
+                attachment: null,
+              };
+            } else {
+              updateTypingPhase('generating');
+              replyResult = await postAriaMessage({
+                userId: user_id,
+                text: trimmed,
+                history,
+              });
+            }
+          }
 
-          const aiNow = new Date().toISOString();
+          const { reply, attachment } = replyResult;
+
           let replyText = reply || '—';
           if (attachment?.mime_type?.startsWith('image/')) {
             replyText = replyText.replace(/\n\n🖼\s*https?:\/\/\S+/i, '').trim() || 'Инфографика';
@@ -405,22 +473,45 @@ export function useAriaChatSession(enabled, nickname) {
             if (__DEV__) console.warn('[Aria] insert aria catch:', e);
           }
 
-          setAriaMessagesForChat((prev) => [
-            ...stripTyping(prev),
-            {
+          setAriaMessagesForChat((prev) => {
+            const aiNow = new Date().toISOString();
+            const finalizedRow = {
               ...baseRow,
-              id: `aria-ai-${Date.now()}`,
+              id: aiMsgId,
               player_name: ARIA_CONTACT.display_name,
               text: replyText,
               created_at: aiNow,
               read_at: aiNow,
               message_type: 'text',
               aria_api_role: 'aria',
-              aria_reveal_done: false,
+              aria_reveal_done: streamPreviewSeen,
+              aria_streaming: false,
+              isTyping: false,
               ...(attachment ? { aria_attachment: attachment } : {}),
-            },
-          ]);
-          void playAriaReplySound();
+            };
+
+            let upgradedTyping = false;
+            const next = prev.map((m) => {
+              if (m.message_type !== ARIA_MESSAGE_TYPING && !m.isTyping) {
+                return m;
+              }
+              upgradedTyping = true;
+              return {
+                ...m,
+                ...finalizedRow,
+                id: aiMsgId,
+                aria_stream_preview: undefined,
+                aria_stream_phase: undefined,
+              };
+            });
+            if (upgradedTyping) {
+              return next;
+            }
+            if (!replySoundPlayed) {
+              maybePlayReplySound();
+            }
+            return [...stripTyping(prev), finalizedRow];
+          });
         } catch {
           const errNow = new Date().toISOString();
           setAriaMessagesForChat((prev) => [

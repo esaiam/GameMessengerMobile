@@ -81,7 +81,7 @@ function RowButton({ title, subtitle, onPress, variant = 'default', disabled = f
 
   const color =
 
-    variant === 'danger' ? '#E87171' : variant === 'primary' ? V.accentSage : V.textPrimary;
+    variant === 'danger' ? V.dangerMuted : variant === 'primary' ? V.accentSage : V.textPrimary;
 
   return (
 
@@ -892,8 +892,6 @@ const styles = StyleSheet.create({
     width: PROFILE_AVATAR_SIZE + 16,
     height: PROFILE_AVATAR_SIZE + 16,
     borderRadius: (PROFILE_AVATAR_SIZE + 16) / 2,
-    borderWidth: 2,
-    borderColor: V.accentSage,
     top: -8,
     left: -8,
   },
@@ -902,13 +900,10 @@ const styles = StyleSheet.create({
     width: PROFILE_AVATAR_SIZE + 28,
     height: PROFILE_AVATAR_SIZE + 28,
     borderRadius: (PROFILE_AVATAR_SIZE + 28) / 2,
-    borderWidth: 4,
-    borderColor: V.accentSage,
     top: -14,
     left: -14,
   },
   avatarGlowRing: {
-    borderWidth: 2,
     borderRadius: PROFILE_AVATAR_SIZE / 2,
     overflow: 'hidden',
   },
