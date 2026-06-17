@@ -38,7 +38,7 @@
 
 ### 2. Код
 
-- [x] Фиксы после `beta-0.1.0` @ `414b3fd` (chat refactor, beta QA infra)
+- [x] Фиксы после `beta-0.1.0` @ `1a1e5fe` (chat refactor, beta QA infra, Aria stream, auth/settings UI)
 - [ ] Опционально: тег `beta-0.1.1` перед APK
 - [ ] Прогон `docs/chat-regression-checklist.md` на dev-сборке
 

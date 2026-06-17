@@ -3,7 +3,7 @@
 > **Для агента:** если пользователь спрашивает про готовность к MVP, бете или «что осталось» — **сначала прочитай этот файл**, затем `RELEASE_PREP.md`, `BETA_BRIEF.md`, `PROD_SECURITY_CHECKLIST.md` (оглавление; SQL — `SECURITY_INVENTORY_0_1.sql`).  
 > **Обновляй этот файл** после крупных вех (APK, VPS, P1).
 
-**Последнее обновление:** 2026-06-14
+**Последнее обновление:** 2026-06-17
 
 ---
 
@@ -20,7 +20,7 @@
 
 ### Код и freeze
 - Ветка: `tab-pager-experiment`
-- Тег: `beta-0.1.0` @ `4503dac`; дальше фиксы до `414b3fd` (chat refactor, VaultErrorBoundary, Maestro/CI, migrations)
+- Тег: `beta-0.1.0` @ `4503dac`; дальше фиксы до `1a1e5fe` (chat refactor, VaultErrorBoundary, Maestro/CI, migrations, Aria SSE stream, glass UI на auth/settings)
 - `Table` submodule bump делался (проверь актуальный SHA: `git ls-tree HEAD GameMessengerMobile` в корне `Table`)
 
 ### QA автomatika

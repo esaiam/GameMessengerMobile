@@ -77,7 +77,7 @@ WHERE n.nspname = 'public'
 -- Ожидание body: «Новое сообщение», не plaintext чата (§5 чеклиста)
 
 -- ─── H. Миграции в репо (сверка вручную) ────────────────────
--- GameMessengerMobile/supabase/migrations/ — последние (commit 414b3fd+):
+-- GameMessengerMobile/supabase/migrations/ — последние (commit 1a1e5fe+):
 -- 20260615_drop_legacy_rls_policies.sql
 -- 20260616_messages_delete_storage_on_delete.sql
 -- Полный список: docs/PROD_SECURITY_CHECKLIST.md § «Миграции в репо»

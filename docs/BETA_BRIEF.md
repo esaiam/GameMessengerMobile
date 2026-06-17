@@ -5,7 +5,7 @@
 | **APK** | _TBD_ (после VPS + release-сборки) |
 | **Канал багов** | **esaiam86@gmail.com** (тема письма: `Vault beta`) |
 | **Privacy Policy** | https://esaiam.github.io/vault-privacy-policy (vaultprivacy06@gmail.com) |
-| **Код** | ветка `tab-pager-experiment`, commit `414b3fd` |
+| **Код** | ветка `tab-pager-experiment`, commit `1a1e5fe` |
 
 > Пока APK нет: разработка через dev-клиент + Metro (одна Wi‑Fi сеть с ПК).
 
@@ -32,7 +32,7 @@
 ```
 Vault beta — баг
 
-Сборка: APK TBD / commit 414b3fd
+Сборка: APK TBD / commit 1a1e5fe
 Устройство: (например Samsung S23)
 Android: (например 14)
 Время (МСК): 
@@ -65,7 +65,7 @@ Android: (например 14)
 | Переслать | «В разработке» |
 | Закрепить | **В чате** (контекстное меню) |
 | Звонки | «Скоро» |
-| Вкладка Poker | Tamagotchi |
+| Poker / Tamagotchi | P1 backlog — сейчас **3 таба** (Chats, Contacts, Profile) |
 | Aria | В release нужен VPS; без `EXPO_PUBLIC_ARIA_API_URL` бот может молчать |
 
 ---
