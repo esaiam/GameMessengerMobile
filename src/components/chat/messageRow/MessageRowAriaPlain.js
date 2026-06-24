@@ -5,6 +5,7 @@ import { isAriaTypewriterPending } from '../../../lib/aria';
 import { AriaTypingIndicator } from '../AriaChatUi';
 import AriaGeneratedAttachment from '../AriaGeneratedAttachment';
 import AriaTypewriterText from '../AriaTypewriterText';
+import AriaMessageFeedbackBar from '../AriaMessageFeedbackBar';
 import { MSG_TEXT_SIZE, MSG_LINE_HEIGHT } from '../messageBubbleLayoutConstants';
 
 function AriaPlainTextRow({
@@ -63,6 +64,9 @@ function AriaPlainTextRow({
                 onImagePress={(uri) => env.setFullScreenImage?.(uri)}
               />
             </View>
+          ) : null}
+          {!typewriterPending && item.aria_reveal_done !== false ? (
+            <AriaMessageFeedbackBar item={item} onFeedback={env.onAriaFeedback} />
           ) : null}
         </View>
       </Animated.View>

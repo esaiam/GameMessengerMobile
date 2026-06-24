@@ -64,7 +64,7 @@ import { useIsSplitLayout } from '../hooks/useIsSplitLayout';
 
 import { Camera, Pencil } from '../icons/lucideIcons';
 
-import { registerPushToken } from '../lib/notifications';
+import { registerPushToken, clearPushToken } from '../lib/notifications';
 import { profileAvatarSaveErrorMessage } from '../lib/profileAvatarUpload';
 
 import {
@@ -513,7 +513,9 @@ export default function ProfileScreen({ route, navigation }) {
 
 
   const logout = async () => {
+    const uid = session?.user?.id;
     try {
+      if (uid) await clearPushToken(uid);
       await clearVaultLocalSession();
     } catch (e) {
       if (__DEV__) console.warn('[Profile] logout cleanup', e?.message || e);

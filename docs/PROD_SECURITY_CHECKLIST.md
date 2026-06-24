@@ -65,6 +65,7 @@ ORDER BY policyname;
 | `20260614_clear_thread_vs_delete_chat.sql` | clear thread vs delete chat |
 | `20260615_drop_legacy_rls_policies.sql` | legacy RLS cleanup |
 | `20260616_messages_delete_storage_on_delete.sql` | storage cleanup on DELETE |
+| `20260619_profiles_push_token.sql` | `profiles.push_token` для Expo / Aria server |
 
 После применения: `npm run smoke:api` + быстрый чат/игра.
 

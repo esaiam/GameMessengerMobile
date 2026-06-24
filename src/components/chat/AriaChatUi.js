@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, View, Text, Image, Platform, Easing } from 'react-native';
+import Reanimated, {
+  Easing as ReanimatedEasing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { V } from '../../theme';
 import { formatAriaStreamPhase } from '../../lib/aria';
 
@@ -20,9 +27,11 @@ const SPHERE_RINGS = [
   { latDeg: -90, count: 1, phaseDeg: 0 },
 ];
 
-function buildSymmetricSphereDots(size, radius) {
-  const cx = size / 2;
-  const cy = size / 2;
+const SPHERE_SPIN_MS = 20000;
+const SPHERE_AXIS_ORBIT_MS = 28000;
+const SPHERE_DOT_SIZE = 2.8;
+
+function buildSymmetricSphereDots() {
   const dots = [];
   let idx = 0;
 
@@ -31,20 +40,14 @@ function buildSymmetricSphereDots(size, radius) {
     const phase = (ring.phaseDeg * Math.PI) / 180;
     const yNorm = Math.sin(lat);
     const ringRadius = Math.cos(lat);
-    const dotSize = 2.8;
 
     for (let i = 0; i < ring.count; i += 1) {
       const angle = phase + ((Math.PI * 2) / ring.count) * i;
-      const xNorm = Math.cos(angle) * ringRadius;
-      const zNorm = Math.sin(angle) * ringRadius;
-      const depth = (zNorm + 1) / 2;
-
       dots.push({
         key: `dot-${idx}`,
-        left: cx + xNorm * radius - dotSize / 2,
-        top: cy + yNorm * radius - dotSize / 2,
-        size: dotSize,
-        baseOpacity: 0.38 + depth * 0.52,
+        x0: Math.cos(angle) * ringRadius,
+        y0: yNorm,
+        z0: Math.sin(angle) * ringRadius,
       });
       idx += 1;
     }
@@ -53,11 +56,52 @@ function buildSymmetricSphereDots(size, radius) {
   return dots;
 }
 
+function rotateSpherePoint(x0, y0, z0, yaw, axisOrbit) {
+  'worklet';
+
+  const cosOrbit = Math.cos(axisOrbit);
+  const sinOrbit = Math.sin(axisOrbit);
+  const x1 = x0;
+  const y1 = y0 * cosOrbit - z0 * sinOrbit;
+  const z1 = y0 * sinOrbit + z0 * cosOrbit;
+
+  const cosYaw = Math.cos(yaw);
+  const sinYaw = Math.sin(yaw);
+  return {
+    x: x1 * cosYaw + z1 * sinYaw,
+    y: y1,
+    z: -x1 * sinYaw + z1 * cosYaw,
+  };
+}
+
+function AriaSphereDot({ dot, yaw, axisOrbit, cx, cy, radius }) {
+  const style = useAnimatedStyle(() => {
+    const { x, y, z } = rotateSpherePoint(dot.x0, dot.y0, dot.z0, yaw.value, axisOrbit.value);
+    const depth = (z + 1) / 2;
+
+    return {
+      position: 'absolute',
+      left: cx + x * radius - SPHERE_DOT_SIZE / 2,
+      top: cy + y * radius - SPHERE_DOT_SIZE / 2,
+      width: SPHERE_DOT_SIZE,
+      height: SPHERE_DOT_SIZE,
+      borderRadius: SPHERE_DOT_SIZE / 2,
+      backgroundColor: SPHERE_COLOR,
+      opacity: 0.38 + depth * 0.52,
+    };
+  });
+
+  return <Reanimated.View style={style} />;
+}
+
 /** Пульсирующая сфера из точек — без фона, «висит» до ответа. */
 function AriaPulsarSphere() {
   const pulse = useRef(new Animated.Value(0)).current;
-  const spin = useRef(new Animated.Value(0)).current;
-  const dots = useMemo(() => buildSymmetricSphereDots(SPHERE_SIZE, SPHERE_RADIUS), []);
+  const yaw = useSharedValue(0);
+  const axisOrbit = useSharedValue(0);
+  const dots = useMemo(() => buildSymmetricSphereDots(), []);
+  const cx = SPHERE_SIZE / 2;
+  const cy = SPHERE_SIZE / 2;
 
   useEffect(() => {
     const breatheMs = 4000;
@@ -77,37 +121,39 @@ function AriaPulsarSphere() {
         }),
       ]),
     );
-    const rotate = Animated.loop(
-      Animated.timing(spin, {
-        toValue: 1,
-        duration: 18000,
-        easing: Easing.linear,
-        useNativeDriver: true,
+    yaw.value = withRepeat(
+      withTiming(Math.PI * 2, {
+        duration: SPHERE_SPIN_MS,
+        easing: ReanimatedEasing.linear,
       }),
+      -1,
+      false,
+    );
+    axisOrbit.value = withRepeat(
+      withTiming(Math.PI * 2, {
+        duration: SPHERE_AXIS_ORBIT_MS,
+        easing: ReanimatedEasing.linear,
+      }),
+      -1,
+      false,
     );
     breathe.start();
-    rotate.start();
     return () => {
       breathe.stop();
-      rotate.stop();
     };
-  }, [pulse, spin]);
+  }, [pulse, yaw, axisOrbit]);
 
   const scale = pulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.96, 1.03],
+    outputRange: [0.88, 1.1],
   });
   const floatY = pulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [-1.5, 1.5],
+    outputRange: [-4, 4],
   });
   const sphereOpacity = pulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.82, 1],
-  });
-  const rotate = spin.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+    outputRange: [0.68, 1],
   });
 
   return (
@@ -116,22 +162,18 @@ function AriaPulsarSphere() {
         width: SPHERE_SIZE,
         height: SPHERE_SIZE,
         opacity: sphereOpacity,
-        transform: [{ translateY: floatY }, { scale }, { rotate }],
+        transform: [{ translateY: floatY }, { scale }],
       }}
     >
       {dots.map((dot) => (
-        <View
+        <AriaSphereDot
           key={dot.key}
-          style={{
-            position: 'absolute',
-            left: dot.left,
-            top: dot.top,
-            width: dot.size,
-            height: dot.size,
-            borderRadius: dot.size / 2,
-            backgroundColor: SPHERE_COLOR,
-            opacity: dot.baseOpacity,
-          }}
+          dot={dot}
+          yaw={yaw}
+          axisOrbit={axisOrbit}
+          cx={cx}
+          cy={cy}
+          radius={SPHERE_RADIUS}
         />
       ))}
     </Animated.View>

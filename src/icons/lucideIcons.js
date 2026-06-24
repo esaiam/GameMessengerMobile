@@ -52,7 +52,9 @@ import {
   EllipsisVertical,
   FileText,
   Pencil,
-  Hand } from 'lucide-react-native/icons';
+  Hand,
+  ThumbsUp,
+  ThumbsDown } from 'lucide-react-native/icons';
 
 /** В lucide-react-native нет `Unlock` — это `LockOpen` */
 const Unlock = LockOpen;
@@ -116,4 +118,6 @@ export {
   EllipsisVertical,
   FileText,
   Pencil,
-  Hand };
+  Hand,
+  ThumbsUp,
+  ThumbsDown };

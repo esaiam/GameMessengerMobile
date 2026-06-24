@@ -5,7 +5,7 @@
 ## Уже сделано
 
 - [x] Freeze кода: тег `beta-0.1.0` @ `4503dac`; далее `53578b3` (scroll + docs)
-- [x] `Table` submodule → `53578b3`
+- [x] `Table` submodule — см. `git ls-tree HEAD GameMessengerMobile` в корне `Table`
 - [x] `npm run smoke` + `npm run smoke:api`
 - [x] Черновик для тестеров: `docs/BETA_BRIEF.md`
 - [x] P0.5 аудит secrets (см. ниже) — **ручное:** убрать `vault-*.json` с диска
@@ -38,7 +38,8 @@
 
 ### 2. Код
 
-- [x] Фиксы после `beta-0.1.0` @ `1a1e5fe` (chat refactor, beta QA infra, Aria stream, auth/settings UI)
+- [x] Фиксы после `beta-0.1.0` (chat refactor, beta QA, Aria stream, push token, Aria feedback, auth/settings UI)
+- [ ] На новой машине: `docs/DEV_SETUP.md` — env, LAN IP, Android SDK
 - [ ] Опционально: тег `beta-0.1.1` перед APK
 - [ ] Прогон `docs/chat-regression-checklist.md` на dev-сборке
 

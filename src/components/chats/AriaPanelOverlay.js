@@ -137,6 +137,7 @@ export default function AriaPanelOverlay({
   sendToAria,
   ariaOnline = null,
   onAriaRevealComplete,
+  onAriaFeedback,
 }) {
   const { height: screenHeight } = useWindowDimensions();
   const curtainMaxHeight = Math.max(0, screenHeight - headerMinHeight);
@@ -319,6 +320,7 @@ export default function AriaPanelOverlay({
             }
             scrollEnabled={committed}
             onAriaRevealComplete={onAriaRevealComplete}
+            onAriaFeedback={onAriaFeedback}
           />
         </Animated.View>
         <GestureDetector gesture={dismissKeyboardTap}>

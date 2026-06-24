@@ -37,6 +37,8 @@ export default function useChatMessageListRender({
   ephemeralTickPausedRef,
   /** Aria: колбэк после typewriter-анимации ответа */
   onAriaRevealComplete,
+  /** Aria: 👍/👎 на ответ */
+  onAriaFeedback,
 }) {
   const rowEnvRef = useRef({});
   const playbackEnvRef = useRef({});
@@ -143,6 +145,8 @@ export default function useChatMessageListRender({
 
   const onAriaRevealCompleteRef = useRef(onAriaRevealComplete);
   onAriaRevealCompleteRef.current = onAriaRevealComplete;
+  const onAriaFeedbackRef = useRef(onAriaFeedback);
+  onAriaFeedbackRef.current = onAriaFeedback;
 
   fmtLenRef.current = formattedMessages.length;
   rowEnvRef.current = {
@@ -164,6 +168,9 @@ export default function useChatMessageListRender({
     ephemeralTickPausedRef,
     onAriaRevealComplete: (messageId) => {
       onAriaRevealCompleteRef.current?.(messageId);
+    },
+    onAriaFeedback: (messageId, rating) => {
+      onAriaFeedbackRef.current?.(messageId, rating);
     },
   };
 

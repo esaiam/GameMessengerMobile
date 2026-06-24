@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { AppState } from 'react-native';
 import { createAudioPlayer, setIsAudioActiveAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
 import {
@@ -12,6 +12,7 @@ import {
   fetchAriaPendingMessages,
   getAriaSeedMessages,
   postAriaMessage,
+  postAriaMessageFeedback,
   postAriaMessageStream,
   trimAriaDisplayMessages,
   ARIA_CHAT_MAX_STORED_MESSAGES,
@@ -19,6 +20,7 @@ import {
 import { setAudioModeAsync } from '../utils/audioMode';
 
 const ARIA_REPLY_VOLUME = 0.3;
+const ARIA_PENDING_POLL_MS = 12_000;
 const ARIA_MESSAGE_RECEIVED_MP3 = require('../assets/sounds/message_received.mp3');
 
 /** Удаляет в БД всё старше последних N сообщений пользователя. */
@@ -63,7 +65,7 @@ function ariaMessagesFromDbRows(rows, nickname) {
 }
 
 /**
- * Сессия Aria: история, health, send, clear, pending push, звук ответа.
+ * Сессия Aria: история, health, send, clear, pending poll (12s), звук ответа.
  * @param {boolean} enabled — `isAriaChat` с экрана
  * @param {string | undefined} nickname — handle из route
  */
@@ -444,6 +446,8 @@ export function useAriaChatSession(enabled, nickname) {
                 trust: undefined,
                 state: undefined,
                 attachment: null,
+                metadata: null,
+                behavior_policy_ids: [],
               };
             } else {
               updateTypingPhase('generating');
@@ -455,7 +459,8 @@ export function useAriaChatSession(enabled, nickname) {
             }
           }
 
-          const { reply, attachment } = replyResult;
+          const { reply, attachment, metadata, behavior_policy_ids: behaviorPolicyIds } =
+            replyResult;
 
           let replyText = reply || '—';
           if (attachment?.mime_type?.startsWith('image/')) {
@@ -488,6 +493,10 @@ export function useAriaChatSession(enabled, nickname) {
               aria_streaming: false,
               isTyping: false,
               ...(attachment ? { aria_attachment: attachment } : {}),
+              ...(metadata ? { aria_metadata: metadata } : {}),
+              ...(behaviorPolicyIds?.length
+                ? { aria_behavior_policy_ids: behaviorPolicyIds }
+                : {}),
             };
 
             let upgradedTyping = false;
@@ -553,76 +562,164 @@ export function useAriaChatSession(enabled, nickname) {
     setAriaMessages(getAriaSeedMessages());
   }, [enabled]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!enabled) return undefined;
-      let cancelled = false;
+  const loadAriaPendingMessages = useCallback(async () => {
+    try {
+      const { data: auth, error: authErr } = await supabase.auth.getUser();
+      if (authErr) return;
+      const user_id = auth?.user?.id;
+      if (!user_id) return;
 
-      const loadPending = async () => {
-        try {
-          const { data: auth, error: authErr } = await supabase.auth.getUser();
-          if (authErr) return;
-          const user_id = auth?.user?.id;
-          if (!user_id || cancelled) return;
+      const texts = await fetchAriaPendingMessages(user_id);
+      if (texts.length === 0) return;
 
-          const texts = await fetchAriaPendingMessages(user_id);
-          if (cancelled || texts.length === 0) return;
-
-          setAriaMessagesForChat((prev) => {
-            const known = new Set(
-              prev
-                .filter((m) => m.player_name === ARIA_CONTACT.display_name)
-                .map((m) => (typeof m.text === 'string' ? m.text.trim() : '')),
-            );
-            const baseRow = createAriaMessageBaseRow();
-            const additions = texts
-              .filter((t) => t && !known.has(t))
-              .map((text, i) => {
-                const now = new Date().toISOString();
-                return {
-                  ...baseRow,
-                  id: `aria-pending-${Date.now()}-${i}`,
-                  player_name: ARIA_CONTACT.display_name,
-                  text,
-                  created_at: now,
-                  read_at: now,
-                  message_type: 'text',
-                  aria_api_role: 'aria',
-                  aria_reveal_done: false,
-                };
-              });
-            if (additions.length === 0) return prev;
-            return trimAriaDisplayMessages([...prev, ...additions]);
+      setAriaMessagesForChat((prev) => {
+        const known = new Set(
+          prev
+            .filter((m) => m.player_name === ARIA_CONTACT.display_name)
+            .map((m) => (typeof m.text === 'string' ? m.text.trim() : '')),
+        );
+        const baseRow = createAriaMessageBaseRow();
+        const additions = texts
+          .filter((t) => t && !known.has(t))
+          .map((text, i) => {
+            const now = new Date().toISOString();
+            return {
+              ...baseRow,
+              id: `aria-pending-${Date.now()}-${i}`,
+              player_name: ARIA_CONTACT.display_name,
+              text,
+              created_at: now,
+              read_at: now,
+              message_type: 'text',
+              aria_api_role: 'aria',
+              aria_reveal_done: false,
+            };
           });
+        if (additions.length === 0) return prev;
+        return trimAriaDisplayMessages([...prev, ...additions]);
+      });
 
-          for (const text of texts) {
-            try {
-              await supabase.from('aria_messages').insert({
-                user_id,
-                role: 'aria',
-                text,
-              });
-            } catch {
-              /* не блокируем UI */
-            }
-          }
-          void pruneAriaMessagesDb(user_id);
+      for (const text of texts) {
+        try {
+          await supabase.from('aria_messages').insert({
+            user_id,
+            role: 'aria',
+            text,
+          });
         } catch {
-          /* сеть / API недоступны */
+          /* не блокируем UI */
         }
-      };
+      }
+      void pruneAriaMessagesDb(user_id);
+    } catch {
+      /* сеть / API недоступны */
+    }
+  }, [setAriaMessagesForChat]);
 
-      void loadPending();
-      return () => {
-        cancelled = true;
-      };
-    }, [enabled, setAriaMessagesForChat]),
+  useEffect(() => {
+    if (!enabled) return undefined;
+
+    let cancelled = false;
+    let intervalId = null;
+    let pollAllowed = AppState.currentState === 'active';
+
+    const tick = () => {
+      if (cancelled || !pollAllowed) return;
+      void loadAriaPendingMessages();
+    };
+
+    const startPolling = () => {
+      pollAllowed = true;
+      tick();
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(tick, ARIA_PENDING_POLL_MS);
+    };
+
+    const stopPolling = () => {
+      pollAllowed = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    if (AppState.currentState === 'active') {
+      startPolling();
+    }
+
+    const appSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') startPolling();
+      else stopPolling();
+    });
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+      appSub.remove();
+    };
+  }, [enabled, loadAriaPendingMessages]);
+
+  const submitAriaFeedback = useCallback(
+    async (messageId, rating) => {
+      if (!enabled || !messageId || (rating !== 'up' && rating !== 'down')) return;
+      const msg = ariaMessagesRef.current.find((m) => m.id === messageId);
+      if (!msg) return;
+      if (msg.aria_feedback_rating === rating) return;
+
+      const policyIds =
+        msg.aria_behavior_policy_ids ??
+        msg.aria_metadata?.behavior_policy_ids ??
+        [];
+      const preview =
+        typeof msg.text === 'string' ? msg.text.trim().slice(0, 200) : '';
+
+      setAriaMessagesForChat((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, aria_feedback_rating: rating, aria_feedback_pending: true }
+            : m,
+        ),
+      );
+
+      try {
+        const { data: auth, error: authErr } = await supabase.auth.getUser();
+        if (authErr) throw authErr;
+        const user_id = auth?.user?.id;
+        if (!user_id) throw new Error('no_user');
+        await postAriaMessageFeedback({
+          userId: user_id,
+          rating,
+          behaviorPolicyIds: policyIds,
+          messagePreview: preview,
+        });
+        setAriaMessagesForChat((prev) =>
+          prev.map((m) =>
+            m.id === messageId ? { ...m, aria_feedback_pending: false } : m,
+          ),
+        );
+      } catch (e) {
+        if (__DEV__) console.warn('[Aria] feedback failed:', e?.message || e);
+        setAriaMessagesForChat((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  aria_feedback_pending: false,
+                  aria_feedback_rating: msg.aria_feedback_rating,
+                }
+              : m,
+          ),
+        );
+      }
+    },
+    [enabled, setAriaMessagesForChat],
   );
 
   return {
     ariaMessages,
     setAriaMessagesForChat,
     sendToAria,
+    submitAriaFeedback,
     clearAriaHistory,
     ariaOnline,
     ariaResolvedNickname,

@@ -28,6 +28,7 @@ export default function ChatRoomScreen({ route, navigation }) {
     ariaOnline,
     ariaResolvedNickname,
     markAriaRevealDone,
+    submitAriaFeedback,
   } = useAriaChatSession(isAriaChat, nickname);
 
   const headerTitle = useMemo(() => {
@@ -110,6 +111,7 @@ export default function ChatRoomScreen({ route, navigation }) {
           setAriaMessages={setAriaMessagesForChat}
           sendToAria={sendToAria}
           markAriaRevealDone={markAriaRevealDone}
+          submitAriaFeedback={submitAriaFeedback}
           listPaddingTop={listPaddingTop}
           chatRoomHeader={chatRoomHeader}
           onTopOverlayHeight={setFrostedHeaderH}

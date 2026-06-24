@@ -19,6 +19,7 @@ export default function AriaPanelMessageList({
   nickname,
   scrollEnabled,
   onAriaRevealComplete,
+  onAriaFeedback,
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const roomKey = scrollEnabled ? ARIA_ROOM_ID : null;
@@ -57,6 +58,7 @@ export default function AriaPanelMessageList({
     ariaPlainPanel: true,
     openCalendarFromSeparator: noop,
     onAriaRevealComplete,
+    onAriaFeedback,
     activeVoiceUri: null,
     activePlayerStatus: { playing: false, currentTime: 0, duration: 0 },
     activeVoiceMessageId: null,

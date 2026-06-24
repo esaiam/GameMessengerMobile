@@ -40,6 +40,7 @@ import { useSplitDetail } from '../context/SplitDetailContext';
 import ChatClearHistoryConfirmModal from '../components/chat/ChatClearHistoryConfirmModal';
 import ChatHeaderOverflowMenuModal from '../components/chat/ChatHeaderOverflowMenuModal';
 import { V } from '../theme';
+import { registerOpenAriaFromPush } from '../lib/ariaPushNavigation';
 
 function ChatsListTopInset({ style }) {
   return <Animated.View style={style} />;
@@ -138,8 +139,21 @@ export default function ChatsScreen({ route, navigation }) {
     releaseTabBarSuppress,
   });
 
-  const { ariaMessages, ariaResolvedNickname, sendToAria, ariaOnline, clearAriaHistory, markAriaRevealDone } =
-    useAriaChatSession(ariaVisible, nickname);
+  useEffect(() => {
+    return registerOpenAriaFromPush(() => {
+      openAriaPanel();
+    });
+  }, [openAriaPanel]);
+
+  const {
+    ariaMessages,
+    ariaResolvedNickname,
+    sendToAria,
+    ariaOnline,
+    clearAriaHistory,
+    markAriaRevealDone,
+    submitAriaFeedback,
+  } = useAriaChatSession(ariaVisible, nickname);
 
   const confirmAriaClearHistory = useCallback(async () => {
     if (ariaClearInProgress) return;
@@ -348,6 +362,7 @@ export default function ChatsScreen({ route, navigation }) {
         sendToAria={sendToAria}
         ariaOnline={ariaOnline}
         onAriaRevealComplete={markAriaRevealDone}
+        onAriaFeedback={submitAriaFeedback}
       />
 
       <View

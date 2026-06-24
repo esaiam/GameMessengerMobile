@@ -42,6 +42,8 @@ export default function Chat({
   roomFocused = false,
   /** Aria: typewriter завершён */
   onAriaRevealComplete,
+  /** Aria: 👍/👎 на ответ */
+  onAriaFeedback,
 }) {
   const viewProps = useChatController({
     roomId,
@@ -66,6 +68,7 @@ export default function Chat({
     overscrollEnabled,
     roomFocused,
     onAriaRevealComplete,
+    onAriaFeedback,
   });
 
   return <ChatView {...viewProps} />;

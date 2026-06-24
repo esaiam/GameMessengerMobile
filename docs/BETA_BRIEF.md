@@ -5,7 +5,7 @@
 | **APK** | _TBD_ (после VPS + release-сборки) |
 | **Канал багов** | **esaiam86@gmail.com** (тема письма: `Vault beta`) |
 | **Privacy Policy** | https://esaiam.github.io/vault-privacy-policy (vaultprivacy06@gmail.com) |
-| **Код** | ветка `tab-pager-experiment`, commit `1a1e5fe` |
+| **Код** | ветка `tab-pager-experiment` — `git rev-parse HEAD` после clone |
 
 > Пока APK нет: разработка через dev-клиент + Metro (одна Wi‑Fi сеть с ПК).
 
@@ -32,7 +32,7 @@
 ```
 Vault beta — баг
 
-Сборка: APK TBD / commit 1a1e5fe
+Сборка: APK TBD / branch tab-pager-experiment / git rev-parse HEAD
 Устройство: (например Samsung S23)
 Android: (например 14)
 Время (МСК): 
@@ -67,6 +67,8 @@ Android: (например 14)
 | Звонки | «Скоро» |
 | Poker / Tamagotchi | P1 backlog — сейчас **3 таба** (Chats, Contacts, Profile) |
 | Aria | В release нужен VPS; без `EXPO_PUBLIC_ARIA_API_URL` бот может молчать |
+| Aria push | Tap по push открывает панель Aria; token в `profiles.push_token` |
+| Aria feedback | 👍/👎 под ответами Aria (обучение на сервере) |
 
 ---
 
@@ -83,4 +85,5 @@ Android: (например 14)
 ## Разработчик
 
 - Перед APK: `docs/RELEASE_PREP.md`
+- Новая машина: `docs/DEV_SETUP.md`
 - Security prod: `docs/PROD_SECURITY_CHECKLIST.md` (SQL: `docs/SECURITY_INVENTORY_0_1.sql`)

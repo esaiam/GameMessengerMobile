@@ -3,7 +3,7 @@
 > **Для агента:** если пользователь спрашивает про готовность к MVP, бете или «что осталось» — **сначала прочитай этот файл**, затем `RELEASE_PREP.md`, `BETA_BRIEF.md`, `PROD_SECURITY_CHECKLIST.md` (оглавление; SQL — `SECURITY_INVENTORY_0_1.sql`).  
 > **Обновляй этот файл** после крупных вех (APK, VPS, P1).
 
-**Последнее обновление:** 2026-06-17
+**Последнее обновление:** 2026-06-24
 
 ---
 
@@ -20,8 +20,10 @@
 
 ### Код и freeze
 - Ветка: `tab-pager-experiment`
-- Тег: `beta-0.1.0` @ `4503dac`; дальше фиксы до `1a1e5fe` (chat refactor, VaultErrorBoundary, Maestro/CI, migrations, Aria SSE stream, glass UI на auth/settings)
-- `Table` submodule bump делался (проверь актуальный SHA: `git ls-tree HEAD GameMessengerMobile` в корне `Table`)
+- Тег: `beta-0.1.0` @ `4503dac`; дальше фиксы (chat refactor, VaultErrorBoundary, Maestro/CI, migrations, Aria SSE stream, glass UI, **Aria push + feedback**)
+- Актуальный commit: `git -C GameMessengerMobile rev-parse HEAD` (после clone / submodule update)
+- `Table` submodule bump: `git ls-tree HEAD GameMessengerMobile` в корне `Table`
+- **Переезд на новое железо:** `docs/DEV_SETUP.md`
 
 ### QA автomatika
 - `npm run smoke` — OK
@@ -30,7 +32,15 @@
 - **Maestro baseline:** `.maestro/smoke.yaml` — auth → chat → send → game (ручной запуск, `npm run maestro:smoke`)
 - **Error Boundary:** `VaultErrorBoundary` в `App.js` (Sentry — перед APK)
 
+### Aria (2026-06-24)
+- **Push token:** `profiles.push_token` + `registerPushToken` / `clearPushToken` (`notifications.js`); миграция `20260619_profiles_push_token.sql`
+- **Tap push → Aria:** `ariaPushNavigation.js` + `setupPushNotificationHandlers` в `App.js`
+- **Feedback 👍/👎:** `AriaMessageFeedbackBar` + `POST /messages/feedback` на Aria API
+- **URL Aria:** `EXPO_PUBLIC_ARIA_API_URL` или Metro host → `:8001`; fallback `ARIA_LITE_LOCAL_URL` в `aria.js`
+
 ### Документация
+- `docs/DEV_SETUP.md` — установка / переезд на новую машину
+- `docs/EDGE_FUNCTIONS.md` — деплой edge (ai-rewrite, push)
 - `docs/BETA_BRIEF.md` — brief для тестеров; баги → **esaiam86@gmail.com**, тема `Vault beta`; **APK = TBD**
 - `docs/RELEASE_PREP.md` — чеклист до первой APK
 - `docs/PROD_SECURITY_CHECKLIST.md` — оглавление prod security; SQL-блоки в `docs/SECURITY_INVENTORY_0_1.sql`
@@ -126,4 +136,7 @@
 | `docs/SECURITY_INVENTORY_0_1.sql` | SQL-блоки A–H для Supabase Editor |
 | `docs/chat-regression-checklist.md` | Ручной regression чата |
 | `docs/TESTING.md` | smoke / crypto |
+| `docs/DEV_SETUP.md` | Новая машина / clone / env |
+| `docs/EDGE_FUNCTIONS.md` | Edge deploy + secrets |
+| `Table/docs/README.md` | Монорепо + submodule |
 | `Table/docs/vault_session_summary.md` | Аудит security (может расходиться с prod — сверять чеклистом) |

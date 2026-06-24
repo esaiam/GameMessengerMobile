@@ -87,6 +87,8 @@ export function messageRowContentSig(m) {
     m.aria_stream_phase ?? '',
     m.aria_stream_preview ?? '',
     m.aria_reveal_done === false ? '0' : '1',
+    m.aria_feedback_rating ?? '',
+    m.aria_feedback_pending ? '1' : '0',
     stableReactionsSig(m.reactions)].join('\x1e');
 }
 

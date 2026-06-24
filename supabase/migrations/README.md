@@ -28,6 +28,9 @@ npx supabase db query --linked --file supabase/migrations/20260521_rooms_last_me
 | `20260522_pg_cron_maintenance.sql` | `pg_cron`: пустые rooms, старые `game_sessions`, `expires_at` |
 | `20260522_push_dedup.sql` | Таблица дедупа push |
 | `20260522_push_on_message_insert.sql` | `trigger_push_on_message` → Edge `send_push_on_message` |
+| `20260619_profiles_push_token.sql` | `profiles.push_token` — Expo token для Aria / push |
+
+См. также зеркала в `docs/migrations/` и § «Миграции в репо» в `docs/PROD_SECURITY_CHECKLIST.md`.
 
 ## Push: секрет Vault (обязательно перед push-миграцией)
 

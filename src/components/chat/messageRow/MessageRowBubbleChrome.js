@@ -7,6 +7,7 @@ import BubbleMaterial from '../BubbleMaterial';
 import MessageBubbleSwipeWrap from '../MessageBubbleSwipeWrap';
 import { AriaTypingDots } from '../AriaChatUi';
 import AriaGeneratedAttachment from '../AriaGeneratedAttachment';
+import AriaMessageFeedbackBar from '../AriaMessageFeedbackBar';
 import { MESSAGE_ROW_SELECTION_BG } from '../messageBubbleLayoutConstants';
 
 export default function MessageRowBubbleChrome({
@@ -220,6 +221,12 @@ export default function MessageRowBubbleChrome({
                       onImagePress={(uri) => env.setFullScreenImage?.(uri)}
                     />
                   </View>
+                ) : null}
+                {listExtra.isAriaChat &&
+                !isMine &&
+                rowKind === 'text' &&
+                item?.aria_reveal_done !== false ? (
+                  <AriaMessageFeedbackBar item={item} onFeedback={env.onAriaFeedback} />
                 ) : null}
               </View>
             </View>

@@ -51,6 +51,7 @@ export default function useChatController({
   overscrollEnabled = true,
   roomFocused = false,
   onAriaRevealComplete,
+  onAriaFeedback,
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const isTablet = useIsSplitLayout();
@@ -456,6 +457,7 @@ export default function useChatController({
     onUnlockVideo,
     ephemeralTickPausedRef: renderPausedRef,
     onAriaRevealComplete,
+    onAriaFeedback,
   });
 
   return buildChatViewProps({

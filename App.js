@@ -19,7 +19,9 @@ import {
   VAULT_PENDING_INVITE_KEY,
   parsePendingInvite,
   serializePendingInvite } from './src/utils/inviteRedeem';
-import { registerPushToken } from './src/lib/notifications';
+import { registerPushToken, setupPushNotificationHandlers } from './src/lib/notifications';
+import { openAriaFromPush } from './src/lib/ariaPushNavigation';
+import { mainTabsNavigationApi } from './src/context/MainTabsNavigationContext';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { RootNavigationTree } from './src/navigation/RootNavigationTree';
 import { MainTabsNavigationProvider } from './src/context/MainTabsNavigationContext';
@@ -40,7 +42,6 @@ function BootstrapSplash() {
 
 function AppNavigationRoot() {
   const navRef = useRef(null);
-  const pushTokenRegisteredForUserRef = useRef(null);
   const {
     bootstrapped,
     session,
@@ -51,15 +52,20 @@ function AppNavigationRoot() {
 
   useEffect(() => {
     const uid = session?.user?.id;
-    if (!uid) {
-      pushTokenRegisteredForUserRef.current = null;
-      return;
-    }
-    if (!profileHandle) return;
-    if (pushTokenRegisteredForUserRef.current === uid) return;
-    pushTokenRegisteredForUserRef.current = uid;
+    if (!uid || !profileHandle) return undefined;
     registerPushToken(uid).catch(() => {});
   }, [session?.user?.id, profileHandle]);
+
+  useEffect(() => {
+    return setupPushNotificationHandlers({
+      onAriaNotificationTap: () => {
+        mainTabsNavigationApi.switchToTab?.(0);
+        setTimeout(() => {
+          openAriaFromPush();
+        }, 350);
+      },
+    });
+  }, []);
 
   useEffect(() => {
     if (bootstrapped) {

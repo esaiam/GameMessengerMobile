@@ -1,48 +1,68 @@
-# Edge Functions
+# Supabase Edge Functions (Vault Messenger)
 
-## ai-rewrite
+Клиент вызывает edge через `src/lib/edgeFunctions.js` → `invokeVaultEdgeFunction`.
 
-ИИ-редактор в чате (Groq `llama-3.1-8b-instant`). Ключ **только на сервере**.
+**URL:** `https://nqssqplizwsukowggzxd.supabase.co/functions/v1/<name>`  
+**Auth:** `Authorization: Bearer <user access_token>` + `apikey: <publishable/anon>`  
+**Конфиг:** `verify_jwt = false` в `config.toml` + проверка JWT в handler (`/auth/v1/user`).
 
-### Однократная настройка (prod)
+Секреты **только** в Supabase Dashboard → Edge Functions → Secrets, не в `.env` клиента.
 
-1. [Groq API key](https://console.groq.com/) → скопировать ключ.
-2. Supabase Dashboard → Project Settings → Edge Functions → Secrets:
+---
 
-   ```
-   GROQ_API_KEY=gsk_...
-   ```
+## Функции
 
-   (`SUPABASE_URL` и `SUPABASE_ANON_KEY` подставляются автоматически при деплое.)
+| Имя | Назначение | Секреты |
+|-----|------------|---------|
+| `ai-rewrite` | ИИ-переписывание текста в чате (`AiRewritePanel`) | `GROQ_API_KEY` |
+| `search-gif` | Поиск GIF в композере | по деплою |
+| `search-pic` | Поиск картинок | по деплою |
+| `send_push_on_message` | Push при INSERT в `messages` (триггер БД) | Vault `service_role_key` в БД |
 
-3. CLI из `GameMessengerMobile/`:
+Клиентские обёртки:
 
-   ```bash
-   npx supabase login
-   npx supabase link --project-ref nqssqplizwsukowggzxd
-   npx supabase secrets set GROQ_API_KEY=gsk_ВАШ_КЛЮЧ
-   npx supabase functions deploy ai-rewrite
-   ```
+- `src/lib/aiRewrite.js` → `ai-rewrite`
+- GIF/pic — через тот же `invokeVaultEdgeFunction` (см. композер / media pickers)
 
-### Клиент
+---
 
-- `src/lib/edgeFunctions.js` — вызовы на `https://nqssqplizwsukowggzxd.supabase.co/functions/v1/...`
-- `Authorization: Bearer <access_token>`, `apikey: sb_publishable_...`
-- При ключах `sb_publishable_*` в `config.toml` для функции нужно **`verify_jwt = false`** (проверка user JWT внутри handler).
-- **`EXPO_PUBLIC_XAI_API_KEY` больше не используется** — убери из `.env` / EAS secrets.
+## Деплой (Supabase CLI)
 
-### GIF / картинки
+```powershell
+cd GameMessengerMobile
+npx supabase login
+npx supabase link --project-ref nqssqplizwsukowggzxd
 
-`search-gif` и `search-pic` — отдельные функции (могут быть не задеплоены). Без них сработает fallback, если в `.env` есть `EXPO_PUBLIC_GIPHY_API_KEY` / `EXPO_PUBLIC_PEXELS_API_KEY`.
-
-### Локальная отладка (опционально)
-
-```bash
-npx supabase start
+# Исходники функций — в Dashboard или в supabase/functions/ (если добавлены в репо)
+npx supabase functions deploy ai-rewrite
 npx supabase secrets set GROQ_API_KEY=gsk_...
-npx supabase functions serve ai-rewrite
 ```
 
-### Стили
+Проверка `ai-rewrite`: чат → выделить текст → стиль переписывания (нужен логин).
 
-`formal` | `short` | `soft` | `bold` | `fix` — промпты в `supabase/functions/ai-rewrite/stylePrompts.ts`.
+---
+
+## Push edge (`send_push_on_message`)
+
+1. Перед миграцией push — секрет в **Vault** (не в git):  
+   Dashboard → Project Settings → **Vault** → `service_role_key` = service role из API settings.
+2. Миграции: `supabase/migrations/20260522_push_*.sql` — см. `supabase/migrations/README.md`.
+3. Body push — **не plaintext** чата («Новое сообщение»). E2E после release APK — §5 в `PROD_SECURITY_CHECKLIST.md`.
+
+---
+
+## Aria push (отдельно от edge)
+
+Expo push token пишется клиентом в `profiles.push_token` (`src/lib/notifications.js`).  
+Сервер Aria читает через `service_role`. Миграция: `20260619_profiles_push_token.sql`.
+
+---
+
+## Troubleshooting
+
+| Симптом | Действие |
+|---------|----------|
+| `Функция ai-rewrite не развёрнута` (404) | `functions deploy ai-rewrite` |
+| 401 от edge | Сессия истекла — re-login; проверить JWT в handler |
+| 500 / Groq | Проверить `GROQ_API_KEY` в secrets |
+| Push FIS_AUTH_ERROR | Firebase / `google-services.json`, SHA-1 в GCP |

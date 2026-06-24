@@ -6,8 +6,8 @@ import { supabase } from './supabase';
 /** Виртуальная комната ассистента (не строка в `profiles`). */
 export const ARIA_ROOM_ID = 'aria-direct';
 
-/** Локальный Aria-lite на том же хосте (Expo web / localhost). */
-export const ARIA_LITE_LOCAL_URL = 'http://127.0.0.1:8001';
+/** Fallback Aria-lite в LAN (Expo web / dev без EXPO_PUBLIC_ARIA_API_URL). */
+export const ARIA_LITE_LOCAL_URL = 'http://192.168.1.100:8001';
 
 function stripTrailingSlashes(url) {
   return typeof url === 'string' ? url.replace(/\/+$/, '') : '';
@@ -31,21 +31,21 @@ function ariaUrlFromDevMetro() {
 }
 
 /**
- * Dev native: IP из Metro QR (hostUri → :8001).
- * Web dev: localhost или EXPO_PUBLIC_ARIA_API_URL.
- * Prod: EXPO_PUBLIC_ARIA_API_URL.
+ * EXPO_PUBLIC_ARIA_API_URL — приоритет ( .env / eas.json ).
+ * Dev native без env: IP из Metro QR (hostUri → :8001), затем ARIA_LITE_LOCAL_URL.
+ * Web dev без env: ARIA_LITE_LOCAL_URL.
  */
 export function resolveAriaApiBaseUrl() {
   const fromEnv = stripTrailingSlashes(process.env.EXPO_PUBLIC_ARIA_API_URL);
+  if (fromEnv) return fromEnv;
 
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    if (Platform.OS === 'web') return fromEnv || ARIA_LITE_LOCAL_URL;
+    if (Platform.OS === 'web') return ARIA_LITE_LOCAL_URL;
     const fromMetro = ariaUrlFromDevMetro();
     if (fromMetro) return fromMetro;
-    if (fromEnv) return fromEnv;
-    return '';
+    return ARIA_LITE_LOCAL_URL;
   }
-  return fromEnv || '';
+  return '';
 }
 
 /** База Aria-lite / полной Aria (не хардкодить :8000). */
@@ -228,6 +228,13 @@ export async function fetchAriaPendingMessages(userId) {
  * attachment — при генерации файла: file_base64, filename, mime_type, size_bytes.
  * @param {{ userId: string, text: string, history: Array<{ role: string, text: string }> }} p
  */
+function extractBehaviorPolicyIds(metadata) {
+  if (!metadata || typeof metadata !== 'object') return [];
+  const ids = metadata.behavior_policy_ids;
+  if (!Array.isArray(ids)) return [];
+  return ids.map((x) => String(x).trim()).filter(Boolean);
+}
+
 function normalizeAriaMessageResponse(json) {
   const replyRaw = json?.reply;
   const reply =
@@ -237,13 +244,55 @@ function normalizeAriaMessageResponse(json) {
         ? json.message
         : '';
   const attachment = parseAriaMessageAttachment(json);
+  const metadata =
+    json?.metadata && typeof json.metadata === 'object' ? json.metadata : null;
+  const behavior_policy_ids = extractBehaviorPolicyIds(metadata);
   return {
     reply,
     mood: json?.mood,
     trust: json?.trust,
     state: normalizeAriaState(json),
     attachment,
+    metadata,
+    behavior_policy_ids,
   };
+}
+
+/**
+ * POST /messages/feedback — explicit 👍/👎 on an Aria reply (learning spine phase 4).
+ */
+export async function postAriaMessageFeedback({
+  userId,
+  rating,
+  behaviorPolicyIds = [],
+  messagePreview = '',
+}) {
+  const base = getAriaApiBaseUrl();
+  if (!base || !userId) throw new Error('no_api');
+  const res = await ariaFetch(`${base}/messages/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      rating,
+      behavior_policy_ids: behaviorPolicyIds,
+      message_preview: messagePreview,
+    }),
+  });
+  let json = {};
+  try {
+    json = await res.json();
+  } catch {
+    json = {};
+  }
+  if (!res.ok) {
+    const detail =
+      typeof json?.detail === 'string'
+        ? json.detail
+        : `feedback_http_${res.status}`;
+    throw new Error(detail);
+  }
+  return json;
 }
 
 export async function postAriaMessage({ userId, text, history }) {

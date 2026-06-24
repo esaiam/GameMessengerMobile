@@ -18,6 +18,7 @@
  * @property {(anchor: object, dateKey: string, dateLabel: string) => void} [onDateSeparatorPress]
  * @property {import('react').MutableRefObject<boolean>} [ephemeralTickPausedRef] — GameScreen dice throw
  * @property {(messageId: string) => void} [onAriaRevealComplete] — Aria typewriter done
+ * @property {(messageId: string, rating: 'up'|'down') => void} [onAriaFeedback] — 👍/👎 learning
  */
 
 export {};
